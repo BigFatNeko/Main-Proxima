@@ -49,17 +49,20 @@ function App() {
       <main className="main">
         <div className="section">
           <div className="info-banner">
-            <strong>Modello bottom-up.</strong> I clienti emergono dalle conversioni reali
-            di ogni canale, non da target top-down. Modifica gli slider a sinistra per
-            vedere in tempo reale impatto su KPI, capacità, break-even. I parametri
-            sono salvati in locale.
+            <strong>Come funziona questo modello.</strong> Invece di partire da obiettivi di
+            clienti decisi a tavolino, il numero di clienti viene <em>calcolato</em> dai
+            numeri veri di ogni canale (quanti click, quante visite, quante persone
+            prenotano, quante diventano clienti paganti). Muovi gli slider a sinistra
+            per vedere in tempo reale come cambiano clienti, ricavi, ore di lavoro
+            necessarie e mese di pareggio. I valori si salvano automaticamente nel browser.
           </div>
         </div>
+        <window.PROXIMA.Glossary />
         <window.PROXIMA.Dashboard sim={sim} />
         <window.PROXIMA.ProjectionTable sim={sim} />
         <div className="section" style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid #1E2A3E" }}>
           <div className="text-faint" style={{ fontSize: 11, textAlign: "center" }}>
-            Proxima Funnel Model · bottom-up · React 18 + Recharts · dati locali (localStorage)
+            Proxima · Modello Funnel calcolato dai numeri veri di ogni canale · dati salvati nel browser
           </div>
         </div>
       </main>
@@ -70,7 +73,8 @@ function App() {
 // Wait for all PROXIMA modules to load before rendering
 function boot() {
   if (!window.PROXIMA.simulate || !window.PROXIMA.Controls ||
-      !window.PROXIMA.Dashboard || !window.PROXIMA.ProjectionTable) {
+      !window.PROXIMA.Dashboard || !window.PROXIMA.ProjectionTable ||
+      !window.PROXIMA.Glossary) {
     return setTimeout(boot, 50);
   }
   const root = ReactDOM.createRoot(document.getElementById("root"));

@@ -69,7 +69,7 @@ window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
   return (
     <div className="section">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <div className="section-title" style={{ margin: 0 }}>Proiezione 24 mesi (mese -6 → +18)</div>
+        <div className="section-title" style={{ margin: 0 }}>Tabella completa 24 mesi (dal mese -6 al mese +18)</div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {exportMsg && <span className="text-dim" style={{ fontSize: 12 }}>{exportMsg}</span>}
           <button className="btn-ghost btn" onClick={exportCSV}>↓ CSV</button>
@@ -88,19 +88,19 @@ window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
               <th>LinkedIn</th>
               <th>SEO</th>
               <th>Social</th>
-              <th>Referral</th>
-              <th>Borrowed</th>
-              <th>Tot. Prenot.</th>
-              <th>Check-up</th>
-              <th>Cap. max</th>
-              <th>Nuovi</th>
-              <th>Churn</th>
-              <th>Clienti</th>
-              <th>Target</th>
-              <th>MRR</th>
-              <th>ARR</th>
-              <th>Rev. cum.</th>
-              <th>Spesa cum.</th>
+              <th>Passaparola</th>
+              <th>PR/Podcast</th>
+              <th>Totale prenotazioni</th>
+              <th>Check-up fatti</th>
+              <th>Max gestibili</th>
+              <th>Nuovi clienti</th>
+              <th>Persi (churn)</th>
+              <th>Clienti totali</th>
+              <th>Obiettivo</th>
+              <th>Ricavi mese</th>
+              <th>Ricavi annui</th>
+              <th>Ricavi accum.</th>
+              <th>Spesa accum.</th>
             </tr>
           </thead>
           <tbody>
@@ -156,15 +156,15 @@ window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
       <div style={{ marginTop: 12, display: "flex", gap: 16, flexWrap: "wrap", fontSize: 11 }} className="text-dim">
         <span>
           <span style={{ display: "inline-block", width: 10, height: 10, background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.3)", marginRight: 6, verticalAlign: "middle" }}></span>
-          Riga con ⚠ = capacità limitante (nuovi clienti &lt; teorico)
+          Riga con ⚠ = ore di lavoro sature (il team non riesce a gestire tutti i lead)
         </span>
         <span>
           <span style={{ display: "inline-block", width: 10, height: 10, background: "rgba(74,222,128,0.15)", marginRight: 6, verticalAlign: "middle" }}></span>
-          Riga verde = mese di break-even (revenue cumulato ≥ €180K)
+          Riga verde = mese di pareggio (ricavi accumulati ≥ €180.000)
         </span>
         <span>
           <span style={{ display: "inline-block", width: 10, height: 2, background: "#8E7940", marginRight: 6, verticalAlign: "middle" }}></span>
-          Linea oro = passaggio di fase
+          Linea oro = inizio di una nuova fase della strategia
         </span>
       </div>
     </div>
