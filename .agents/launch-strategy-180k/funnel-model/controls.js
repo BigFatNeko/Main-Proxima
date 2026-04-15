@@ -4,6 +4,58 @@
 
 window.PROXIMA = window.PROXIMA || {};
 
+// --- Hoisted formatters (stable identity) ---
+const pct = (v) => (v * 100).toFixed(1) + "%";
+const eur = (v) => "€" + Math.round(v).toLocaleString("it-IT");
+const num = (v) => Number(v).toFixed(2);
+
+// --- Hoisted helper components (stable identity = no unmount/remount on parent render) ---
+function Slider({ label, value, min, max, step, fmt, onChange }) {
+  return (
+    <div className="slider-row">
+      <div className="slider-label">
+        <span className="name">{label}</span>
+        <span className="val">{fmt ? fmt(value) : value}</span>
+      </div>
+      <input
+        type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+      />
+    </div>
+  );
+}
+
+function Panel({ id, title, openState, onToggle, children }) {
+  const isOpen = !!openState[id];
+  return (
+    <div className="panel">
+      <div className="panel-header" onClick={() => onToggle(id)}>
+        <h3>{title}</h3>
+        <span className="chev">{isOpen ? "▼" : "▶"}</span>
+      </div>
+      {isOpen && <div className="panel-body">{children}</div>}
+    </div>
+  );
+}
+
+function PhaseBudgets({ channel, label, params, updateArray }) {
+  return (
+    <>
+      <div className="uppercase text-faint" style={{ marginTop: 6, marginBottom: 6 }}>
+        Budget {label} per fase
+      </div>
+      {["F1", "F2", "F3", "F4", "F5"].map((ph, i) => (
+        <Slider
+          key={ph} label={`Fase ${i + 1} (${ph})`}
+          value={params[channel].budgetByPhase[i + 1]}
+          min={0} max={6000} step={100} fmt={eur}
+          onChange={(v) => updateArray([channel, "budgetByPhase"], i + 1, v)}
+        />
+      ))}
+    </>
+  );
+}
+
 window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
   const [open, setOpen] = React.useState({
     google: true, meta: true, linkedin: false,
@@ -11,7 +63,10 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
     borrowed: false, funnel: true, capacity: true, business: true
   });
 
-  const toggle = (k) => setOpen({ ...open, [k]: !open[k] });
+  const toggle = React.useCallback(
+    (k) => setOpen((prev) => ({ ...prev, [k]: !prev[k] })),
+    []
+  );
 
   // Helper: update a nested path in params
   const update = (path, value) => {
@@ -30,49 +85,6 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
     setParams(next);
   };
 
-  const Slider = ({ label, value, min, max, step, fmt, onChange }) => (
-    <div className="slider-row">
-      <div className="slider-label">
-        <span className="name">{label}</span>
-        <span className="val">{fmt ? fmt(value) : value}</span>
-      </div>
-      <input
-        type="range" min={min} max={max} step={step} value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-      />
-    </div>
-  );
-
-  const Panel = ({ id, title, children }) => (
-    <div className="panel">
-      <div className="panel-header" onClick={() => toggle(id)}>
-        <h3>{title}</h3>
-        <span className="chev">{open[id] ? "▼" : "▶"}</span>
-      </div>
-      {open[id] && <div className="panel-body">{children}</div>}
-    </div>
-  );
-
-  const pct = (v) => (v * 100).toFixed(1) + "%";
-  const eur = (v) => "€" + Math.round(v).toLocaleString("it-IT");
-  const num = (v) => Number(v).toFixed(2);
-
-  const PhaseBudgets = ({ channel, label }) => (
-    <>
-      <div className="uppercase text-faint" style={{ marginTop: 6, marginBottom: 6 }}>
-        Budget {label} per fase
-      </div>
-      {["F1", "F2", "F3", "F4", "F5"].map((ph, i) => (
-        <Slider
-          key={ph} label={`Fase ${i + 1} (${ph})`}
-          value={params[channel].budgetByPhase[i + 1]}
-          min={0} max={6000} step={100} fmt={eur}
-          onChange={(v) => updateArray([channel, "budgetByPhase"], i + 1, v)}
-        />
-      ))}
-    </>
-  );
-
   return (
     <div>
       <div className="brand">
@@ -85,7 +97,7 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
         <button className="btn-ghost btn" onClick={onReset}>↻ Reset</button>
       </div>
 
-      <Panel id="funnel" title="Post-funnel & Show-rate">
+      <Panel id="funnel" title="Post-funnel & Show-rate" openState={open} onToggle={toggle}>
         <Slider label="Show-rate (% prenotazioni che si presenta)"
           value={params.showRate} min={0.3} max={1} step={0.01} fmt={pct}
           onChange={(v) => update(["showRate"], v)} />
@@ -94,7 +106,7 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
           onChange={(v) => update(["checkupToClient"], v)} />
       </Panel>
 
-      <Panel id="google" title="Google Ads">
+      <Panel id="google" title="Google Ads" openState={open} onToggle={toggle}>
         <Slider label="CPC medio" value={params.google.cpc}
           min={0.5} max={5} step={0.05} fmt={(v) => "€" + num(v)}
           onChange={(v) => update(["google", "cpc"], v)} />
@@ -104,10 +116,10 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
         <Slider label="Calc → prenotazione"
           value={params.google.calcToBooking} min={0.01} max={0.25} step={0.005} fmt={pct}
           onChange={(v) => update(["google", "calcToBooking"], v)} />
-        <PhaseBudgets channel="google" label="Google" />
+        <PhaseBudgets channel="google" label="Google" params={params} updateArray={updateArray} />
       </Panel>
 
-      <Panel id="meta" title="Meta Ads (IG + FB)">
+      <Panel id="meta" title="Meta Ads (IG + FB)" openState={open} onToggle={toggle}>
         <Slider label="CPC medio" value={params.meta.cpc}
           min={0.2} max={3} step={0.05} fmt={(v) => "€" + num(v)}
           onChange={(v) => update(["meta", "cpc"], v)} />
@@ -117,10 +129,10 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
         <Slider label="Calc → prenotazione"
           value={params.meta.calcToBooking} min={0.01} max={0.2} step={0.005} fmt={pct}
           onChange={(v) => update(["meta", "calcToBooking"], v)} />
-        <PhaseBudgets channel="meta" label="Meta" />
+        <PhaseBudgets channel="meta" label="Meta" params={params} updateArray={updateArray} />
       </Panel>
 
-      <Panel id="linkedin" title="LinkedIn Ads (dal mese +9)">
+      <Panel id="linkedin" title="LinkedIn Ads (dal mese +9)" openState={open} onToggle={toggle}>
         <Slider label="CPC medio" value={params.linkedin.cpc}
           min={2} max={12} step={0.1} fmt={(v) => "€" + num(v)}
           onChange={(v) => update(["linkedin", "cpc"], v)} />
@@ -133,10 +145,10 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
         <Slider label="Mese di inizio (index)"
           value={params.linkedin.startMonth} min={10} max={24} step={1} fmt={(v) => `M${v - 6}`}
           onChange={(v) => update(["linkedin", "startMonth"], v)} />
-        <PhaseBudgets channel="linkedin" label="LinkedIn" />
+        <PhaseBudgets channel="linkedin" label="LinkedIn" params={params} updateArray={updateArray} />
       </Panel>
 
-      <Panel id="seo" title="SEO Organico">
+      <Panel id="seo" title="SEO Organico" openState={open} onToggle={toggle}>
         <Slider label="Visite base (mese 1)" value={params.seo.baseVisits}
           min={0} max={300} step={5} fmt={(v) => v + "/mese"}
           onChange={(v) => update(["seo", "baseVisits"], v)} />
@@ -151,7 +163,7 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
           onChange={(v) => update(["seo", "calcToBooking"], v)} />
       </Panel>
 
-      <Panel id="social" title="Social Organico">
+      <Panel id="social" title="Social Organico" openState={open} onToggle={toggle}>
         <Slider label="Visite base al sito (mese 1)" value={params.social.baseVisits}
           min={0} max={300} step={5} fmt={(v) => v + "/mese"}
           onChange={(v) => update(["social", "baseVisits"], v)} />
@@ -166,7 +178,7 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
           onChange={(v) => update(["social", "calcToBooking"], v)} />
       </Panel>
 
-      <Panel id="referral" title="Referral (dal mese +9)">
+      <Panel id="referral" title="Referral (dal mese +9)" openState={open} onToggle={toggle}>
         <Slider label="% clienti attivi che porta 1 ref/mese"
           value={params.referral.ratePerClient} min={0} max={0.2} step={0.005} fmt={pct}
           onChange={(v) => update(["referral", "ratePerClient"], v)} />
@@ -178,7 +190,7 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
           onChange={(v) => update(["referral", "startMonth"], v)} />
       </Panel>
 
-      <Panel id="borrowed" title="Borrowed (PR + podcast + eventi)">
+      <Panel id="borrowed" title="Borrowed (PR + podcast + eventi)" openState={open} onToggle={toggle}>
         <div className="uppercase text-faint" style={{ marginBottom: 6 }}>
           Prenotazioni/mese per fase
         </div>
@@ -190,7 +202,7 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
         ))}
       </Panel>
 
-      <Panel id="capacity" title="Capacità operativa">
+      <Panel id="capacity" title="Capacità operativa" openState={open} onToggle={toggle}>
         <Slider label="Ore/settimana founder"
           value={params.founderHoursPerWeek} min={5} max={50} step={1} fmt={(v) => v + "h"}
           onChange={(v) => update(["founderHoursPerWeek"], v)} />
@@ -205,7 +217,7 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
           onChange={(v) => update(["secondConsultantHoursPerWeek"], v)} />
       </Panel>
 
-      <Panel id="business" title="Business">
+      <Panel id="business" title="Business" openState={open} onToggle={toggle}>
         <Slider label="ARPU (parcella media annua)"
           value={params.arpu} min={300} max={900} step={10} fmt={eur}
           onChange={(v) => update(["arpu"], v)} />
