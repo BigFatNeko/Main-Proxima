@@ -123,13 +123,13 @@ Per content, design, marketing, sviluppo app — la soluzione più flessibile ne
 
 | Periodo | Team | Voce principale | Costo/mese | Costo cumulato |
 |---------|------|-----------------|------------|----------------|
-| **M0-M6** | 2 fondatori | Compenso amm. €2.000/mese cad. + INPS | ~€5.100 | €30.600 |
-| **M7-M9** | 2 fondatori + freelancer | + freelancer marketing/content | ~€6.600 | €50.400 |
-| **M10-M12** | 2 fondatori + freelancer + 1 dipendente | RAL €25K = ~€3.000/mese azienda | ~€9.600 | €79.200 |
-| **M13-M18** | 2 fondatori + 1 dipendente + freelancer | Stabilizzazione | ~€9.800 | €138.000 |
-| **M19-M24** | 2 fondatori + 2 dipendenti + freelancer | + secondo dipendente (RAL €28K) | ~€13.200 | €217.200 |
+| **M0-M6** | 2 fondatori | Compenso amm. €1.000/mese cad. + INPS | ~€2.550 | €15.300 |
+| **M7-M9** | 2 fondatori + freelancer | + freelancer marketing/content | ~€4.050 | €27.450 |
+| **M10-M12** | 2 fondatori + freelancer + 1 dipendente | RAL €25K = ~€3.000/mese azienda | ~€7.050 | €48.600 |
+| **M13-M18** | 2 fondatori + 1 dipendente + freelancer | Stabilizzazione | ~€7.250 | €92.100 |
+| **M19-M24** | 2 fondatori + 2 dipendenti + freelancer | + secondo dipendente (RAL €28K) | ~€10.650 | €156.000 |
 
-**Totale personale stimato M0-M24**: ~€223.000 (fondatori ~€122K + dipendenti ~€72K + freelancer ~€24K + adempimenti ~€5K). Budget separato dai €180K marketing, coperto da capitale sociale e ricavi operativi da M6-M9.
+**Totale personale stimato M0-M24**: ~€170.000 (fondatori ~€61K + dipendenti ~€72K + freelancer ~€24K + adempimenti ~€5K). Coperto dal capitale sociale di €180K e dai ricavi operativi da M+6 in avanti (cfr. doc 60).
 
 ---
 

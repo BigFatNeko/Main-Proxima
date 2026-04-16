@@ -49,7 +49,7 @@ Almeno un socio/amministratore che dirige l'attività deve possedere:
 
 - Iscrizione all'Albo dei consulenti finanziari (sezione persone fisiche) **oppure**
 - Laurea in discipline economiche/giuridiche + 2 anni di esperienza in consulenza finanziaria/gestione patrimoniale **oppure**
-- 5 anni di esperienza documentata in ambito finanziario senza laurea specifica
+- 3 anni di esperienza documentata in ambito finanziario senza laurea specifica (art. 4 DM 206/2008)
 - Superamento della prova valutativa APF (se non già iscritti)
 
 ### 2.4 Requisiti organizzativi

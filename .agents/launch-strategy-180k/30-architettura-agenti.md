@@ -118,8 +118,9 @@
 
 | Fase | Periodo | Agenti attivi | Totale |
 |------|---------|---------------|--------|
-| Pre-lancio | Mese -6 → -3 | 1, 2, 3, 5, 6, 7, 12, 20, 25, 26, 28, 29, 30 | 13 |
-| Alpha | Mese -3 → 0 | + 4, 8, 13, 15, 16, 17, 21, 22, 23, 27 | 23 |
+| Fondamenta | Mese -12 → -7 | 25, 26, 28, 29, 30 + 1, 2, 3, 5, 12 | 10 |
+| Pre-lancio | Mese -6 → -3 | + 6, 7, 8, 15, 16, 20 | 16 |
+| Alpha | Mese -3 → 0 | + 4, 9, 10, 13, 17, 21, 22, 23, 27 | 25 |
 | Beta | Mese 0 → 3 | + 9, 10, 14, 18, 19, 24, 31, 32, 33 | 32 |
 | Scala | Mese 3 → 12 | + 11, 34, 35 | 35 |
 | Maturità | Mese 12 → 24 | Tutti attivi, Marketing Manager Hire assorbe agenti FL | 35 |

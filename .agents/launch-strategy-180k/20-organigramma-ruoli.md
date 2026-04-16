@@ -109,7 +109,7 @@ Solo i 2 founder. Nessuna assunzione, massima flessibilità.
 
 | Ruolo | Periodo | Costo mensile stimato |
 |-------|---------|----------------------|
-| Founder A + B | M-12 → M+24 | €0 (compenso da utili) |
+| Founder A + B | M-12 → M+24 | €1.000/mese cad. come compenso amm. (cfr. doc 60) |
 | Commercialista esterno | M-12 → ongoing | €200-350 |
 | Avvocato esterno | On-demand | €150-300 (media) |
 | Consulente #2 (part-time) | Da M+7 | €1.500-2.000 |
