@@ -46,7 +46,13 @@ window.PROXIMA.defaultParams = function () {
     social: { baseVisits: 60, growthRate: 0.14, visitToCalc: 0.10, calcToBooking: 0.04 },
     referral: { ratePerClient: 0.06, bookingRate: 0.80, startMonth: 15 },
     borrowed: { bookingsByPhase: { 1:0, 2:0, 3:0, 4:2, 5:5, 6:8, 7:12 } },
-    founderHoursPerWeek: 25, hoursOnboarding: 5, hoursRecurring: 1.25,
+    founderHoursPerWeek: 25, hoursOnboarding: 5,
+    clientRisk: {
+      lowPct: 0.75, mediumPct: 0.20,
+      lowHoursPerMonth: 0.33,
+      mediumHoursPerMonth: 4.33,
+      highHoursPerMonth: 21.7
+    },
     arpu: 490, churnMonthly: 0.01,
     constitution: {
       notaio: 2500, cciaa: 200, impostoRegistro: 200, bollo: 156,
@@ -96,6 +102,11 @@ function constitutionForMonth(m, c) {
   return 0;
 }
 
+function weightedHoursPerClient(cr) {
+  var highPct = Math.max(0, 1 - cr.lowPct - cr.mediumPct);
+  return cr.lowPct * cr.lowHoursPerMonth + cr.mediumPct * cr.mediumHoursPerMonth + highPct * cr.highHoursPerMonth;
+}
+
 var RISK = {
   base:       { clientMult: 1.0, costMult: 1.0, churnMult: 1.0 },
   recessione: { clientMult: 0.7, costMult: 1.15, churnMult: 1.5 },
@@ -113,6 +124,7 @@ window.PROXIMA.simulate = function (p, months) {
   for (var k = 0; k < keys.length; k++) opBase += p.operating[keys[k]];
   var cash = p.startingCapital;
   var cashMin = cash, cashMinMonth = 1;
+  var hRec = weightedHoursPerClient(p.clientRisk);
 
   var h = p.hiring;
   var hiredConsultants = 0, hasBackOffice = false, hasContent = false, hasJunior = false;
@@ -134,8 +146,7 @@ window.PROXIMA.simulate = function (p, months) {
     var cHoursPre = hiredConsultants * h.consultantHoursPerWeek * 4.33;
     var jHoursPre = hasJunior ? h.juniorHoursPerWeek * 4.33 : 0;
     var totHoursPre = fHoursPre + cHoursPre + jHoursPre;
-    var hoursUsedByExisting = totalClients * p.hoursRecurring;
-    var maxCapPre = p.hoursRecurring > 0 ? totHoursPre / p.hoursRecurring : 999;
+    var maxCapPre = hRec > 0 ? totHoursPre / hRec : 999;
     var utilPre = maxCapPre > 0 ? totalClients / maxCapPre : 0;
 
     // --- Dynamic hiring: trigger on utilization > 85%, max 1 hire every 3 months ---
@@ -169,10 +180,15 @@ window.PROXIMA.simulate = function (p, months) {
     var consultantHours = hiredConsultants * h.consultantHoursPerWeek * 4.33;
     var juniorHours = hasJunior ? h.juniorHoursPerWeek * 4.33 : 0;
     var totHours = fHours + consultantHours + juniorHours;
-    var hoursForExisting = totalClients * p.hoursRecurring;
+    var cr = p.clientRisk;
+    var highPct = Math.max(0, 1 - cr.lowPct - cr.mediumPct);
+    var clientsLow = totalClients * cr.lowPct;
+    var clientsMed = totalClients * cr.mediumPct;
+    var clientsHigh = totalClients * highPct;
+    var hoursForExisting = clientsLow * cr.lowHoursPerMonth + clientsMed * cr.mediumHoursPerMonth + clientsHigh * cr.highHoursPerMonth;
     var hoursAvailableForNew = Math.max(0, totHours - hoursForExisting);
     var maxNewByHours = p.hoursOnboarding > 0 ? hoursAvailableForNew / p.hoursOnboarding : 999;
-    var maxCap = p.hoursRecurring > 0 ? totHours / p.hoursRecurring : 999;
+    var maxCap = hRec > 0 ? totHours / hRec : 999;
     var utilization = maxCap > 0 ? totalClients / maxCap : 0;
 
     // --- Smart budget: reduce ads near capacity ---
@@ -268,6 +284,8 @@ window.PROXIMA.simulate = function (p, months) {
       founderHours: fHours, totalHours: totHours,
       hoursForExisting: hoursForExisting, hoursForNew: newCapped * p.hoursOnboarding,
       maxNewThisMonth: maxNewByHours,
+      clientsLow: clientsLow, clientsMed: clientsMed, clientsHigh: clientsHigh,
+      weightedHoursPerClient: hRec,
       capacityLimited: capLimited,
       capacityUtilization: utilization, budgetFactor: budgetFactor,
       hiredConsultants: hiredConsultants, hasBackOffice: hasBackOffice,
