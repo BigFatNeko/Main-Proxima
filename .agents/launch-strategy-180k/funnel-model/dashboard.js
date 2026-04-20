@@ -71,8 +71,7 @@ window.PROXIMA.Dashboard = function Dashboard({ sim }) {
   };
 
   const clientsData = results.map((r) => ({
-    monthLabel: r.monthLabel, totalClients: r.totalClients,
-    maxCapacity: r.maxClientsByCapacity
+    monthLabel: r.monthLabel, totalClients: r.totalClients
   }));
 
   /* ── CAC per channel (current month = last post-launch with spend) ── */
@@ -86,7 +85,7 @@ window.PROXIMA.Dashboard = function Dashboard({ sim }) {
   const staffData = results.filter((r) => r.month >= 13).map((r) => ({
     monthLabel: r.monthLabel,
     staffCount: r.staffCount,
-    utilization: Math.round(r.capacityUtilization * 100),
+    utilization: Math.round(r.appointmentUtilization * 100),
     budgetFactor: Math.round(r.budgetFactor * 100)
   }));
 
@@ -198,7 +197,7 @@ window.PROXIMA.Dashboard = function Dashboard({ sim }) {
         <div className="chart-row">
           {/* Chart 1: Clienti attivi + capacity line */}
           <div className="card">
-            <div className="card-title">Clienti attivi vs capacita</div>
+            <div className="card-title">Clienti attivi (nessun tetto)</div>
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart data={clientsData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="#1E2A3E" vertical={false} />
@@ -210,8 +209,6 @@ window.PROXIMA.Dashboard = function Dashboard({ sim }) {
                 <ReferenceLine x={results[12]?.monthLabel} stroke="#C4A962"
                                strokeDasharray="4 4" label={{ value: "Lancio", fill: "#C4A962", fontSize: 11 }} />
                 <Bar dataKey="totalClients" name="Clienti attivi" fill="#C4A962" />
-                <Line type="stepAfter" dataKey="maxCapacity" name="Capacita max"
-                      stroke="#F59E0B" strokeWidth={2} strokeDasharray="6 3" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -289,7 +286,7 @@ window.PROXIMA.Dashboard = function Dashboard({ sim }) {
         {/* Row 3: Team & utilization */}
         <div className="chart-row" style={{ marginTop: 14 }}>
           <div className="card">
-            <div className="card-title">Team e utilizzo capacita</div>
+            <div className="card-title">Team e slot appuntamenti</div>
             <ResponsiveContainer width="100%" height={250}>
               <ComposedChart data={staffData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="#1E2A3E" vertical={false} />
@@ -301,7 +298,7 @@ window.PROXIMA.Dashboard = function Dashboard({ sim }) {
                 <Tooltip contentStyle={tooltipStyle} />
                 <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
                 <Bar yAxisId="left" dataKey="staffCount" name="Team (persone)" fill="#A78BFA" />
-                <Line yAxisId="right" type="monotone" dataKey="utilization" name="Utilizzo %"
+                <Line yAxisId="right" type="monotone" dataKey="utilization" name="Slot appuntamenti %"
                       stroke="#F59E0B" strokeWidth={2} dot={false} />
                 <Line yAxisId="right" type="monotone" dataKey="budgetFactor" name="Budget ads %"
                       stroke="#4ADE80" strokeWidth={2} strokeDasharray="4 3" dot={false} />

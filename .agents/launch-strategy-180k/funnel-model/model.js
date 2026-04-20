@@ -124,8 +124,6 @@ window.PROXIMA.simulate = function (p, months) {
   for (var k = 0; k < keys.length; k++) opBase += p.operating[keys[k]];
   var cash = p.startingCapital;
   var cashMin = cash, cashMinMonth = 1;
-  var hRec = weightedHoursPerClient(p.clientRisk);
-
   var h = p.hiring;
   var hiredConsultants = 0, hasBackOffice = false, hasContent = false, hasJunior = false;
   var hiringPlan = [];
@@ -141,24 +139,14 @@ window.PROXIMA.simulate = function (p, months) {
     var label = window.PROXIMA.monthLabel(m);
     var isPreRelease = m <= 12;
 
-    // --- Capacity before hiring (to check utilization) ---
-    var fHoursPre = p.founderHoursPerWeek * 4.33;
-    var cHoursPre = hiredConsultants * h.consultantHoursPerWeek * 4.33;
-    var jHoursPre = hasJunior ? h.juniorHoursPerWeek * 4.33 : 0;
-    var totHoursPre = fHoursPre + cHoursPre + jHoursPre;
-    var maxCapPre = hRec > 0 ? totHoursPre / hRec : 999;
-    var utilPre = maxCapPre > 0 ? totalClients / maxCapPre : 0;
+    // --- Appointment capacity: no client cap, only new-client bottleneck ---
+    var fHours = p.founderHoursPerWeek * 4.33;
+    var consultantHours = hiredConsultants * h.consultantHoursPerWeek * 4.33;
+    var juniorHours = hasJunior ? h.juniorHoursPerWeek * 4.33 : 0;
+    var totHours = fHours + consultantHours + juniorHours;
+    var maxNewByHours = p.hoursOnboarding > 0 ? totHours / p.hoursOnboarding : 999;
 
-    // --- Dynamic hiring: trigger on utilization > 85%, max 1 hire every 3 months ---
-    if (m >= h.firstConsultantMonth && hiredConsultants < h.maxConsultants
-        && utilPre > 0.85 && (m - lastConsultantHireMonth) >= 3) {
-      hiredConsultants++;
-      lastConsultantHireMonth = m;
-      hiringPlan.push({ month: m, monthLabel: label,
-        role: 'Consulente #' + (hiredConsultants + 1),
-        cost: h.consultantCost,
-        trigger: 'capacita al ' + Math.round(utilPre * 100) + '%' });
-    }
+    // --- Dynamic hiring: trigger when appointment slots are >85% full ---
     if (!hasBackOffice && m >= h.backOfficeMinMonth && totalClients >= h.backOfficeTrigger) {
       hasBackOffice = true;
       hiringPlan.push({ month: m, monthLabel: label, role: 'Back-office',
@@ -175,39 +163,17 @@ window.PROXIMA.simulate = function (p, months) {
         cost: h.juniorCost, trigger: h.juniorTrigger + ' clienti' });
     }
 
-    // --- Capacity (dynamic): ore disponibili - ore clienti esistenti = ore per nuovi ---
-    var fHours = p.founderHoursPerWeek * 4.33;
-    var consultantHours = hiredConsultants * h.consultantHoursPerWeek * 4.33;
-    var juniorHours = hasJunior ? h.juniorHoursPerWeek * 4.33 : 0;
-    var totHours = fHours + consultantHours + juniorHours;
-    var cr = p.clientRisk;
-    var highPct = Math.max(0, 1 - cr.lowPct - cr.mediumPct);
-    var clientsLow = totalClients * cr.lowPct;
-    var clientsMed = totalClients * cr.mediumPct;
-    var clientsHigh = totalClients * highPct;
-    var hoursForExisting = clientsLow * cr.lowHoursPerMonth + clientsMed * cr.mediumHoursPerMonth + clientsHigh * cr.highHoursPerMonth;
-    var hoursAvailableForNew = Math.max(0, totHours - hoursForExisting);
-    var maxNewByHours = p.hoursOnboarding > 0 ? hoursAvailableForNew / p.hoursOnboarding : 999;
-    var maxCap = hRec > 0 ? totHours / hRec : 999;
-    var utilization = maxCap > 0 ? totalClients / maxCap : 0;
+    // --- Demand calculation (full budget first, then adjust) ---
+    var bGFull = p.google.budgetByPhase[phase] || 0;
+    var bMFull = p.meta.budgetByPhase[phase] || 0;
+    var bLFull = (m >= p.linkedin.startMonth) ? (p.linkedin.budgetByPhase[phase] || 0) : 0;
 
-    // --- Smart budget: reduce ads near capacity ---
-    var budgetFactor = 1.0;
-    if (p.budgetCapAdjust && m >= 13 && utilization > p.budgetCapThreshold) {
-      budgetFactor = Math.max(0.05, 1 - (utilization - p.budgetCapThreshold) / (1 - p.budgetCapThreshold));
-    }
-
-    var bG = (p.google.budgetByPhase[phase] || 0) * budgetFactor;
-    var bM = (p.meta.budgetByPhase[phase] || 0) * budgetFactor;
-    var bL = (m >= p.linkedin.startMonth ? (p.linkedin.budgetByPhase[phase] || 0) : 0) * budgetFactor;
-
-    // --- Channel funnel ---
-    var gClicks = bG > 0 ? bG / p.google.cpc : 0;
-    var gBook = gClicks * p.google.clickToCalc * p.google.calcToBooking;
-    var mClicks = bM > 0 ? bM / p.meta.cpc : 0;
-    var mBook = mClicks * p.meta.clickToCalc * p.meta.calcToBooking;
-    var lClicks = bL > 0 ? bL / p.linkedin.cpc : 0;
-    var lBook = lClicks * p.linkedin.clickToCalc * p.linkedin.calcToBooking;
+    var gClicksFull = bGFull > 0 ? bGFull / p.google.cpc : 0;
+    var gBookFull = gClicksFull * p.google.clickToCalc * p.google.calcToBooking;
+    var mClicksFull = bMFull > 0 ? bMFull / p.meta.cpc : 0;
+    var mBookFull = mClicksFull * p.meta.clickToCalc * p.meta.calcToBooking;
+    var lClicksFull = bLFull > 0 ? bLFull / p.linkedin.cpc : 0;
+    var lBookFull = lClicksFull * p.linkedin.clickToCalc * p.linkedin.calcToBooking;
 
     var seoV = p.seo.baseVisits * Math.pow(1 + p.seo.growthRate, m - 1);
     var seoBook = seoV * p.seo.visitToCalc * p.seo.calcToBooking;
@@ -218,10 +184,51 @@ window.PROXIMA.simulate = function (p, months) {
     var borBook = p.borrowed.bookingsByPhase[phase] || 0;
 
     if (isPreRelease) {
-      gBook = 0; mBook = 0; lBook = 0; seoBook = 0; socBook = 0; refBook = 0;
-      bG = 0; bM = 0; bL = 0;
+      gBookFull = 0; mBookFull = 0; lBookFull = 0; seoBook = 0; socBook = 0; refBook = 0;
+      bGFull = 0; bMFull = 0; bLFull = 0;
       if (phase !== 4) borBook = 0;
     }
+
+    var totBookFull = gBookFull + mBookFull + lBookFull + seoBook + socBook + refBook + borBook;
+    var checkupsFull = totBookFull * p.showRate;
+    var newRawFull = checkupsFull * p.checkupToClient * risk.clientMult;
+
+    // --- Appointment utilization: demand vs slots ---
+    var appointmentUtil = maxNewByHours > 0 ? newRawFull / maxNewByHours : 0;
+
+    // --- Hire consultant when appointment demand exceeds 85% of slots ---
+    if (m >= h.firstConsultantMonth && hiredConsultants < h.maxConsultants
+        && appointmentUtil > 0.85 && (m - lastConsultantHireMonth) >= 3) {
+      hiredConsultants++;
+      lastConsultantHireMonth = m;
+      // Recalculate capacity after hire
+      consultantHours = hiredConsultants * h.consultantHoursPerWeek * 4.33;
+      totHours = fHours + consultantHours + juniorHours;
+      maxNewByHours = p.hoursOnboarding > 0 ? totHours / p.hoursOnboarding : 999;
+      appointmentUtil = maxNewByHours > 0 ? newRawFull / maxNewByHours : 0;
+      hiringPlan.push({ month: m, monthLabel: label,
+        role: 'Consulente #' + (hiredConsultants + 1),
+        cost: h.consultantCost,
+        trigger: 'appuntamenti al ' + Math.round(appointmentUtil * 100) + '% dopo assunzione' });
+    }
+
+    // --- Smart budget: reduce ads only when appointment slots are full ---
+    var budgetFactor = 1.0;
+    if (p.budgetCapAdjust && m >= 13 && appointmentUtil > p.budgetCapThreshold) {
+      budgetFactor = Math.max(0.05, 1 - (appointmentUtil - p.budgetCapThreshold) / (1 - p.budgetCapThreshold));
+    }
+
+    // --- Apply budget factor ---
+    var bG = bGFull * budgetFactor;
+    var bM = bMFull * budgetFactor;
+    var bL = bLFull * budgetFactor;
+    var gClicks = bG > 0 ? bG / p.google.cpc : 0;
+    var gBook = gClicks * p.google.clickToCalc * p.google.calcToBooking;
+    var mClicks = bM > 0 ? bM / p.meta.cpc : 0;
+    var mBook = mClicks * p.meta.clickToCalc * p.meta.calcToBooking;
+    var lClicks = bL > 0 ? bL / p.linkedin.cpc : 0;
+    var lBook = lClicks * p.linkedin.clickToCalc * p.linkedin.calcToBooking;
+    if (isPreRelease) { gBook = 0; mBook = 0; lBook = 0; bG = 0; bM = 0; bL = 0; }
 
     var totBook = gBook + mBook + lBook + seoBook + socBook + refBook + borBook;
     var checkups = totBook * p.showRate;
@@ -274,7 +281,7 @@ window.PROXIMA.simulate = function (p, months) {
       seoVisits: seoV, seoBookings: seoBook, socialVisits: socV, socialBookings: socBook,
       referralBookings: refBook, borrowedBookings: borBook,
       totalBookings: totBook, checkups: checkups,
-      newClientsRaw: newRaw, maxClientsByCapacity: maxCap, newClientsCapped: newCapped,
+      newClientsRaw: newRaw, maxNewPerMonth: maxNewByHours, newClientsCapped: newCapped,
       churnedClients: churn, totalClients: totalClients,
       constitutionCosts: constCost, operatingCosts: opCost,
       personnelCosts: persCost, marketingCosts: mktCost, totalCosts: totCost,
@@ -282,12 +289,10 @@ window.PROXIMA.simulate = function (p, months) {
       netBurn: netBurn, cashRemaining: cash,
       revenueCumulative: revCum, costsCumulative: costCum,
       founderHours: fHours, totalHours: totHours,
-      hoursForExisting: hoursForExisting, hoursForNew: newCapped * p.hoursOnboarding,
+      hoursForOnboarding: newCapped * p.hoursOnboarding,
       maxNewThisMonth: maxNewByHours,
-      clientsLow: clientsLow, clientsMed: clientsMed, clientsHigh: clientsHigh,
-      weightedHoursPerClient: hRec,
       capacityLimited: capLimited,
-      capacityUtilization: utilization, budgetFactor: budgetFactor,
+      appointmentUtilization: appointmentUtil, budgetFactor: budgetFactor,
       hiredConsultants: hiredConsultants, hasBackOffice: hasBackOffice,
       hasContent: hasContent, hasJunior: hasJunior, staffCount: staffCount,
       activeAgents: AGENTS_BY_PHASE[phase] || 35

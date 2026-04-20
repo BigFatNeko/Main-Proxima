@@ -18,7 +18,7 @@ window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
     ["Fase",           (r) => null,                ""],
     ["Prenotazioni",   (r) => fmtN(r.totalBookings), ""],
     ["Check-up",       (r) => fmtN(r.checkups),    ""],
-    ["Max gestibili",  (r) => fmtN(r.maxClientsByCapacity), ""],
+    ["Max nuovi/mese", (r) => fmtN(r.maxNewPerMonth), ""],
     ["Nuovi clienti",  (r) => fmtN(r.newClientsCapped), ""],
     ["Persi (churn)",  (r) => fmtN(r.churnedClients), ""],
     ["Clienti attivi", (r) => fmtN(r.totalClients), "bold"],
@@ -31,7 +31,7 @@ window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
     ["Burn netto",     (r) => fmtE(r.netBurn),     "burn"],
     ["Cash",           (r) => fmtE(r.cashRemaining), "cash"],
     ["Team",           (r) => fmtN(r.staffCount), ""],
-    ["Util. %",        (r) => Math.round(r.capacityUtilization*100)+"%", "util"],
+    ["Slot %",         (r) => Math.round(r.appointmentUtilization*100)+"%", "util"],
     ["Ads %",          (r) => Math.round(r.budgetFactor*100)+"%", "bf"],
   ];
 
@@ -50,19 +50,19 @@ window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
   };
 
   const exportCSV = () => {
-    const hdr = ["Mese","Fase","Prenotazioni","Check-up","Max gestibili",
+    const hdr = ["Mese","Fase","Prenotazioni","Check-up","Max nuovi/mese",
       "Nuovi clienti","Churn","Clienti attivi","Costi costituzione",
       "Costi operativi","Personale","Marketing","Costi totali",
-      "MRR","Burn netto","Cash","Team","Utilizzo %","Budget ads %"];
+      "MRR","Burn netto","Cash","Team","Slot appuntamenti %","Budget ads %"];
     const rows = results.map((r) => [
       r.monthLabel, r.phaseName, Math.round(r.totalBookings), Math.round(r.checkups),
-      Math.round(r.maxClientsByCapacity), Math.round(r.newClientsCapped),
+      Math.round(r.maxNewPerMonth), Math.round(r.newClientsCapped),
       Math.round(r.churnedClients), Math.round(r.totalClients),
       Math.round(r.constitutionCosts), Math.round(r.operatingCosts),
       Math.round(r.personnelCosts), Math.round(r.marketingCosts),
       Math.round(r.totalCosts), Math.round(r.mrr), Math.round(r.netBurn),
       Math.round(r.cashRemaining), r.staffCount,
-      Math.round(r.capacityUtilization*100), Math.round(r.budgetFactor*100)
+      Math.round(r.appointmentUtilization*100), Math.round(r.budgetFactor*100)
     ].join(";"));
     download(new Blob([hdr.join(";") + "\n" + rows.join("\n")], { type: "text/csv;charset=utf-8" }),
       "proxima-proiezione-36m.csv");
@@ -82,7 +82,7 @@ window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
     if (flag === "gold") return { color: "#D4A843", fontWeight: 700 };
     if (flag === "burn") return { fontWeight: 700, color: r.netBurn > 0 ? "#ef4444" : "#4ade80" };
     if (flag === "cash") return { fontWeight: 700, color: r.cashRemaining < 30000 ? "#ef4444" : undefined };
-    if (flag === "util") return { color: r.capacityUtilization > 0.85 ? "#F59E0B" : "#8B98B0" };
+    if (flag === "util") return { color: r.appointmentUtilization > 0.85 ? "#F59E0B" : "#8B98B0" };
     if (flag === "bf") return { color: r.budgetFactor < 0.5 ? "#F59E0B" : "#8B98B0" };
     return undefined;
   };
