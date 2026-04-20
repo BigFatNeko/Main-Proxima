@@ -1,5 +1,5 @@
 /* ============================================================
-   Proxima Funnel Model — Bottom-Up 36 mesi (M-12 → M+24)
+   Proxima Funnel Model — Bottom-Up 36 mesi (M-12 → M+23)
    v3: assunzioni dinamiche, budget intelligente, CAC per canale
    ============================================================ */
 window.PROXIMA = window.PROXIMA || {};
@@ -47,12 +47,6 @@ window.PROXIMA.defaultParams = function () {
     referral: { ratePerClient: 0.06, bookingRate: 0.80, startMonth: 15 },
     borrowed: { bookingsByPhase: { 1:0, 2:0, 3:0, 4:2, 5:5, 6:8, 7:12 } },
     founderHoursPerWeek: 25, hoursOnboarding: 5,
-    clientRisk: {
-      lowPct: 0.75, mediumPct: 0.20,
-      lowHoursPerMonth: 0.33,
-      mediumHoursPerMonth: 4.33,
-      highHoursPerMonth: 21.7
-    },
     arpu: 490, churnMonthly: 0.01,
     constitution: {
       notaio: 2500, cciaa: 200, impostoRegistro: 200, bollo: 156,
@@ -68,7 +62,6 @@ window.PROXIMA.defaultParams = function () {
       founderComp: 1000, numFounders: 2, inpsRate: 0.26
     },
     hiring: {
-      consultantClientsEach: 35,
       consultantHoursPerWeek: 20,
       consultantCost: 2500,
       maxConsultants: 4,
@@ -100,11 +93,6 @@ function constitutionForMonth(m, c) {
   if (m === 6) return c.branding;
   if (m === 7) return c.setupCRM;
   return 0;
-}
-
-function weightedHoursPerClient(cr) {
-  var highPct = Math.max(0, 1 - cr.lowPct - cr.mediumPct);
-  return cr.lowPct * cr.lowHoursPerMonth + cr.mediumPct * cr.mediumHoursPerMonth + highPct * cr.highHoursPerMonth;
 }
 
 var RISK = {
@@ -207,7 +195,7 @@ window.PROXIMA.simulate = function (p, months) {
       maxNewByHours = p.hoursOnboarding > 0 ? totHours / p.hoursOnboarding : 999;
       appointmentUtil = maxNewByHours > 0 ? newRawFull / maxNewByHours : 0;
       hiringPlan.push({ month: m, monthLabel: label,
-        role: 'Consulente #' + (hiredConsultants + 1),
+        role: 'Consulente #' + hiredConsultants,
         cost: h.consultantCost,
         trigger: 'appuntamenti al ' + Math.round(appointmentUtil * 100) + '% dopo assunzione' });
     }

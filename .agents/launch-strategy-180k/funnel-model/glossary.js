@@ -13,7 +13,7 @@ window.PROXIMA.Glossary = function Glossary() {
       ["Clienti totali attivi", "Quante persone stanno pagando la parcella Proxima in quel mese."],
       ["Nuovi clienti", "Persone che sono diventate clienti paganti in quel mese specifico."],
       ["Clienti persi (churn)", "Clienti che hanno disdetto il servizio. In un servizio sano il churn mensile è tra 0,5% e 2%."],
-      ["Capacità massima / Max gestibili", "Numero massimo di nuovi clienti gestibili con le ore disponibili."],
+      ["Max nuovi/mese", "Numero massimo di nuovi clienti onboardabili in un mese, dato dagli slot appuntamento disponibili."],
     ]},
     { group: "Funnel (il percorso del cliente)", items: [
       ["Click", "Persone che hanno cliccato su un annuncio pubblicitario."],
@@ -52,9 +52,9 @@ window.PROXIMA.Glossary = function Glossary() {
       ["PR / Podcast / Eventi (Borrowed)", "Apparizioni su giornali, podcast, conferenze."],
     ]},
     { group: "Gestione automatica", items: [
-      ["Utilizzo capacità", "Percentuale delle ore disponibili già impegnate dai clienti attuali. Sopra l'85% il modello assume nuovi consulenti."],
-      ["Budget ads %", "Quando la capacità è satura, il budget pubblicitario viene ridotto automaticamente per non sprecare soldi in lead che non puoi servire."],
-      ["Assunzioni dinamiche", "Il modello assume nuovi consulenti, back-office, content creator e junior automaticamente quando i clienti superano le soglie impostate."],
+      ["Slot appuntamenti %", "Percentuale degli slot di onboarding occupati dalla domanda di nuovi clienti. Sopra l'85% il modello assume nuovi consulenti e riduce il budget ads."],
+      ["Budget ads %", "Quando gli slot appuntamento sono saturi (>85%), il budget pubblicitario viene ridotto automaticamente per non sprecare soldi in lead che non puoi servire."],
+      ["Assunzioni dinamiche", "Il modello assume nuovi consulenti quando gli slot appuntamento superano l'85%, e back-office, content creator e junior quando i clienti superano le soglie impostate."],
     ]},
     { group: "Scenari di rischio", items: [
       ["Scenario base", "Crescita moderata dei mercati, condizioni favorevoli."],

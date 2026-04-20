@@ -6,13 +6,26 @@ window.PROXIMA = window.PROXIMA || {};
 
 const STORAGE_KEY = "proxima.funnel.params.v3";
 
+function deepMerge(target, source) {
+  const out = { ...target };
+  for (const key of Object.keys(source)) {
+    if (source[key] && typeof source[key] === "object" && !Array.isArray(source[key])
+        && target[key] && typeof target[key] === "object" && !Array.isArray(target[key])) {
+      out[key] = deepMerge(target[key], source[key]);
+    } else {
+      out[key] = source[key];
+    }
+  }
+  return out;
+}
+
 function loadParams() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return window.PROXIMA.defaultParams();
     const parsed = JSON.parse(raw);
     const defaults = window.PROXIMA.defaultParams();
-    return { ...defaults, ...parsed };
+    return deepMerge(defaults, parsed);
   } catch (e) {
     return window.PROXIMA.defaultParams();
   }
@@ -49,7 +62,7 @@ function App() {
         <div className="section">
           <div className="info-banner">
             <strong>Come funziona questo modello.</strong> Calcola clienti, ricavi,
-            costi e cash flow su 36 mesi (da M-12 a M+24), partendo dai numeri veri
+            costi e cash flow su 36 mesi (da M-12 a M+23), partendo dai numeri veri
             di ogni canale e includendo tutti i costi di costituzione, operativi e del
             personale. Include tre scenari di rischio (base, recessione, crisi). Muovi
             gli slider a sinistra per aggiornare tutto in tempo reale.

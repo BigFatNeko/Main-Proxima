@@ -152,18 +152,6 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
       <Panel id="capacity" title="Capacita e ore di lavoro" openState={open} onToggle={toggle}>
         {S(["founderHoursPerWeek"],"Ore a settimana del founder",5,50,1,(v)=>v+"h")}
         {S(["hoursOnboarding"],"Onboarding per nuovo cliente",2,10,0.5,(v)=>v+"h una tantum")}
-
-        <div className="uppercase text-faint" style={{marginTop:14,marginBottom:8}}>Mix rischio clienti</div>
-        {S(["clientRisk","lowPct"],"% clienti basso rischio (1h/trimestre)",0.3,0.95,0.05,pct)}
-        {S(["clientRisk","mediumPct"],"% clienti medio rischio (1h/settimana)",0.05,0.50,0.05,pct)}
-        <div className="text-dim" style={{fontSize:11,marginBottom:10}}>
-          Alto rischio (1h/giorno): {pct(Math.max(0, 1 - (params.clientRisk?.lowPct||0) - (params.clientRisk?.mediumPct||0)))}
-        </div>
-
-        <div className="uppercase text-faint" style={{marginTop:8,marginBottom:8}}>Ore gestione per categoria</div>
-        {S(["clientRisk","lowHoursPerMonth"],"Basso rischio (h/mese)",0.1,1,0.05,(v)=>v+"h/mese")}
-        {S(["clientRisk","mediumHoursPerMonth"],"Medio rischio (h/mese)",1,8,0.25,(v)=>v+"h/mese")}
-        {S(["clientRisk","highHoursPerMonth"],"Alto rischio (h/mese)",10,30,0.5,(v)=>v+"h/mese")}
       </Panel>
 
       <Panel id="hiring" title="Assunzioni dinamiche" openState={open} onToggle={toggle}>
