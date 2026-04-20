@@ -1,10 +1,10 @@
-/* Controls — Slider panels for all funnel parameters */
+/* Controls — Slider panels for all funnel parameters (v3) */
 window.PROXIMA = window.PROXIMA || {};
 
 const pct = (v) => (v * 100).toFixed(1) + "%";
 const eur = (v) => "€" + Math.round(v).toLocaleString("it-IT");
 const num = (v) => Number(v).toFixed(2);
-const monthLabel = (v) => { const d = v - 13; return d < 0 ? "M" + d : "M+" + d; };
+const monthLabel = (v) => { const d = v - 13; return d < 0 ? "M" + d : d === 0 ? "M0" : "M+" + d; };
 
 function Slider({ label, value, min, max, step, fmt, onChange }) {
   return (
@@ -52,6 +52,7 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
   const [open, setOpen] = React.useState({
     scenario:true, funnel:true, google:true, meta:true, linkedin:false,
     seo:true, social:false, referral:true, borrowed:false, capacity:true,
+    hiring:true, budgetCap:true,
     constitution:false, operating:false, personnel:true, business:true, capital:true
   });
   const toggle = React.useCallback((k) => setOpen((p) => ({ ...p, [k]: !p[k] })), []);
@@ -111,11 +112,11 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
         <PhaseBudgets channel="meta" label="Meta" params={params} updateArray={updateArray} />
       </Panel>
 
-      <Panel id="linkedin" title="LinkedIn Ads (parte al mese +10)" openState={open} onToggle={toggle}>
+      <Panel id="linkedin" title="LinkedIn Ads" openState={open} onToggle={toggle}>
         {S(["linkedin","cpc"],"Costo per click",2,12,0.1,eurCpc)}
         {S(["linkedin","clickToCalc"],"% click → calcolatore",0.1,0.9,0.01,pct)}
         {S(["linkedin","calcToBooking"],"% calcolatore → prenotazione",0.01,0.2,0.005,pct)}
-        {S(["linkedin","startMonth"],"Mese di inizio",10,24,1,monthLabel)}
+        {S(["linkedin","startMonth"],"Mese di inizio",10,30,1,monthLabel)}
         <PhaseBudgets channel="linkedin" label="LinkedIn" params={params} updateArray={updateArray} />
       </Panel>
 
@@ -150,9 +151,45 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
 
       <Panel id="capacity" title="Ore di lavoro disponibili" openState={open} onToggle={toggle}>
         {S(["founderHoursPerWeek"],"Ore a settimana del founder",5,50,1,(v)=>v+"h")}
-        {S(["hoursPerClient"],"Ore per ogni nuovo cliente",1,8,0.25,(v)=>v+"h")}
-        {S(["secondConsultantStartMonth"],"Mese ingresso 2° consulente",7,24,1,monthLabel)}
-        {S(["secondConsultantHoursPerWeek"],"Ore/settimana 2° consulente",5,50,1,(v)=>v+"h")}
+        {S(["hoursPerClient"],"Ore mensili per cliente",0.5,8,0.25,(v)=>v+"h")}
+      </Panel>
+
+      <Panel id="hiring" title="Assunzioni dinamiche" openState={open} onToggle={toggle}>
+        <div className="uppercase text-faint" style={{marginBottom:8}}>Consulenti aggiuntivi</div>
+        {S(["hiring","consultantHoursPerWeek"],"Ore/settimana per consulente",10,40,5,(v)=>v+"h")}
+        {S(["hiring","consultantCost"],"Costo per consulente (€/mese)",500,5000,100,eur)}
+        {S(["hiring","maxConsultants"],"Max consulenti aggiuntivi",0,6,1)}
+        {S(["hiring","firstConsultantMonth"],"Mese prima assunzione possibile",13,30,1,monthLabel)}
+
+        <div className="uppercase text-faint" style={{marginTop:14,marginBottom:8}}>Back-office</div>
+        {S(["hiring","backOfficeTrigger"],"Clienti necessari per assunzione",20,200,10)}
+        {S(["hiring","backOfficeCost"],"Costo back-office (€/mese)",300,2000,100,eur)}
+        {S(["hiring","backOfficeMinMonth"],"Mese minimo",13,30,1,monthLabel)}
+
+        <div className="uppercase text-faint" style={{marginTop:14,marginBottom:8}}>Content creator</div>
+        {S(["hiring","contentTrigger"],"Clienti necessari per assunzione",10,150,10)}
+        {S(["hiring","contentCost"],"Costo content creator (€/mese)",200,2000,100,eur)}
+        {S(["hiring","contentMinMonth"],"Mese minimo",13,30,1,monthLabel)}
+
+        <div className="uppercase text-faint" style={{marginTop:14,marginBottom:8}}>Consulente junior</div>
+        {S(["hiring","juniorTrigger"],"Clienti necessari per assunzione",50,300,10)}
+        {S(["hiring","juniorCost"],"Costo junior (€/mese)",500,2500,100,eur)}
+        {S(["hiring","juniorHoursPerWeek"],"Ore/settimana junior",10,40,5,(v)=>v+"h")}
+        {S(["hiring","juniorMinMonth"],"Mese minimo",15,36,1,monthLabel)}
+      </Panel>
+
+      <Panel id="budgetCap" title="Gestione budget automatica" openState={open} onToggle={toggle}>
+        <div style={{marginBottom:12}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
+            <input type="checkbox" checked={!!params.budgetCapAdjust}
+              onChange={() => update(["budgetCapAdjust"], !params.budgetCapAdjust)} />
+            Riduci ads quando capacita satura
+          </label>
+          <div className="text-faint" style={{fontSize:11,marginTop:4}}>
+            Scala il budget pubblicitario quando il team non puo gestire nuovi clienti.
+          </div>
+        </div>
+        {params.budgetCapAdjust && S(["budgetCapThreshold"],"Soglia di utilizzo per riduzione",0.5,0.95,0.05,pct)}
       </Panel>
 
       <Panel id="constitution" title="Costi di costituzione" openState={open} onToggle={toggle}>
@@ -180,19 +217,13 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
         {S(["operating","quotaOCF"],"Quota annuale OCF",30,200,10,eur)}
       </Panel>
 
-      <Panel id="personnel" title="Personale" openState={open} onToggle={toggle}>
+      <Panel id="personnel" title="Compensi fondatori" openState={open} onToggle={toggle}>
         {S(["personnel","founderComp"],"Compenso per fondatore (€/mese)",0,3000,100,eur)}
         {S(["personnel","numFounders"],"Numero fondatori",1,4,1)}
-        {S(["personnel","secondConsultantMonth"],"Mese ingresso 2° consulente",13,36,1,monthLabel)}
-        {S(["personnel","secondConsultantCost"],"Costo 2° consulente (€/mese)",500,4000,100,eur)}
-        {S(["personnel","backOfficeMonth"],"Mese ingresso back-office",13,36,1,monthLabel)}
-        {S(["personnel","backOfficeCost"],"Costo back-office (€/mese)",300,2000,100,eur)}
-        {S(["personnel","freelancerMonth"],"Mese ingresso freelancer",13,36,1,monthLabel)}
-        {S(["personnel","freelancerCost"],"Costo freelancer (€/mese)",200,1500,100,eur)}
       </Panel>
 
       <Panel id="business" title="Parcelle e abbandoni" openState={open} onToggle={toggle}>
-        {S(["arpu"],"Parcella media per cliente (€/anno)",300,900,10,eur)}
+        {S(["arpu"],"Parcella media per cliente (€/anno)",300,1500,10,eur)}
         {S(["churnMonthly"],"% clienti che disdicono ogni mese",0,0.05,0.002,pct)}
       </Panel>
 

@@ -45,10 +45,16 @@ window.PROXIMA.Glossary = function Glossary() {
     ]},
     { group: "Canali di acquisizione", items: [
       ["Google Ads / Meta Ads / LinkedIn Ads", "Pubblicità a pagamento. Porta traffico ma costa."],
+      ["CAC (Costo Acquisizione Cliente)", "Quanto spendi in pubblicità per ottenere un cliente pagante. Calcolato per ogni canale separatamente."],
       ["SEO", "Traffico gratuito da Google. Cresce lentamente ma è composto."],
       ["Social organici", "Post gratuiti su IG/TikTok/LinkedIn. Costruiscono audience senza budget."],
       ["Passaparola (referral)", "Clienti esistenti che portano altri clienti."],
       ["PR / Podcast / Eventi (Borrowed)", "Apparizioni su giornali, podcast, conferenze."],
+    ]},
+    { group: "Gestione automatica", items: [
+      ["Utilizzo capacità", "Percentuale delle ore disponibili già impegnate dai clienti attuali. Sopra l'85% il modello assume nuovi consulenti."],
+      ["Budget ads %", "Quando la capacità è satura, il budget pubblicitario viene ridotto automaticamente per non sprecare soldi in lead che non puoi servire."],
+      ["Assunzioni dinamiche", "Il modello assume nuovi consulenti, back-office, content creator e junior automaticamente quando i clienti superano le soglie impostate."],
     ]},
     { group: "Scenari di rischio", items: [
       ["Scenario base", "Crescita moderata dei mercati, condizioni favorevoli."],

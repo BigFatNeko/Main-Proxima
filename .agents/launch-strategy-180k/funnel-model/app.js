@@ -4,7 +4,7 @@
 
 window.PROXIMA = window.PROXIMA || {};
 
-const STORAGE_KEY = "proxima.funnel.params.v2";
+const STORAGE_KEY = "proxima.funnel.params.v3";
 
 function loadParams() {
   try {
@@ -60,7 +60,7 @@ function App() {
         <window.PROXIMA.ProjectionTable sim={sim} />
         <div className="section" style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid #1E2A3E" }}>
           <div className="text-faint" style={{ fontSize: 11, textAlign: "center" }}>
-            Proxima · Modello Funnel v2 · 36 mesi · costi completi · scenari di rischio · dati salvati nel browser
+            Proxima · Modello Funnel v3 · 36 mesi · assunzioni dinamiche · budget intelligente · CAC per canale
           </div>
         </div>
       </main>
