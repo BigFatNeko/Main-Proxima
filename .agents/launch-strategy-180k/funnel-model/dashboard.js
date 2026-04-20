@@ -1,226 +1,205 @@
 /* ============================================================
-   Dashboard — KPI cards + Recharts visualizations
+   Dashboard — KPI cards + Recharts 2.12.7 visualizations
+   Receives { sim } with 36-month simulation results.
    ============================================================ */
 
 window.PROXIMA = window.PROXIMA || {};
 
 window.PROXIMA.Dashboard = function Dashboard({ sim }) {
-  const R = window.Recharts;
-  const { results, breakEvenMonth, cacBlended, budgetPaidCumulativeByChannel } = sim;
-  const targets = window.PROXIMA.strategyTargets;
+  const {
+    ResponsiveContainer, ComposedChart, AreaChart, Bar, Line, Area,
+    XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine
+  } = window.Recharts;
 
-  // Milestones: index 13=M+6, 19=M+12, 24=M+18
-  const milestones = [
-    { key: "m6", idx: 13, label: "M+6 — lancio pubblico" },
-    { key: "m12", idx: 19, label: "M+12 — fine primo anno" },
-    { key: "m18", idx: 24, label: "M+18 — fine della strategia" }
-  ];
+  const { results, breakEvenOperational, breakEvenCumulative,
+          cacBlended, cashMinimum, cashMinimumMonth } = sim;
 
-  const eur = (v) => "€" + Math.round(v).toLocaleString("it-IT");
+  const eur = (v) => "€\u00A0" + Math.round(v).toLocaleString("it-IT");
   const num = (v) => Math.round(v).toLocaleString("it-IT");
-
-  const deltaPill = (actual, target) => {
-    if (target === 0) return null;
-    const d = (actual - target) / target;
-    const cls = d >= 0.02 ? "delta-pos" : d <= -0.02 ? "delta-neg" : "delta-flat";
-    const sign = d >= 0 ? "+" : "";
-    return <span className={`kpi-delta ${cls}`}>{sign}{(d * 100).toFixed(0)}% vs obiettivo</span>;
-  };
-
-  const Kpi = ({ label, value, sub, delta, accent }) => (
-    <div className={`kpi-card ${accent ? "accent" : ""}`}>
-      <div className="kpi-label">{label}</div>
-      <div className="kpi-value">{value}</div>
-      {sub && <div className="kpi-sub">{sub}</div>}
-      {delta}
-    </div>
-  );
-
-  // Break-even vs strategy target (mese 17-18 = idx 23-24)
-  const beLabel = breakEvenMonth
-    ? `Mese ${breakEvenMonth} (strategia M${breakEvenMonth - 6})`
-    : "Non raggiunto nei 24 mesi";
-
-  // Final month row
+  const ml = (idx) => idx != null && results[idx] ? results[idx].monthLabel : "Mai";
   const last = results[results.length - 1];
 
-  // Capacity bottleneck detection
-  const firstBottleneck = results.find((r) => r.capacityLimited);
+  const tooltipFmt = (v) => eur(v);
+  const tooltipStyle = {
+    backgroundColor: "#121E30", border: "1px solid #2A3952",
+    borderRadius: 8, fontFamily: "DM Mono, monospace", fontSize: 12, color: "#E8ECF2"
+  };
+  const axTick = { fill: "#8B98B0", fontSize: 11 };
+  const axLine = { stroke: "#1E2A3E" };
+  const every3 = (_, i) => i % 3 === 0;
 
-  // Chart data: clients actual vs target
-  const clientsChart = results.map((r) => ({
-    m: `M${r.strategyMonth >= 0 ? "+" : ""}${r.strategyMonth}`,
-    mIdx: r.month,
-    actual: Math.round(r.totalClients),
-    target: targets.clients[r.month] || null,
-    maxCap: Math.round(r.maxClientsByCapacity)
-  }));
+  /* ── Milestones ── */
+  const milestones = [
+    { label: "M0 — Lancio", idx: 12 },
+    { label: "M+12", idx: 24 },
+    { label: "M+24", idx: 35 }
+  ];
 
-  // Stacked area: new clients by channel
-  const stackData = results.map((r) => ({
-    m: `M${r.strategyMonth >= 0 ? "+" : ""}${r.strategyMonth}`,
-    Google: +r.byChannel.google.toFixed(2),
-    Meta: +r.byChannel.meta.toFixed(2),
-    LinkedIn: +r.byChannel.linkedin.toFixed(2),
-    SEO: +r.byChannel.seo.toFixed(2),
-    Social: +r.byChannel.social.toFixed(2),
-    Referral: +r.byChannel.referral.toFixed(2),
-    Borrowed: +r.byChannel.borrowed.toFixed(2)
-  }));
+  const Kpi = ({ label, value, sub, accent }) => (
+    React.createElement("div", { className: "kpi-card" + (accent ? " accent" : "") },
+      React.createElement("div", { className: "kpi-label" }, label),
+      React.createElement("div", { className: "kpi-value mono" }, value),
+      sub && React.createElement("div", { className: "kpi-sub text-dim" }, sub)
+    )
+  );
 
-  // Revenue cumulato vs investment
-  const revChart = results.map((r) => ({
-    m: `M${r.strategyMonth >= 0 ? "+" : ""}${r.strategyMonth}`,
-    cumRev: Math.round(r.cumulativeRevenue),
-    cumSpend: Math.round(r.cumulativeSpend),
-    target: 180000
+  /* ── Chart data ── */
+  const channelData = results.filter((r) => r.month >= 7).map((r) => ({
+    monthLabel: r.monthLabel,
+    google: r.googleBookings, meta: r.metaBookings,
+    linkedin: r.linkedinBookings, seo: r.seoBookings,
+    social: r.socialBookings, referral: r.referralBookings,
+    borrowed: r.borrowedBookings
   }));
 
   const chanColors = {
-    Google: "#60A5FA", Meta: "#F472B6", LinkedIn: "#818CF8",
-    SEO: "#4ADE80", Social: "#FBBF24",
-    Referral: "#C4A962", Borrowed: "#F87171"
+    google: ["Google Ads", "#4285F4"], meta: ["Meta Ads", "#E1306C"],
+    linkedin: ["LinkedIn", "#0077B5"], seo: ["SEO", "#4ADE80"],
+    social: ["Social organico", "#A78BFA"], referral: ["Referral", "#F59E0B"],
+    borrowed: ["Borrowed", "#60A5FA"]
   };
 
-  const tooltipStyle = {
-    backgroundColor: "#121E30",
-    border: "1px solid #2A3952",
-    borderRadius: 8,
-    fontFamily: "DM Mono, monospace",
-    fontSize: 12,
-    color: "#E8ECF2"
+  const costColors = {
+    constitutionCosts: ["Costituzione", "#F87171"],
+    operatingCosts: ["Operativi", "#60A5FA"],
+    personnelCosts: ["Personale", "#A78BFA"],
+    marketingCosts: ["Marketing", "#F59E0B"]
   };
+
+  /* ── Capacity line data ── */
+  const clientsData = results.map((r) => ({
+    monthLabel: r.monthLabel, totalClients: r.totalClients,
+    capacity: r.capacityLimited ? r.totalClients : null
+  }));
 
   return (
     <div>
-      {/* Milestone KPIs */}
+      {/* Section 1: KPI milestone cards */}
       <div className="section">
-        <div className="section-title">Risultati chiave alle tappe della strategia</div>
+        <div className="section-title">Indicatori chiave</div>
         {milestones.map((ms) => {
-          const r = results[ms.idx - 1];
+          const r = results[ms.idx];
           if (!r) return null;
-          const targetClients = targets.clients[ms.idx] || 0;
-          const targetARR = targets.milestoneARR[ms.idx] || null;
           return (
-            <div key={ms.key} style={{ marginBottom: 18 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 10 }}>
-                <span className="uppercase gold">{ms.label}</span>
-                <span className="text-faint mono" style={{ fontSize: 11 }}>
-                  mese interno del modello: {ms.idx}
-                </span>
-              </div>
+            <div key={ms.idx} style={{ marginBottom: 18 }}>
+              <div className="uppercase gold" style={{ marginBottom: 8 }}>{ms.label}</div>
               <div className="kpi-grid">
-                <Kpi
-                  label="Clienti totali attivi"
-                  value={num(r.totalClients)}
-                  sub={`obiettivo strategia: ${targetClients}`}
-                  delta={deltaPill(r.totalClients, targetClients)}
-                  accent
-                />
-                <Kpi
-                  label="Ricavi annui (se tutti rinnovano)"
-                  value={eur(r.arr)}
-                  sub={targetARR ? `obiettivo: ${eur(targetARR)}` : null}
-                  delta={targetARR ? deltaPill(r.arr, targetARR) : null}
-                />
-                <Kpi
-                  label="Nuovi clienti in questo mese"
-                  value={num(r.newClients)}
-                  sub={r.capacityLimited ? "⚠ ore di lavoro sature" : `senza limiti di capacità: ${num(r.newClientsTheoretical)}`}
-                />
-                <Kpi
-                  label="Prenotazioni di check-up nel mese"
-                  value={num(r.bookings.total)}
-                  sub={`di cui si presentano: ${num(r.actualCheckups)}`}
-                />
+                <Kpi label="Clienti attivi" value={num(r.totalClients)} />
+                <Kpi label="Ricavi mensili (MRR)" value={eur(r.mrr)} />
+                <Kpi label="Cash rimanente" value={eur(r.cashRemaining)} />
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Break-even & CAC */}
+      {/* Section 2: Key metrics */}
       <div className="section">
-        <div className="section-title">Pareggio e costi di acquisizione clienti</div>
+        <div className="section-title">Metriche di sintesi</div>
         <div className="kpi-grid">
-          <Kpi label="Mese di pareggio (ricavi ≥ €180K investiti)" value={beLabel} accent />
-          <Kpi label="Ricavi accumulati a fine strategia (M+18)" value={eur(last.cumulativeRevenue)}
-            sub={`obiettivo strategia: €167.500`} />
-          <Kpi label="Spesa totale a fine strategia (M+18)" value={eur(last.cumulativeSpend)}
-            sub="pubblicità + costi fissi operativi" />
-          <Kpi label="Costo medio per acquisire 1 cliente (a M+12)" value={eur(cacBlended.m12)}
-            sub={`a M+18: ${eur(cacBlended.m18)}`} />
+          <Kpi label="Pareggio operativo" value={ml(breakEvenOperational)} accent />
+          <Kpi label="Pareggio investimento" value={ml(breakEvenCumulative)} />
+          <Kpi label="CAC medio" value={eur(cacBlended)} />
+          <Kpi label="Cash minimo" value={eur(cashMinimum)}
+               sub={"Raggiunto a " + ml(cashMinimumMonth)} />
+          <Kpi label="Agenti attivi" value={num(last.activeAgents)} />
         </div>
       </div>
 
-      {/* Bottleneck banner */}
-      {firstBottleneck && (
-        <div className="section">
-          <div className="warn-banner">
-            <span className="dot"></span>
-            <div>
-              <strong>Attenzione: ore di lavoro sature</strong> dal mese <span className="mono gold">
-                M{firstBottleneck.strategyMonth >= 0 ? "+" : ""}{firstBottleneck.strategyMonth}
-              </span>: la domanda di consulenze supera i {num(firstBottleneck.maxClientsByCapacity)} clienti/mese gestibili dal team.
-              Soluzioni possibili: aumentare le ore del founder, anticipare l'ingresso del 2° consulente, o ridurre la pubblicità a pagamento.
-            </div>
+      {/* Section 3: Charts — 2×2 grid */}
+      <div className="section">
+        <div className="section-title">Grafici a 36 mesi</div>
+
+        {/* Row 1 */}
+        <div className="chart-row">
+          {/* Chart 1: Clienti attivi */}
+          <div className="card">
+            <div className="card-title">Clienti attivi (36 mesi)</div>
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={clientsData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false}
+                       axisLine={axLine} interval={2} />
+                <YAxis tick={axTick} tickLine={false} axisLine={axLine} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+                <ReferenceLine x={results[12]?.monthLabel} stroke="#C4A962"
+                               strokeDasharray="4 4" label={{ value: "Lancio", fill: "#C4A962", fontSize: 11 }} />
+                <Bar dataKey="totalClients" name="Clienti attivi" fill="#C4A962" />
+                <Line type="monotone" dataKey="capacity" name="Limite capacità"
+                      stroke="#F59E0B" strokeWidth={2} strokeDasharray="6 3" dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Chart 2: Cash flow */}
+          <div className="card">
+            <div className="card-title">Cash flow (€180K)</div>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={results} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="cashGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4ADE80" stopOpacity={0.6} />
+                    <stop offset="100%" stopColor="#F87171" stopOpacity={0.3} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false}
+                       axisLine={axLine} interval={2} />
+                <YAxis tick={axTick} tickLine={false} axisLine={axLine}
+                       tickFormatter={(v) => "€" + Math.round(v / 1000) + "k"} />
+                <Tooltip contentStyle={tooltipStyle} formatter={tooltipFmt} />
+                <ReferenceLine y={0} stroke="#F87171" strokeWidth={1.5} />
+                <ReferenceLine y={30000} stroke="#F59E0B" strokeDasharray="6 3"
+                               label={{ value: "Riserva minima", fill: "#F59E0B", fontSize: 11, position: "insideTopLeft" }} />
+                <Area type="monotone" dataKey="cashRemaining" name="Cash rimanente"
+                      stroke="#4ADE80" fill="url(#cashGrad)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
-      )}
 
-      {/* Charts */}
-      <div className="section">
-        <div className="section-title">Crescita clienti — modello calcolato vs obiettivo della strategia</div>
-        <div className="card" style={{ padding: 16 }}>
-          <R.ResponsiveContainer width="100%" height={320}>
-            <R.ComposedChart data={clientsChart} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
-              <R.CartesianGrid stroke="#1E2A3E" vertical={false} />
-              <R.XAxis dataKey="m" tick={{ fill: "#8B98B0", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#1E2A3E" }} />
-              <R.YAxis tick={{ fill: "#8B98B0", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#1E2A3E" }} />
-              <R.Tooltip contentStyle={tooltipStyle} />
-              <R.Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
-              <R.Area type="monotone" dataKey="maxCap" name="Capacità massima (limite ore di lavoro)" stroke="#F59E0B" fill="#F59E0B" fillOpacity={0.08} strokeDasharray="4 4" />
-              <R.Line type="monotone" dataKey="actual" name="Clienti (calcolati dal modello)" stroke="#C4A962" strokeWidth={2.5} dot={false} />
-              <R.Line type="monotone" dataKey="target" name="Obiettivo della strategia" stroke="#60A5FA" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
-            </R.ComposedChart>
-          </R.ResponsiveContainer>
-        </div>
-      </div>
+        {/* Row 2 */}
+        <div className="chart-row">
+          {/* Chart 3: Costi vs Ricavi */}
+          <div className="card">
+            <div className="card-title">Costi vs Ricavi mensili</div>
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={results} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false}
+                       axisLine={axLine} interval={2} />
+                <YAxis tick={axTick} tickLine={false} axisLine={axLine}
+                       tickFormatter={(v) => "€" + Math.round(v / 1000) + "k"} />
+                <Tooltip contentStyle={tooltipStyle} formatter={tooltipFmt} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+                {Object.entries(costColors).map(([key, [name, color]]) => (
+                  <Bar key={key} dataKey={key} name={name} stackId="costs" fill={color} />
+                ))}
+                <Line type="monotone" dataKey="mrr" name="MRR" stroke="#4ADE80"
+                      strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
 
-      <div className="section">
-        <div className="section-title">Da quali canali arrivano i nuovi clienti ogni mese</div>
-        <div className="card" style={{ padding: 16 }}>
-          <R.ResponsiveContainer width="100%" height={280}>
-            <R.AreaChart data={stackData} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
-              <R.CartesianGrid stroke="#1E2A3E" vertical={false} />
-              <R.XAxis dataKey="m" tick={{ fill: "#8B98B0", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#1E2A3E" }} />
-              <R.YAxis tick={{ fill: "#8B98B0", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#1E2A3E" }} />
-              <R.Tooltip contentStyle={tooltipStyle} />
-              <R.Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
-              {Object.keys(chanColors).map((k) => (
-                <R.Area key={k} type="monotone" dataKey={k} stackId="1"
-                  stroke={chanColors[k]} fill={chanColors[k]} fillOpacity={0.75} />
-              ))}
-            </R.AreaChart>
-          </R.ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="section">
-        <div className="section-title">Ricavi accumulati vs investimento iniziale di €180.000</div>
-        <div className="card" style={{ padding: 16 }}>
-          <R.ResponsiveContainer width="100%" height={260}>
-            <R.LineChart data={revChart} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
-              <R.CartesianGrid stroke="#1E2A3E" vertical={false} />
-              <R.XAxis dataKey="m" tick={{ fill: "#8B98B0", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#1E2A3E" }} />
-              <R.YAxis tick={{ fill: "#8B98B0", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#1E2A3E" }} tickFormatter={(v) => "€" + (v / 1000) + "k"} />
-              <R.Tooltip contentStyle={tooltipStyle} formatter={(v) => eur(v)} />
-              <R.Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
-              <R.Line type="monotone" dataKey="cumRev" name="Ricavi accumulati" stroke="#4ADE80" strokeWidth={2.5} dot={false} />
-              <R.Line type="monotone" dataKey="cumSpend" name="Spesa accumulata" stroke="#F87171" strokeWidth={2} dot={false} />
-              <R.Line type="monotone" dataKey="target" name="Investimento di €180.000" stroke="#C4A962" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
-            </R.LineChart>
-          </R.ResponsiveContainer>
+          {/* Chart 4: Acquisizione per canale */}
+          <div className="card">
+            <div className="card-title">Acquisizione per canale</div>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={channelData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false}
+                       axisLine={axLine} interval={2} />
+                <YAxis tick={axTick} tickLine={false} axisLine={axLine} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+                {Object.entries(chanColors).map(([key, [name, color]]) => (
+                  <Area key={key} type="monotone" dataKey={key} name={name}
+                        stackId="ch" stroke={color} fill={color} fillOpacity={0.7} />
+                ))}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
     </div>

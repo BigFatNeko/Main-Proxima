@@ -1,17 +1,16 @@
 /* ============================================================
-   App — state management + layout composition
+   App — state management + layout composition (v2 · 36 mesi)
    ============================================================ */
 
 window.PROXIMA = window.PROXIMA || {};
 
-const STORAGE_KEY = "proxima.funnel.params.v1";
+const STORAGE_KEY = "proxima.funnel.params.v2";
 
 function loadParams() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return window.PROXIMA.defaultParams();
     const parsed = JSON.parse(raw);
-    // Merge with defaults to avoid missing keys after schema changes
     const defaults = window.PROXIMA.defaultParams();
     return { ...defaults, ...parsed };
   } catch (e) {
@@ -27,7 +26,7 @@ function App() {
   }, [params]);
 
   const sim = React.useMemo(
-    () => window.PROXIMA.simulate(params, 24),
+    () => window.PROXIMA.simulate(params, 36),
     [params]
   );
 
@@ -49,12 +48,11 @@ function App() {
       <main className="main">
         <div className="section">
           <div className="info-banner">
-            <strong>Come funziona questo modello.</strong> Invece di partire da obiettivi di
-            clienti decisi a tavolino, il numero di clienti viene <em>calcolato</em> dai
-            numeri veri di ogni canale (quanti click, quante visite, quante persone
-            prenotano, quante diventano clienti paganti). Muovi gli slider a sinistra
-            per vedere in tempo reale come cambiano clienti, ricavi, ore di lavoro
-            necessarie e mese di pareggio. I valori si salvano automaticamente nel browser.
+            <strong>Come funziona questo modello.</strong> Calcola clienti, ricavi,
+            costi e cash flow su 36 mesi (da M-12 a M+24), partendo dai numeri veri
+            di ogni canale e includendo tutti i costi di costituzione, operativi e del
+            personale. Include tre scenari di rischio (base, recessione, crisi). Muovi
+            gli slider a sinistra per aggiornare tutto in tempo reale.
           </div>
         </div>
         <window.PROXIMA.Glossary />
@@ -62,7 +60,7 @@ function App() {
         <window.PROXIMA.ProjectionTable sim={sim} />
         <div className="section" style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid #1E2A3E" }}>
           <div className="text-faint" style={{ fontSize: 11, textAlign: "center" }}>
-            Proxima · Modello Funnel calcolato dai numeri veri di ogni canale · dati salvati nel browser
+            Proxima · Modello Funnel v2 · 36 mesi · costi completi · scenari di rischio · dati salvati nel browser
           </div>
         </div>
       </main>
@@ -74,7 +72,7 @@ function App() {
 function boot() {
   if (!window.PROXIMA.simulate || !window.PROXIMA.Controls ||
       !window.PROXIMA.Dashboard || !window.PROXIMA.ProjectionTable ||
-      !window.PROXIMA.Glossary) {
+      !window.PROXIMA.Glossary || !window.PROXIMA.defaultParams) {
     return setTimeout(boot, 50);
   }
   const root = ReactDOM.createRoot(document.getElementById("root"));
