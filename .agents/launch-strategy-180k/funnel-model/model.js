@@ -46,7 +46,7 @@ window.PROXIMA.defaultParams = function () {
     social: { baseVisits: 60, growthRate: 0.14, visitToCalc: 0.10, calcToBooking: 0.04 },
     referral: { ratePerClient: 0.06, bookingRate: 0.80, startMonth: 15 },
     borrowed: { bookingsByPhase: { 1:0, 2:0, 3:0, 4:2, 5:5, 6:8, 7:12 } },
-    founderHoursPerWeek: 25, hoursPerClient: 3,
+    founderHoursPerWeek: 25, hoursOnboarding: 5, hoursRecurring: 1.25,
     arpu: 490, churnMonthly: 0.01,
     constitution: {
       notaio: 2500, cciaa: 200, impostoRegistro: 200, bollo: 156,
@@ -133,7 +133,9 @@ window.PROXIMA.simulate = function (p, months) {
     var fHoursPre = p.founderHoursPerWeek * 4.33;
     var cHoursPre = hiredConsultants * h.consultantHoursPerWeek * 4.33;
     var jHoursPre = hasJunior ? h.juniorHoursPerWeek * 4.33 : 0;
-    var maxCapPre = (fHoursPre + cHoursPre + jHoursPre) / p.hoursPerClient;
+    var totHoursPre = fHoursPre + cHoursPre + jHoursPre;
+    var hoursUsedByExisting = totalClients * p.hoursRecurring;
+    var maxCapPre = p.hoursRecurring > 0 ? totHoursPre / p.hoursRecurring : 999;
     var utilPre = maxCapPre > 0 ? totalClients / maxCapPre : 0;
 
     // --- Dynamic hiring: trigger on utilization > 85%, max 1 hire every 3 months ---
@@ -162,12 +164,15 @@ window.PROXIMA.simulate = function (p, months) {
         cost: h.juniorCost, trigger: h.juniorTrigger + ' clienti' });
     }
 
-    // --- Capacity (dynamic) ---
+    // --- Capacity (dynamic): ore disponibili - ore clienti esistenti = ore per nuovi ---
     var fHours = p.founderHoursPerWeek * 4.33;
     var consultantHours = hiredConsultants * h.consultantHoursPerWeek * 4.33;
     var juniorHours = hasJunior ? h.juniorHoursPerWeek * 4.33 : 0;
     var totHours = fHours + consultantHours + juniorHours;
-    var maxCap = totHours / p.hoursPerClient;
+    var hoursForExisting = totalClients * p.hoursRecurring;
+    var hoursAvailableForNew = Math.max(0, totHours - hoursForExisting);
+    var maxNewByHours = p.hoursOnboarding > 0 ? hoursAvailableForNew / p.hoursOnboarding : 999;
+    var maxCap = p.hoursRecurring > 0 ? totHours / p.hoursRecurring : 999;
     var utilization = maxCap > 0 ? totalClients / maxCap : 0;
 
     // --- Smart budget: reduce ads near capacity ---
@@ -206,7 +211,7 @@ window.PROXIMA.simulate = function (p, months) {
     var checkups = totBook * p.showRate;
     var newRaw = checkups * p.checkupToClient * risk.clientMult;
 
-    var newCapped = (m >= 13) ? Math.min(newRaw, Math.max(0, maxCap - totalClients)) : newRaw;
+    var newCapped = (m >= 13) ? Math.min(newRaw, maxNewByHours) : newRaw;
     var capLimited = newRaw > newCapped + 0.5;
 
     var churn = totalClients * p.churnMonthly * risk.churnMult;
@@ -260,7 +265,9 @@ window.PROXIMA.simulate = function (p, months) {
       mrr: mrr, arr: arr,
       netBurn: netBurn, cashRemaining: cash,
       revenueCumulative: revCum, costsCumulative: costCum,
-      founderHours: fHours, totalHours: totHours, hoursNeeded: totalClients * p.hoursPerClient,
+      founderHours: fHours, totalHours: totHours,
+      hoursForExisting: hoursForExisting, hoursForNew: newCapped * p.hoursOnboarding,
+      maxNewThisMonth: maxNewByHours,
       capacityLimited: capLimited,
       capacityUtilization: utilization, budgetFactor: budgetFactor,
       hiredConsultants: hiredConsultants, hasBackOffice: hasBackOffice,

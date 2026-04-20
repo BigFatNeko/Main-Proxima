@@ -151,7 +151,9 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
 
       <Panel id="capacity" title="Ore di lavoro disponibili" openState={open} onToggle={toggle}>
         {S(["founderHoursPerWeek"],"Ore a settimana del founder",5,50,1,(v)=>v+"h")}
-        {S(["hoursPerClient"],"Ore mensili per cliente",0.5,8,0.25,(v)=>v+"h")}
+        <div className="uppercase text-faint" style={{marginTop:10,marginBottom:8}}>Ore per cliente</div>
+        {S(["hoursOnboarding"],"Onboarding (check-up + analisi + proposta)",2,10,0.5,(v)=>v+"h una tantum")}
+        {S(["hoursRecurring"],"Gestione ricorrente (review, call, monitoraggio)",0.25,4,0.25,(v)=>v+"h/mese")}
       </Panel>
 
       <Panel id="hiring" title="Assunzioni dinamiche" openState={open} onToggle={toggle}>
