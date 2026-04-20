@@ -32,7 +32,7 @@ window.PROXIMA.Dashboard = function Dashboard({ sim }) {
   const milestones = [
     { label: "M0 — Lancio", idx: 12 },
     { label: "M+12", idx: 24 },
-    { label: "M+24", idx: 35 }
+    { label: "M+23 (fine)", idx: 35 }
   ];
 
   const Kpi = ({ label, value, sub, accent }) => (

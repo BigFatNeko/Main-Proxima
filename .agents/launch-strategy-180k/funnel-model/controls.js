@@ -79,15 +79,17 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
   return (
     <div>
       <div className="brand"><h1>Proxima</h1><span className="brand-tag">Modello Funnel</span></div>
-      <div className="subtitle">Calcolato dai numeri veri · 24 mesi · aggiornamento in tempo reale</div>
+      <div className="subtitle">Calcolato dai numeri veri · 36 mesi · aggiornamento in tempo reale</div>
       <div className="toolbar"><button className="btn-ghost btn" onClick={onReset}>↻ Reset</button></div>
 
       <Panel id="scenario" title="Scenario di rischio" openState={open} onToggle={toggle}>
-        {["base","recessione","crisi"].map((s) => (
-          <button key={s} className={"btn"+(params.riskScenario===s?" btn-active":" btn-ghost")}
-            style={{marginRight:6,marginBottom:4,textTransform:"capitalize"}}
-            onClick={() => update(["riskScenario"],s)}>{s}</button>
-        ))}
+        <div className="scenario-group">
+          {["base","recessione","crisi"].map((s) => (
+            <button key={s}
+              className={"scenario-btn scenario-"+s+(params.riskScenario===s?" active":"")}
+              onClick={() => update(["riskScenario"],s)}>{s}</button>
+          ))}
+        </div>
       </Panel>
 
       <Panel id="funnel" title="Dopo la prenotazione" openState={open} onToggle={toggle}>
@@ -179,14 +181,14 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
       </Panel>
 
       <Panel id="personnel" title="Personale" openState={open} onToggle={toggle}>
-        {S(["founderComp"],"Compenso per fondatore (€/mese)",0,3000,100,eur)}
-        {S(["numFounders"],"Numero fondatori",1,4,1)}
-        {S(["secondConsultantMonth"],"Mese ingresso 2° consulente",13,36,1,monthLabel)}
-        {S(["secondConsultantCost"],"Costo 2° consulente (€/mese)",500,4000,100,eur)}
-        {S(["backOfficeMonth"],"Mese ingresso back-office",13,36,1,monthLabel)}
-        {S(["backOfficeCost"],"Costo back-office (€/mese)",300,2000,100,eur)}
-        {S(["freelancerMonth"],"Mese ingresso freelancer",13,36,1,monthLabel)}
-        {S(["freelancerCost"],"Costo freelancer (€/mese)",200,1500,100,eur)}
+        {S(["personnel","founderComp"],"Compenso per fondatore (€/mese)",0,3000,100,eur)}
+        {S(["personnel","numFounders"],"Numero fondatori",1,4,1)}
+        {S(["personnel","secondConsultantMonth"],"Mese ingresso 2° consulente",13,36,1,monthLabel)}
+        {S(["personnel","secondConsultantCost"],"Costo 2° consulente (€/mese)",500,4000,100,eur)}
+        {S(["personnel","backOfficeMonth"],"Mese ingresso back-office",13,36,1,monthLabel)}
+        {S(["personnel","backOfficeCost"],"Costo back-office (€/mese)",300,2000,100,eur)}
+        {S(["personnel","freelancerMonth"],"Mese ingresso freelancer",13,36,1,monthLabel)}
+        {S(["personnel","freelancerCost"],"Costo freelancer (€/mese)",200,1500,100,eur)}
       </Panel>
 
       <Panel id="business" title="Parcelle e abbandoni" openState={open} onToggle={toggle}>
