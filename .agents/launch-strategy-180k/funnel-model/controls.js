@@ -271,8 +271,11 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
           {S(["mortgage","preAmortMonths"],"Mesi pre-ammortamento",6,36,6,(v)=>v+" mesi")}
           {S(["mortgage","amortMonths"],"Durata piano rimborso (mesi)",12,120,12,(v)=>v+" mesi")}
           <div className="text-faint" style={{fontSize:11,marginTop:8,padding:"8px",background:"rgba(196,169,98,0.08)",borderRadius:4}}>
-            Interessi mensili pre-ammortamento: {eur(params.mortgage.principal * params.mortgage.rate / 12)}/mese
-            {" · "}ogni 6 mesi: {eur(params.mortgage.principal * params.mortgage.rate / 2)}
+            Pre-ammortamento: {eur(params.mortgage.principal * params.mortgage.rate / 2)} ogni 6 mesi (solo interessi)
+            <br/>Rata piena (dopo): {eur(
+              (() => { var r = params.mortgage.rate/2, n = Math.ceil(params.mortgage.amortMonths/6);
+                return r > 0 ? params.mortgage.principal * r / (1 - Math.pow(1+r,-n)) : params.mortgage.principal/n; })()
+            )} ogni 6 mesi
           </div>
         </>}
       </Panel>

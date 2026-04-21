@@ -264,17 +264,17 @@ window.PROXIMA.simulate = function (p, months) {
 
     var mktCost = (bG + bM + bL) * risk.costMult;
 
-    // --- Mortgage: interest-only during pre-amortization, then full installment ---
+    // --- Mortgage: billed every 6 months from month 1 ---
     var mortgageCost = 0;
-    if (p.mortgage.enabled) {
+    if (p.mortgage.enabled && m % 6 === 0) {
       if (m <= p.mortgage.preAmortMonths) {
-        mortgageCost = p.mortgage.principal * p.mortgage.rate / 12;
+        mortgageCost = p.mortgage.principal * p.mortgage.rate / 2;
       } else {
-        var rM = p.mortgage.rate / 12;
-        var nM = p.mortgage.amortMonths;
-        mortgageCost = rM > 0
-          ? p.mortgage.principal * rM / (1 - Math.pow(1 + rM, -nM))
-          : p.mortgage.principal / nM;
+        var rSemi = p.mortgage.rate / 2;
+        var nSemi = Math.ceil(p.mortgage.amortMonths / 6);
+        mortgageCost = rSemi > 0
+          ? p.mortgage.principal * rSemi / (1 - Math.pow(1 + rSemi, -nSemi))
+          : p.mortgage.principal / nSemi;
       }
     }
 
