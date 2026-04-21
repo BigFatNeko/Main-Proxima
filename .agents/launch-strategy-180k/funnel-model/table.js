@@ -22,10 +22,14 @@ window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
     ["Nuovi clienti",  (r) => fmtN(r.newClientsCapped), ""],
     ["Persi (churn)",  (r) => fmtN(r.churnedClients), ""],
     ["Clienti attivi", (r) => fmtN(r.totalClients), "bold"],
+    ["Clienti paganti",(r) => fmtN(r.payingClients), "paying"],
+    ["AUM (€k)",       (r) => fmtN(Math.round(r.totalAUM/1000)), ""],
     ["Costi costituz.",  (r) => fmtE(r.constitutionCosts), ""],
     ["Costi operativi",  (r) => fmtE(r.operatingCosts), ""],
     ["Personale",      (r) => fmtE(r.personnelCosts), ""],
     ["Marketing",      (r) => fmtE(r.marketingCosts), ""],
+    ["Mutuo",          (r) => r.mortgageCost > 0 ? fmtE(r.mortgageCost) : "—", ""],
+    ["Tasse",          (r) => r.taxCost > 0 ? fmtE(r.taxCost) : "—", ""],
     ["Costi totali",   (r) => fmtE(r.totalCosts),  "bold"],
     ["MRR",            (r) => fmtE(r.mrr),         "gold"],
     ["Burn netto",     (r) => fmtE(r.netBurn),     "burn"],
@@ -84,6 +88,7 @@ window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
     if (flag === "cash") return { fontWeight: 700, color: r.cashRemaining < 30000 ? "#ef4444" : undefined };
     if (flag === "util") return { color: r.appointmentUtilization > 0.85 ? "#F59E0B" : "#8B98B0" };
     if (flag === "bf") return { color: r.budgetFactor < 0.5 ? "#F59E0B" : "#8B98B0" };
+    if (flag === "paying") return { color: r.payingClients < r.totalClients ? "#A78BFA" : undefined };
     return undefined;
   };
 

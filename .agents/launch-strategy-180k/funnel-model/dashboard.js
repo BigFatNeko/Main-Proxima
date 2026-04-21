@@ -89,6 +89,17 @@ window.PROXIMA.Dashboard = function Dashboard({ sim }) {
     budgetFactor: Math.round(r.budgetFactor * 100)
   }));
 
+  /* ── AUM + S&P 500 data ── */
+  const aumData = results.filter((r) => r.month >= 13).map((r) => ({
+    monthLabel: r.monthLabel,
+    aumGestito: Math.round(r.totalAUM / 1000),
+    sp500Benchmark: Math.round(r.sp500BenchmarkValue / 1000)
+  }));
+
+  const hasMortgage = results.some((r) => r.mortgageCost > 0);
+  const hasTax = results.some((r) => r.taxCost > 0);
+  const hasDeferredFees = results.some((r) => r.month >= 25 && r.payingClients !== r.totalClients);
+
   return (
     <div>
       {/* Section 1: KPI milestone cards */}
@@ -189,7 +200,65 @@ window.PROXIMA.Dashboard = function Dashboard({ sim }) {
         )}
       </div>
 
-      {/* Section 5: Charts — 2×2 grid */}
+      {/* Section 5: AUM + S&P 500 benchmark */}
+      <div className="section">
+        <div className="section-title">Patrimonio gestito (AUM) vs S&P 500</div>
+        <div className="kpi-grid" style={{ marginBottom: 16 }}>
+          <Kpi label="AUM a M0" value={eur(results[12]?.totalAUM || 0)} sub="Lancio" />
+          <Kpi label="AUM a M+12" value={eur(results[24]?.totalAUM || 0)} />
+          <Kpi label="AUM a M+23" value={eur(last.totalAUM)} />
+          <Kpi label="S&P 500 benchmark a M+23"
+            value={eur(last.sp500BenchmarkValue || 0)}
+            sub="Partendo dall'AUM a M0" />
+        </div>
+        {hasDeferredFees && (
+          <div style={{ padding: "8px 12px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 6, fontSize: 12, marginBottom: 14, color: "#F59E0B" }}>
+            ⚠ Pagamento differito attivo — i ricavi partono 12 mesi dopo l'acquisizione del cliente.
+          </div>
+        )}
+        <div className="card">
+          <div className="card-title">Patrimonio totale gestito (€k)</div>
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={aumData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+              <CartesianGrid stroke="#1E2A3E" vertical={false} />
+              <XAxis dataKey="monthLabel" tick={axTick} tickLine={false} axisLine={axLine} interval={2} />
+              <YAxis tick={axTick} tickLine={false} axisLine={axLine}
+                tickFormatter={(v) => "€" + v + "k"} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v) => "€" + v.toLocaleString("it-IT") + "k"} />
+              <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+              <Area type="monotone" dataKey="aumGestito" name="AUM gestito"
+                stroke="#C4A962" fill="rgba(196,169,98,0.2)" strokeWidth={2} />
+              <Line type="monotone" dataKey="sp500Benchmark" name="S&P 500 benchmark"
+                stroke="#4ADE80" strokeWidth={2} strokeDasharray="5 3" dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Section 6: Mortgage + Tax summary (conditional) */}
+      {(hasMortgage || hasTax) && (
+        <div className="section">
+          <div className="section-title">Mutuo e Fiscalità</div>
+          <div className="kpi-grid">
+            {hasMortgage && (
+              <Kpi label="Costo mutuo totale (36 mesi)"
+                value={eur(results.reduce((s, r) => s + r.mortgageCost, 0))}
+                sub="Interessi + rimborso capitale" />
+            )}
+            {hasTax && (
+              <Kpi label="Tasse totali stimate (36 mesi)"
+                value={eur(results.reduce((s, r) => s + r.taxCost, 0))}
+                sub="IRES + IRAP (provisione mensile)" />
+            )}
+            {hasMortgage && (
+              <Kpi label="Rata mensile mutuo (post pre-amm.)"
+                value={eur(results.find((r) => r.mortgageCost > 0 && r.month > (results[0]?.month || 0) + 18)?.mortgageCost || results.find((r) => r.mortgageCost > 0)?.mortgageCost || 0)} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Section 7: Charts — 2×2 grid */}
       <div className="section">
         <div className="section-title">Grafici a 36 mesi</div>
 

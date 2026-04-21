@@ -80,7 +80,12 @@ window.PROXIMA.defaultParams = function () {
     budgetCapAdjust: true,
     budgetCapThreshold: 0.85,
     riskScenario: 'base',
-    startingCapital: 180000
+    startingCapital: 180000,
+    waitingList: { count: 10, conversionRate: 0.80 },
+    aum: { avgPerClient: 80000, sp500Annual: 0.10 },
+    deferredFees: false,
+    mortgage: { enabled: false, principal: 180000, rate: 0.054, preAmortMonths: 18, amortMonths: 60 },
+    taxation: { enabled: false, iresRate: 0.24, irapRate: 0.039 }
   };
 };
 
@@ -120,6 +125,9 @@ window.PROXIMA.simulate = function (p, months) {
   var gCumSpend = 0, gCumClients = 0;
   var mCumSpend = 0, mCumClients = 0;
   var lCumSpend = 0, lCumClients = 0;
+  var sp500Monthly = Math.pow(1 + p.aum.sp500Annual, 1 / 12) - 1;
+  var sp500BenchmarkValue = 0;
+  var revWindow12 = [], costWindow12 = [];
 
   for (var m = 1; m <= months; m++) {
     var phase = window.PROXIMA.getPhase(m);
@@ -228,6 +236,13 @@ window.PROXIMA.simulate = function (p, months) {
     var churn = totalClients * p.churnMonthly * risk.churnMult;
     totalClients = Math.max(0, totalClients + newCapped - churn);
 
+    // --- Waiting list injection at M0 ---
+    var waitingListBoost = 0;
+    if (m === 13) {
+      waitingListBoost = Math.round(p.waitingList.count * p.waitingList.conversionRate);
+      totalClients += waitingListBoost;
+    }
+
     // --- Per-channel client attribution ---
     var paidConvRate = p.showRate * p.checkupToClient * risk.clientMult;
     var gClients = gBook * paidConvRate;
@@ -248,10 +263,48 @@ window.PROXIMA.simulate = function (p, months) {
     if (hasJunior) persCost += h.juniorCost;
 
     var mktCost = (bG + bM + bL) * risk.costMult;
-    var totCost = constCost + opCost + persCost + mktCost;
 
-    var mrr = totalClients * p.arpu / 12;
+    // --- Mortgage: interest-only during pre-amortization, then full installment ---
+    var mortgageCost = 0;
+    if (p.mortgage.enabled) {
+      if (m <= p.mortgage.preAmortMonths) {
+        mortgageCost = p.mortgage.principal * p.mortgage.rate / 12;
+      } else {
+        var rM = p.mortgage.rate / 12;
+        var nM = p.mortgage.amortMonths;
+        mortgageCost = rM > 0
+          ? p.mortgage.principal * rM / (1 - Math.pow(1 + rM, -nM))
+          : p.mortgage.principal / nM;
+      }
+    }
+
+    // --- Revenue: immediate or deferred 12 months ---
+    var payingClients = p.deferredFees
+      ? (m >= 13 && results[m - 13] ? results[m - 13].totalClients : 0)
+      : totalClients;
+    var mrr = payingClients * p.arpu / 12;
     var arr = totalClients * p.arpu;
+
+    // --- Taxation: monthly IRES + IRAP provision (rolling 12-month estimate) ---
+    var totCostPreTax = constCost + opCost + persCost + mktCost + mortgageCost;
+    revWindow12.push(mrr);
+    costWindow12.push(totCostPreTax);
+    if (revWindow12.length > 12) { revWindow12.shift(); costWindow12.shift(); }
+    var trailingProfit = Math.max(0,
+      revWindow12.reduce(function(s, v) { return s + v; }, 0) -
+      costWindow12.reduce(function(s, v) { return s + v; }, 0));
+    var taxCost = 0;
+    if (p.taxation.enabled && m >= 13) {
+      taxCost = trailingProfit * p.taxation.iresRate / 12
+        + Math.max(0, mrr - opCost) * p.taxation.irapRate;
+    }
+    var totCost = totCostPreTax + taxCost;
+
+    // --- AUM tracking + S&P 500 benchmark ---
+    var totalAUM = totalClients * p.aum.avgPerClient;
+    if (m === 13) { sp500BenchmarkValue = totalAUM; }
+    else if (m > 13) { sp500BenchmarkValue = sp500BenchmarkValue * (1 + sp500Monthly); }
+
     revCum += mrr;
     costCum += totCost;
 
@@ -272,8 +325,11 @@ window.PROXIMA.simulate = function (p, months) {
       newClientsRaw: newRaw, maxNewPerMonth: maxNewByHours, newClientsCapped: newCapped,
       churnedClients: churn, totalClients: totalClients,
       constitutionCosts: constCost, operatingCosts: opCost,
-      personnelCosts: persCost, marketingCosts: mktCost, totalCosts: totCost,
+      personnelCosts: persCost, marketingCosts: mktCost,
+      mortgageCost: mortgageCost, taxCost: taxCost, totalCosts: totCost,
+      payingClients: payingClients, waitingListBoost: waitingListBoost,
       mrr: mrr, arr: arr,
+      totalAUM: totalAUM, sp500BenchmarkValue: sp500BenchmarkValue,
       netBurn: netBurn, cashRemaining: cash,
       revenueCumulative: revCum, costsCumulative: costCum,
       founderHours: fHours, totalHours: totHours,

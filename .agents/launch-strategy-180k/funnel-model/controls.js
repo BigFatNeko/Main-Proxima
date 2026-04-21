@@ -53,7 +53,8 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
     scenario:true, funnel:true, google:true, meta:true, linkedin:false,
     seo:true, social:false, referral:true, borrowed:false, capacity:true,
     hiring:true, budgetCap:true,
-    constitution:false, operating:false, personnel:true, business:true, capital:true
+    constitution:false, operating:false, personnel:true, business:true,
+    waitingList:true, aum:false, mortgage:false, taxation:false, capital:true
   });
   const toggle = React.useCallback((k) => setOpen((p) => ({ ...p, [k]: !p[k] })), []);
 
@@ -225,10 +226,76 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
       <Panel id="business" title="Parcelle e abbandoni" openState={open} onToggle={toggle}>
         {S(["arpu"],"Parcella media per cliente (€/anno)",300,1500,10,eur)}
         {S(["churnMonthly"],"% clienti che disdicono ogni mese",0,0.05,0.002,pct)}
+        <div style={{marginTop:12}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
+            <input type="checkbox" checked={!!params.deferredFees}
+              onChange={() => update(["deferredFees"], !params.deferredFees)} />
+            Prima parcella dopo 12 mesi (pagamento differito)
+          </label>
+          <div className="text-faint" style={{fontSize:11,marginTop:4}}>
+            I clienti pagano il primo anno di parcella solo al compimento del 12° mese. Ritarda significativamente il break-even.
+          </div>
+        </div>
+      </Panel>
+
+      <Panel id="waitingList" title="Lista d'attesa e pre-lancio" openState={open} onToggle={toggle}>
+        <div className="text-faint" style={{fontSize:11,marginBottom:10}}>
+          Persone acquisite durante la fase Alpha che diventano clienti al lancio (M0).
+        </div>
+        {S(["waitingList","count"],"Persone in lista d'attesa",0,100,1,(v)=>v+" persone")}
+        {S(["waitingList","conversionRate"],"% che diventa cliente a M0",0,1,0.05,pct)}
+      </Panel>
+
+      <Panel id="aum" title="Patrimonio gestito (AUM) e S&P 500" openState={open} onToggle={toggle}>
+        <div className="text-faint" style={{fontSize:11,marginBottom:10}}>
+          Usato per proiettare il patrimonio totale gestito e confrontarlo con il rendimento S&P 500.
+        </div>
+        {S(["aum","avgPerClient"],"Patrimonio medio per cliente (€)",10000,500000,5000,eur)}
+        {S(["aum","sp500Annual"],"Rendimento annuo benchmark (S&P 500)",0.05,0.15,0.005,pct)}
+      </Panel>
+
+      <Panel id="mortgage" title="Mutuo (finanziamento 180k)" openState={open} onToggle={toggle}>
+        <div style={{marginBottom:12}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
+            <input type="checkbox" checked={!!params.mortgage.enabled}
+              onChange={() => update(["mortgage","enabled"], !params.mortgage.enabled)} />
+            Capitale ottenuto tramite mutuo
+          </label>
+          <div className="text-faint" style={{fontSize:11,marginTop:4}}>
+            Durante il pre-ammortamento si pagano solo gli interessi. Rata mensile calcolata automaticamente.
+          </div>
+        </div>
+        {params.mortgage.enabled && <>
+          {S(["mortgage","principal"],"Capitale a mutuo",50000,300000,5000,eur)}
+          {S(["mortgage","rate"],"Tasso annuo",0.01,0.12,0.001,(v)=>(v*100).toFixed(2)+"%")}
+          {S(["mortgage","preAmortMonths"],"Mesi pre-ammortamento",6,36,6,(v)=>v+" mesi")}
+          {S(["mortgage","amortMonths"],"Durata piano rimborso (mesi)",12,120,12,(v)=>v+" mesi")}
+          <div className="text-faint" style={{fontSize:11,marginTop:8,padding:"8px",background:"rgba(196,169,98,0.08)",borderRadius:4}}>
+            Interessi mensili pre-ammortamento: {eur(params.mortgage.principal * params.mortgage.rate / 12)}/mese
+            {" · "}ogni 6 mesi: {eur(params.mortgage.principal * params.mortgage.rate / 2)}
+          </div>
+        </>}
+      </Panel>
+
+      <Panel id="taxation" title="Fiscalità (IRES + IRAP)" openState={open} onToggle={toggle}>
+        <div style={{marginBottom:12}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
+            <input type="checkbox" checked={!!params.taxation.enabled}
+              onChange={() => update(["taxation","enabled"], !params.taxation.enabled)} />
+            Includi stima tasse nel cash flow
+          </label>
+          <div className="text-faint" style={{fontSize:11,marginTop:4}}>
+            Provisione mensile IRES (24%) su utile stimato + IRAP (3,9%) sul margine operativo. Approssimazione per accrual.
+          </div>
+        </div>
+        {params.taxation.enabled && <>
+          {S(["taxation","iresRate"],"Aliquota IRES",0.15,0.30,0.01,pct)}
+          {S(["taxation","irapRate"],"Aliquota IRAP",0.02,0.06,0.001,pct)}
+        </>}
       </Panel>
 
       <Panel id="capital" title="Capitale iniziale" openState={open} onToggle={toggle}>
-        {S(["startingCapital"],"Capitale iniziale",50000,300000,10000,eur)}
+        {S(["startingCapital"],"Capitale iniziale (equity + mutuo)",50000,300000,10000,eur)}
       </Panel>
     </div>
   );
