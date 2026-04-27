@@ -47,16 +47,21 @@ window.PROXIMA.defaultParams = function () {
     referral: { ratePerClient: 0.06, bookingRate: 0.80, startMonth: 15 },
     borrowed: { bookingsByPhase: { 1:0, 2:0, 3:0, 4:2, 5:5, 6:8, 7:12 } },
     founderHoursPerWeek: 25, hoursOnboarding: 5,
-    arpu: 490, churnMonthly: 0.01,
+    arpu: 374, churnMonthly: 0.006,
     constitution: {
       notaio: 2500, cciaa: 200, impostoRegistro: 200, bollo: 156,
-      iscrizioneOCF: 700, commercialistaIniziale: 1500, avvocato: 2500,
-      assicurazioneRC: 3000, sitoWeb: 4000, branding: 3000, setupCRM: 500,
-      esamiCertificazioni: 1500, pecFirmaDigitale: 75
+      iscrizioneOCF: 0,        // agente collegato: la registra la SIM
+      commercialistaIniziale: 1500, avvocato: 2500,
+      assicurazioneRC: 0,       // coperta dalla SIM partner
+      sitoWeb: 4000, branding: 3000, setupCRM: 500,
+      esamiCertificazioni: 0,   // non obbligatorio per agente collegato
+      simIntegration: 1500,     // setup tech integrazione SIM
+      pecFirmaDigitale: 75
     },
     operating: {
-      commercialista: 400, coworking: 350, software: 200,
-      assicurazioneMensile: 250, pecTelCloud: 100, quotaOCF: 80
+      commercialista: 400, coworking: 350, software: 350,
+      assicurazioneMensile: 0,  // coperta dalla SIM
+      pecTelCloud: 100, quotaOCF: 0  // non applicabile
     },
     personnel: {
       founderComp: 1000, numFounders: 2, inpsRate: 0.26
@@ -82,7 +87,13 @@ window.PROXIMA.defaultParams = function () {
     riskScenario: 'base',
     startingCapital: 180000,
     waitingList: { count: 10, conversionRate: 0.80 },
-    aum: { avgPerClient: 80000, sp500Annual: 0.10 },
+    aum: {
+      avgPerClient: 50000,       // AUM medio iniziale per cliente (target €30K-150K)
+      sp500Annual: 0.07,         // rendimento atteso portafoglio bilanciato
+      feeRate: 0.012,            // fee annua media al cliente (tiered 1.0-1.5%)
+      proximaSplit: 0.50,        // quota Proxima sulla fee
+      annualContributions: 4000  // versamenti medi annui del cliente
+    },
     deferredFees: false,
     mortgage: { enabled: false, principal: 180000, rate: 0.054, preAmortMonths: 18, amortMonths: 60 },
     taxation: { enabled: false, iresRate: 0.24, irapRate: 0.039 }
@@ -92,7 +103,7 @@ window.PROXIMA.defaultParams = function () {
 function constitutionForMonth(m, c) {
   if (m === 1) return c.notaio + c.cciaa + c.impostoRegistro + c.bollo + c.commercialistaIniziale;
   if (m === 2) return c.pecFirmaDigitale + c.iscrizioneOCF;
-  if (m === 3) return c.esamiCertificazioni;
+  if (m === 3) return c.simIntegration;
   if (m === 4) return c.avvocato + c.sitoWeb / 2;
   if (m === 5) return c.assicurazioneRC + c.sitoWeb / 2;
   if (m === 6) return c.branding;
@@ -278,12 +289,17 @@ window.PROXIMA.simulate = function (p, months) {
       }
     }
 
-    // --- Revenue: immediate or deferred 12 months ---
+    // --- Revenue: AUM-based, grows with market returns + client contributions ---
     var payingClients = p.deferredFees
       ? (m >= 13 && results[m - 13] ? results[m - 13].totalClients : 0)
       : totalClients;
-    var mrr = payingClients * p.arpu / 12;
-    var arr = totalClients * p.arpu;
+    var monthsSinceLaunch = Math.max(0, m - 13);
+    var currentAvgAUM = p.aum.avgPerClient
+      * Math.pow(1 + p.aum.sp500Annual / 12, monthsSinceLaunch)
+      + (p.aum.annualContributions / 12) * monthsSinceLaunch;
+    var annualRevPerClient = currentAvgAUM * p.aum.feeRate * p.aum.proximaSplit;
+    var mrr = payingClients * annualRevPerClient / 12;
+    var arr = totalClients * annualRevPerClient;
 
     // --- Taxation: monthly IRES + IRAP provision (rolling 12-month estimate) ---
     var totCostPreTax = constCost + opCost + persCost + mktCost + mortgageCost;
@@ -301,7 +317,7 @@ window.PROXIMA.simulate = function (p, months) {
     var totCost = totCostPreTax + taxCost;
 
     // --- AUM tracking + S&P 500 benchmark ---
-    var totalAUM = totalClients * p.aum.avgPerClient;
+    var totalAUM = totalClients * currentAvgAUM;
     if (m === 13) { sp500BenchmarkValue = totalAUM; }
     else if (m > 13) { sp500BenchmarkValue = sp500BenchmarkValue * (1 + sp500Monthly); }
 
