@@ -197,17 +197,18 @@ window.PROXIMA.getTarget = function (m) {
 window.PROXIMA.defaultParams = function () {
   return {
     showRate: 0.75, checkupToClient: 0.30,
+    assetTransferLagMonths: 2, // lag tra firma mandato e primo ricavo
     google: { cpc: 1.80, clickToCalc: 0.60, calcToBooking: 0.08,
-      budgetByPhase: { 1:0, 2:0, 3:0, 4:500, 5:1500, 6:2500, 7:3500 } },
+      budgetByPhase: { 1:0, 2:0, 3:0, 4:500, 5:2000, 6:3200, 7:4500 } },
     meta: { cpc: 0.90, clickToCalc: 0.35, calcToBooking: 0.05,
-      budgetByPhase: { 1:0, 2:0, 3:0, 4:300, 5:800, 6:1200, 7:1800 } },
+      budgetByPhase: { 1:0, 2:0, 3:0, 4:300, 5:1100, 6:1600, 7:2300 } },
     linkedin: { cpc: 6.00, clickToCalc: 0.50, calcToBooking: 0.06,
       budgetByPhase: { 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:600 }, startMonth: 22 },
     seo: { baseVisits: 30, growthRate: 0.22, visitToCalc: 0.18, calcToBooking: 0.06 },
     social: { baseVisits: 60, growthRate: 0.14, visitToCalc: 0.10, calcToBooking: 0.04 },
     referral: { ratePerClient: 0.06, bookingRate: 0.80, startMonth: 15 },
     borrowed: { bookingsByPhase: { 1:0, 2:0, 3:0, 4:2, 5:5, 6:8, 7:12 } },
-    founderHoursPerWeek: 25, hoursOnboarding: 5,
+    founderHoursPerWeek: 25, hoursOnboarding: 3.5, // AC: la SIM gestisce la burocrazia del mandato
     arpu: 374, churnMonthly: 0.006, // agente collegato: AUM-based, mandati più stabili
     constitution: {
       notaio: 2500, cciaa: 200, impostoRegistro: 200, bollo: 156,
@@ -243,7 +244,7 @@ window.PROXIMA.defaultParams = function () {
     riskScenario: 'base',
     startingCapital: 180000,
     waitingList: { count: 10, conversionRate: 0.80 },
-    aum: { avgPerClient: 50000, sp500Annual: 0.07, sp500Benchmark: 0.10, feeRate: 0.012, proximaSplit: 0.50, annualContributions: 4000 },
+    aum: { avgPerClient: 50000, sp500Annual: 0.07, sp500Benchmark: 0.10, feeRate: 0.012, proximaSplit: 0.50, annualContributions: 4000, qualifyRate: 0.65 },
     deferredFees: false,
     mortgage: { enabled: false, principal: 180000, rate: 0.054, preAmortMonths: 18, amortMonths: 60 },
     taxation: { enabled: false, iresRate: 0.24, irapRate: 0.039 }
@@ -348,7 +349,7 @@ window.PROXIMA.simulate = function (p, months) {
 
     var totBookFull = gBookFull + mBookFull + lBookFull + seoBook + socBook + refBook + borBook;
     var checkupsFull = totBookFull * p.showRate;
-    var newRawFull = checkupsFull * p.checkupToClient * risk.clientMult;
+    var newRawFull = checkupsFull * p.checkupToClient * (p.aum.qualifyRate || 1) * risk.clientMult;
 
     // --- Appointment utilization: demand vs slots ---
     var appointmentUtil = maxNewByHours > 0 ? newRawFull / maxNewByHours : 0;
@@ -389,7 +390,7 @@ window.PROXIMA.simulate = function (p, months) {
 
     var totBook = gBook + mBook + lBook + seoBook + socBook + refBook + borBook;
     var checkups = totBook * p.showRate;
-    var newRaw = checkups * p.checkupToClient * risk.clientMult;
+    var newRaw = checkups * p.checkupToClient * (p.aum.qualifyRate || 1) * risk.clientMult;
 
     var newCapped = (m >= 13) ? Math.min(newRaw, maxNewByHours) : newRaw;
     var capLimited = newRaw > newCapped + 0.5;
@@ -405,7 +406,7 @@ window.PROXIMA.simulate = function (p, months) {
     }
 
     // --- Per-channel client attribution ---
-    var paidConvRate = p.showRate * p.checkupToClient * risk.clientMult;
+    var paidConvRate = p.showRate * p.checkupToClient * (p.aum.qualifyRate || 1) * risk.clientMult;
     var gClients = gBook * paidConvRate;
     var mClients = mBook * paidConvRate;
     var lClients = lBook * paidConvRate;
@@ -440,9 +441,11 @@ window.PROXIMA.simulate = function (p, months) {
     }
 
     // --- Revenue: immediate or deferred 12 months ---
+    var lag = p.assetTransferLagMonths || 0;
+    var laggedClients = (lag > 0 && results[m - 1 - lag]) ? results[m - 1 - lag].totalClients : (lag === 0 ? totalClients : 0);
     var payingClients = p.deferredFees
       ? (m >= 13 && results[m - 13] ? results[m - 13].totalClients : 0)
-      : totalClients;
+      : laggedClients;
     var msl = Math.max(0, m - 13);
     var avgAge = msl / 2; // età media dei cohort: clienti distribuiti nel tempo
     var r12 = p.aum.sp500Annual / 12;
@@ -632,7 +635,8 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
 
       <Panel id="funnel" title="Dopo la prenotazione" openState={open} onToggle={toggle}>
         {S(["showRate"],"% che si presenta all'appuntamento",0.3,1,0.01,pct)}
-        {S(["checkupToClient"],"% check-up → cliente pagante",0.1,0.7,0.01,pct)}
+        {S(["checkupToClient"],"% primo incontro → mandato firmato",0.1,0.7,0.01,pct)}
+        {S(["assetTransferLagMonths"],"Mesi di lag trasferimento asset (firma → primo ricavo)",0,4,1,(v)=>v+" mesi")}
       </Panel>
 
       <Panel id="google" title="Google Ads" openState={open} onToggle={toggle}>
@@ -688,7 +692,7 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
 
       <Panel id="capacity" title="Capacita e ore di lavoro" openState={open} onToggle={toggle}>
         {S(["founderHoursPerWeek"],"Ore a settimana del founder",5,50,1,(v)=>v+"h")}
-        {S(["hoursOnboarding"],"Onboarding per nuovo cliente",2,10,0.5,(v)=>v+"h una tantum")}
+        {S(["hoursOnboarding"],"Ore primo incontro + mandato per nuovo cliente",1,8,0.5,(v)=>v+"h una tantum")}
       </Panel>
 
       <Panel id="hiring" title="Assunzioni dinamiche" openState={open} onToggle={toggle}>
@@ -763,6 +767,7 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
         {S(["aum","feeRate"],"Fee annua al cliente (es. 1.2% = 0.012)",0.005,0.025,0.001,(v)=>(v*100).toFixed(1)+"%")}
         {S(["aum","proximaSplit"],"Quota Proxima sulla fee (es. 50% = 0.5)",0.30,0.70,0.05,(v)=>(v*100).toFixed(0)+"%")}
         {S(["aum","annualContributions"],"Versamenti annui medi per cliente (€)",0,20000,500,eur)}
+        {S(["aum","qualifyRate"],"% lead con AUM sufficiente (≥ soglia SIM)",0.30,1.0,0.05,pct)}
         {S(["churnMonthly"],"% clienti che disdicono ogni mese",0,0.05,0.002,pct)}
         <div style={{marginTop:12}}>
           <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
@@ -1364,7 +1369,7 @@ window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
     ["Mese",           (r) => null,                ""],
     ["Fase",           (r) => null,                ""],
     ["Prenotazioni",   (r) => fmtN(r.totalBookings), ""],
-    ["Check-up",       (r) => fmtN(r.checkups),    ""],
+    ["Primo incontro", (r) => fmtN(r.checkups),    ""],
     ["Max nuovi/mese", (r) => fmtN(r.maxNewPerMonth), ""],
     ["Nuovi clienti",  (r) => fmtN(r.newClientsCapped), ""],
     ["Persi (churn)",  (r) => fmtN(r.churnedClients), ""],
