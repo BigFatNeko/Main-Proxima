@@ -244,7 +244,7 @@ window.PROXIMA.defaultParams = function () {
     riskScenario: 'base',
     startingCapital: 180000,
     waitingList: { count: 10, conversionRate: 0.80 },
-    aum: { avgPerClient: 50000, sp500Annual: 0.07, sp500Benchmark: 0.10, feeRate: 0.012, proximaSplit: 0.50, annualContributions: 4000, qualifyRate: 0.65 },
+    aum: { avgPerClient: 50000, sp500Annual: 0.07, sp500Benchmark: 0.10, feeRate: 0.012, proximaSplit: 0.50, annualContributions: 4000, qualifyRate: 0.65, marketShock: 0 },
     deferredFees: false,
     mortgage: { enabled: false, principal: 180000, rate: 0.054, preAmortMonths: 18, amortMonths: 60 },
     taxation: { enabled: false, iresRate: 0.24, irapRate: 0.039 }
@@ -273,6 +273,7 @@ var AGENTS_BY_PHASE = { 1: 10, 2: 16, 3: 25, 4: 32, 5: 35, 6: 35, 7: 35 };
 window.PROXIMA.simulate = function (p, months) {
   months = months || 36;
   var results = [], totalClients = 0, revCum = 0, costCum = 0;
+  var cohorts = [];
   var risk = RISK[p.riskScenario] || RISK.base;
   var opBase = 0;
   var keys = Object.keys(p.operating);
@@ -395,15 +396,28 @@ window.PROXIMA.simulate = function (p, months) {
     var newCapped = (m >= 13) ? Math.min(newRaw, maxNewByHours) : newRaw;
     var capLimited = newRaw > newCapped + 0.5;
 
-    var churn = totalClients * p.churnMonthly * risk.churnMult;
-    totalClients = Math.max(0, totalClients + newCapped - churn);
+    // --- Churn: proportional across all cohorts ---
+    var churnRate = p.churnMonthly * risk.churnMult;
+    var churn = 0;
+    for (var ci = 0; ci < cohorts.length; ci++) {
+      var loss = cohorts[ci].count * churnRate;
+      churn += loss;
+      cohorts[ci].count -= loss;
+    }
+
+    // --- Add new cohort ---
+    if (newCapped > 0) cohorts.push({ count: newCapped, birthMonth: m });
 
     // --- Waiting list injection at M0 ---
     var waitingListBoost = 0;
     if (m === 13) {
       waitingListBoost = Math.round(p.waitingList.count * p.waitingList.conversionRate);
-      totalClients += waitingListBoost;
+      if (waitingListBoost > 0) cohorts.push({ count: waitingListBoost, birthMonth: m });
     }
+
+    // --- Total clients from cohorts ---
+    totalClients = 0;
+    for (var cj = 0; cj < cohorts.length; cj++) totalClients += cohorts[cj].count;
 
     // --- Per-channel client attribution ---
     var paidConvRate = p.showRate * p.checkupToClient * (p.aum.qualifyRate || 1) * risk.clientMult;
@@ -418,7 +432,7 @@ window.PROXIMA.simulate = function (p, months) {
     var constCost = constitutionForMonth(m, p.constitution);
     var opCost = opBase * risk.costMult;
 
-    var persCost = p.personnel.founderComp * p.personnel.numFounders * (1 + p.personnel.inpsRate / 3);
+    var persCost = p.personnel.founderComp * p.personnel.numFounders * (1 + p.personnel.inpsRate * 2 / 3);
     persCost += hiredConsultants * h.consultantCost;
     if (hasBackOffice) persCost += h.backOfficeCost;
     if (hasContent) persCost += h.contentCost;
@@ -440,19 +454,24 @@ window.PROXIMA.simulate = function (p, months) {
       }
     }
 
-    // --- Revenue: immediate or deferred 12 months ---
+    // --- Revenue: cohort-based AUM, market shock, split ratchet ---
     var lag = p.assetTransferLagMonths || 0;
-    var laggedClients = (lag > 0 && results[m - 1 - lag]) ? results[m - 1 - lag].totalClients : (lag === 0 ? totalClients : 0);
-    var payingClients = p.deferredFees
-      ? (m >= 13 && results[m - 13] ? results[m - 13].totalClients : 0)
-      : laggedClients;
-    var msl = Math.max(0, m - 13);
-    var avgAge = msl / 2; // età media dei cohort: clienti distribuiti nel tempo
     var r12 = p.aum.sp500Annual / 12;
-    var curAUM = p.aum.avgPerClient * Math.pow(1 + r12, avgAge)
-      + (avgAge > 0 ? p.aum.annualContributions / 12 * (Math.pow(1 + r12, avgAge) - 1) / r12 : 0);
-    var mrr = payingClients * curAUM * p.aum.feeRate * p.aum.proximaSplit / 12;
-    var arr = totalClients * curAUM * p.aum.feeRate * p.aum.proximaSplit;
+    var mktF = 1 + (p.aum.marketShock || 0);
+    var totalAUM = 0, payingAUM = 0, payingClients = 0;
+    for (var ck = 0; ck < cohorts.length; ck++) {
+      var cAge = m - cohorts[ck].birthMonth;
+      var aumPer = p.aum.avgPerClient * mktF * Math.pow(1 + r12, cAge)
+        + (cAge > 0 ? p.aum.annualContributions / 12 * (Math.pow(1 + r12, cAge) - 1) / r12 : 0);
+      totalAUM += cohorts[ck].count * aumPer;
+      var isPaying = p.deferredFees ? cAge >= 12 : cAge >= lag;
+      if (isPaying) { payingClients += cohorts[ck].count; payingAUM += cohorts[ck].count * aumPer; }
+    }
+    var proximaSplit = p.aum.proximaSplit;
+    if (totalAUM >= 30000000) proximaSplit = Math.min(proximaSplit + 0.10, 0.70);
+    else if (totalAUM >= 10000000) proximaSplit = Math.min(proximaSplit + 0.05, 0.70);
+    var mrr = payingAUM * p.aum.feeRate * proximaSplit / 12;
+    var arr = totalAUM * p.aum.feeRate * proximaSplit;
 
     // --- Taxation: monthly IRES + IRAP provision (rolling 12-month estimate) ---
     var totCostPreTax = constCost + opCost + persCost + mktCost + mortgageCost;
@@ -469,8 +488,7 @@ window.PROXIMA.simulate = function (p, months) {
     }
     var totCost = totCostPreTax + taxCost;
 
-    // --- AUM tracking + S&P 500 benchmark ---
-    var totalAUM = totalClients * curAUM;
+    // --- S&P 500 benchmark tracking ---
     if (m === 13) { sp500BenchmarkValue = totalAUM; }
     else if (m > 13) { sp500BenchmarkValue = sp500BenchmarkValue * (1 + sp500Monthly); }
 
@@ -496,8 +514,8 @@ window.PROXIMA.simulate = function (p, months) {
       constitutionCosts: constCost, operatingCosts: opCost,
       personnelCosts: persCost, marketingCosts: mktCost,
       mortgageCost: mortgageCost, taxCost: taxCost, totalCosts: totCost,
-      payingClients: payingClients, waitingListBoost: waitingListBoost,
-      mrr: mrr, arr: arr,
+      payingClients: payingClients, payingAUM: payingAUM, waitingListBoost: waitingListBoost,
+      mrr: mrr, arr: arr, currentSplit: proximaSplit,
       totalAUM: totalAUM, sp500BenchmarkValue: sp500BenchmarkValue,
       netBurn: netBurn, cashRemaining: cash,
       revenueCumulative: revCum, costsCumulative: costCum,
@@ -796,6 +814,10 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
         {S(["aum","avgPerClient"],"Patrimonio medio per cliente (€)",10000,500000,5000,eur)}
         {S(["aum","sp500Annual"],"Rendimento annuo portafoglio gestito",0.03,0.12,0.005,pct)}
         {S(["aum","sp500Benchmark"],"Rendimento benchmark S&P 500 (confronto)",0.05,0.15,0.005,pct)}
+        {S(["aum","marketShock"],"Shock di mercato sull'AUM (0 = nessuno, -0.30 = -30%)",-0.5,0.3,0.05,(v)=>v>=0?(v===0?"nessuno":"+"+Math.round(v*100)+"%"):Math.round(v*100)+"%")}
+        <div className="text-faint" style={{fontSize:11,marginTop:6,padding:"8px 10px",background:"rgba(196,169,98,0.06)",borderRadius:6}}>
+          Split ratchet automatico: +5% a €10M AUM · +10% a €30M AUM (cap 70%)
+        </div>
       </Panel>
 
       <Panel id="mortgage" title="Mutuo (finanziamento 180k)" openState={open} onToggle={toggle}>
