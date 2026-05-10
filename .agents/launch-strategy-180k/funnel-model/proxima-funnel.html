@@ -288,6 +288,7 @@ window.PROXIMA.simulate = function (p, months) {
   var lCumSpend = 0, lCumClients = 0;
   var sp500Monthly = Math.pow(1 + p.aum.sp500Annual, 1 / 12) - 1;
   var sp500BenchmarkValue = 0;
+  var managedAUM = 0;
   var revWindow12 = [], costWindow12 = [];
 
   for (var m = 1; m <= months; m++) {
@@ -462,9 +463,17 @@ window.PROXIMA.simulate = function (p, months) {
     var totCost = totCostPreTax + taxCost;
 
     // --- AUM tracking + S&P 500 benchmark ---
-    var totalAUM = totalClients * p.aum.avgPerClient;
+    if (m >= 13) {
+      managedAUM *= (1 + sp500Monthly);
+      var prevClients = totalClients - newCapped + churn - waitingListBoost;
+      if (prevClients > 0 && churn > 0) {
+        managedAUM -= managedAUM * (churn / prevClients);
+      }
+      managedAUM += (newCapped + waitingListBoost) * p.aum.avgPerClient;
+    }
+    var totalAUM = managedAUM;
     if (m === 13) { sp500BenchmarkValue = totalAUM; }
-    else if (m > 13) { sp500BenchmarkValue = sp500BenchmarkValue * (1 + sp500Monthly); }
+    else if (m > 13) { sp500BenchmarkValue *= (1 + sp500Monthly); }
 
     revCum += mrr;
     costCum += totCost;
