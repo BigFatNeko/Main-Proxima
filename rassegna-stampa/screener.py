@@ -203,8 +203,13 @@ def tv_to_yf_ticker(tv_ticker: str) -> Optional[str]:
 
 def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
                                 min_price: float = 1.0, limit_per_market: int = 100,
-                                sector_filter: Optional[str] = None) -> list[str]:
-    """Auto-build universe da TradingView in formato yfinance."""
+                                sector_filter: Optional[str] = None,
+                                total_limit: Optional[int] = None) -> list[str]:
+    """Auto-build universe da TradingView in formato yfinance.
+
+    total_limit: se impostato, cap finale sul numero di ticker passati a yfinance.
+    TradingView li ordina già per market_cap desc, quindi i top-N sono i più liquidi.
+    """
     if not TV_OK:
         log.error("tradingview-screener non installato.")
         return []
@@ -248,6 +253,9 @@ def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
         log.info("Exchange non mappati (skipped): %d (es. %s)",
                  len(failed), ", ".join(failed[:3]))
     deduped = list(dict.fromkeys(all_tickers))
+    if total_limit and len(deduped) > total_limit:
+        deduped = deduped[:total_limit]
+        log.info("Universe cappato a %d ticker (total_limit)", total_limit)
     log.info("Universe finale: %d ticker unici", len(deduped))
     return deduped
 
@@ -725,6 +733,8 @@ def main():
     p.add_argument("--min-mcap", type=int, default=CONFIG["min_market_cap_million"])
     p.add_argument("--top", type=int, default=30)
     p.add_argument("--limit-per-market", type=int, default=100)
+    p.add_argument("--total-limit", type=int, default=None,
+                   help="Cap totale ticker passati a yfinance (es. 60 per run veloci)")
     p.add_argument("--sector", default=None)
     p.add_argument("--output", type=Path, default=Path("./data/screener_results"))
     args = p.parse_args()
@@ -736,6 +746,7 @@ def main():
         min_price=CONFIG["min_price_usd"],
         limit_per_market=args.limit_per_market,
         sector_filter=args.sector,
+        total_limit=args.total_limit,
     )
     if not tickers and args.region == "US" and FINVIZ_OK:
         log.warning("Tentativo fallback finvizfinance...")

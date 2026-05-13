@@ -89,7 +89,7 @@ def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
     cmd = [
         sys.executable, str(SCRIPT_DIR / "screener.py"),
         "--region", region, "--strategy", strategy, "--top", "30",
-        "--limit-per-market", "40",
+        "--limit-per-market", "20", "--total-limit", "60",
         "--output", str(SCREENER_OUTPUT_DIR),
     ]
     try:
