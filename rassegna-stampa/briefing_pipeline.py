@@ -293,7 +293,7 @@ def render_html(markdown_briefing: str, user: str, mode: str) -> Path:
     DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     date_tag = datetime.now().strftime("%Y-%m-%d")
     md_path = DEFAULT_OUTPUT_DIR / f"{date_tag}-{user}.md"
-    md_path.write_text(markdown_briefing)
+    md_path.write_text(markdown_briefing, encoding="utf-8")
 
     try:
         from jinja2 import Template
@@ -317,7 +317,7 @@ def render_html(markdown_briefing: str, user: str, mode: str) -> Path:
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
     out = DEFAULT_OUTPUT_DIR / f"{date_tag}-{user}.html"
-    out.write_text(html)
+    out.write_text(html, encoding="utf-8")
     log.info("HTML salvato: %s", out)
     return out
 
