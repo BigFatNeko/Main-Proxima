@@ -67,7 +67,7 @@ SCREENER_OUTPUT_DIR = SCRIPT_DIR / "data" / "screener_results"
 SYSTEM_PROMPT_PATH = SCRIPT_DIR / "system_prompt.md"
 TEMPLATE_PATH = SCRIPT_DIR / "newspaper_template.html"
 
-CLAUDE_MODEL = "claude-sonnet-4-6-20250920"
+CLAUDE_MODEL = "claude-sonnet-4-6"
 CLAUDE_MAX_TOKENS = 8000
 
 
