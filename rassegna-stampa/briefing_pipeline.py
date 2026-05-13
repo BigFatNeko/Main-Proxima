@@ -77,10 +77,19 @@ CLAUDE_MAX_TOKENS = 16000
 
 def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
     """Esegue screener.py come subprocess e ritorna il path del JSON output."""
+    date_tag = datetime.now().strftime("%Y-%m-%d")
+    json_path = SCREENER_OUTPUT_DIR / f"screener_{date_tag}.json"
+
+    # Cache giornaliera: se il JSON di oggi esiste già, riusalo
+    if json_path.exists():
+        log.info("Step 1/6: screener cache hit (%s), skip.", json_path.name)
+        return json_path
+
     log.info("Step 1/6: lancio screener (region=%s, strategy=%s)...", region, strategy)
     cmd = [
         sys.executable, str(SCRIPT_DIR / "screener.py"),
         "--region", region, "--strategy", strategy, "--top", "30",
+        "--limit-per-market", "40",
         "--output", str(SCREENER_OUTPUT_DIR),
     ]
     try:
@@ -91,8 +100,6 @@ def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
     except subprocess.CalledProcessError as e:
         log.error("Screener fallito: %s", e.stderr[:500])
         return None
-    date_tag = datetime.now().strftime("%Y-%m-%d")
-    json_path = SCREENER_OUTPUT_DIR / f"screener_{date_tag}.json"
     if not json_path.exists():
         log.warning("Output screener non trovato.")
         return None

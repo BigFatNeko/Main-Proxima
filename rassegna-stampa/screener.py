@@ -647,7 +647,7 @@ def screen_ticker(ticker):
     return c
 
 
-def screen_universe(tickers, strategy="all", max_workers=20):
+def screen_universe(tickers, strategy="all", max_workers=30):
     from concurrent.futures import ThreadPoolExecutor, as_completed
     out = []
     n = len(tickers)
@@ -660,7 +660,7 @@ def screen_universe(tickers, strategy="all", max_workers=20):
             if done % 50 == 0:
                 log.info("  elaborati %d/%d", done, n)
             try:
-                c = fut.result(timeout=30)
+                c = fut.result(timeout=20)
             except Exception:
                 continue
             if c is None or not c.passes_hard_filters:
