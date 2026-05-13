@@ -138,7 +138,7 @@ def load_todo() -> str:
     return DEFAULT_TODO_FILE.read_text()
 
 
-def load_previous_briefings(user: str, days: int = 7) -> list[dict]:
+def load_previous_briefings(user: str, days: int = 30) -> list[dict]:
     out = []
     for d in range(1, days + 1):
         date = (datetime.now() - timedelta(days=d)).strftime("%Y-%m-%d")
