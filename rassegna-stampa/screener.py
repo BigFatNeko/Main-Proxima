@@ -647,20 +647,28 @@ def screen_ticker(ticker):
     return c
 
 
-def screen_universe(tickers, strategy="all"):
+def screen_universe(tickers, strategy="all", max_workers=20):
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     out = []
     n = len(tickers)
-    log.info("Screening su %d ticker...", n)
-    for i, t in enumerate(tickers, 1):
-        if i % 25 == 0:
-            log.info("  elaborati %d/%d", i, n)
-        c = screen_ticker(t)
-        if c is None or not c.passes_hard_filters:
-            continue
-        if strategy != "all":
-            if not any(tag.startswith(strategy) for tag in c.strategy_tags):
+    log.info("Screening su %d ticker (workers=%d)...", n, max_workers)
+    done = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = {ex.submit(screen_ticker, t): t for t in tickers}
+        for fut in as_completed(futures):
+            done += 1
+            if done % 50 == 0:
+                log.info("  elaborati %d/%d", done, n)
+            try:
+                c = fut.result(timeout=30)
+            except Exception:
                 continue
-        out.append(c)
+            if c is None or not c.passes_hard_filters:
+                continue
+            if strategy != "all":
+                if not any(tag.startswith(strategy) for tag in c.strategy_tags):
+                    continue
+            out.append(c)
     return out
 
 
