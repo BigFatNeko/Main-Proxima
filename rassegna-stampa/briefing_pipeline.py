@@ -68,7 +68,7 @@ SYSTEM_PROMPT_PATH = SCRIPT_DIR / "system_prompt.md"
 TEMPLATE_PATH = SCRIPT_DIR / "newspaper_template.html"
 
 CLAUDE_MODEL = "claude-sonnet-4-6"
-CLAUDE_MAX_TOKENS = 8000
+CLAUDE_MAX_TOKENS = 16000
 
 
 # =============================================================================
@@ -276,6 +276,14 @@ def call_claude(system: str, user: str, dry_run: bool = False) -> str:
     return response.content[0].text
 
 
+_GIORNI_IT = ["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato","Domenica"]
+_MESI_IT   = ["","Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno",
+               "Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"]
+
+def _format_date_it(dt: datetime) -> str:
+    return f"{_GIORNI_IT[dt.weekday()]} {dt.day} {_MESI_IT[dt.month]} {dt.year}"
+
+
 # =============================================================================
 # STEP 5 — RENDER HTML
 # =============================================================================
@@ -304,7 +312,7 @@ def render_html(markdown_briefing: str, user: str, mode: str) -> Path:
     template = Template(TEMPLATE_PATH.read_text())
     html = template.render(
         title=f"Proxima Daily — {user.title()}",
-        date=datetime.now().strftime("%A %d %B %Y").capitalize(),
+        date=_format_date_it(datetime.now()),
         user=user, mode=mode, body=body_html,
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
