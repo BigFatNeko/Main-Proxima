@@ -89,14 +89,14 @@ def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
     cmd = [
         sys.executable, str(SCRIPT_DIR / "screener.py"),
         "--region", region, "--strategy", strategy,
-        "--top", "30", "--top-speculative", "20",
-        "--limit-per-market", "150",   # nessun --total-limit: GitHub Actions ha tempo
+        "--top", "40", "--top-speculative", "25", "--top-special", "15",
+        "--limit-per-market", "400",
         "--output", str(SCREENER_OUTPUT_DIR),
     ]
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=5400)
+        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=7200)
     except subprocess.TimeoutExpired:
-        log.error("Screener timeout (>90min).")
+        log.error("Screener timeout (>2h).")
         return None
     except subprocess.CalledProcessError as e:
         log.error("Screener fallito: %s", e.stderr[:500])
@@ -220,30 +220,59 @@ def build_system_prompt() -> str:
 def build_user_prompt(user_data, screener_data, market, todo, previous, mode):
     tier1 = screener_data.get("candidates", [])
     tier2 = screener_data.get("speculative_candidates", [])
+    tier3 = screener_data.get("special_situations", [])
+    ctx   = screener_data.get("market_context", {})
+
+    # Market context: leaders/laggards + macro summary
+    ctx_section = ""
+    if ctx:
+        leaders  = ctx.get("sector_leaders_1m", [])
+        laggards = ctx.get("sector_laggards_1m", [])
+        vix      = ctx.get("vix")
+        spread   = ctx.get("yield_curve_spread_10y2y")
+        macro    = ctx.get("macro", {})
+        regions  = ctx.get("regions", {})
+        ctx_section = f"""
+MARKET CONTEXT (ETF settoriali + regionali + macro):
+Settori US leaders 1m: {leaders}
+Settori US laggards 1m: {laggards}
+VIX: {vix} | Yield curve 10y-2y: {spread}
+Macro: {json.dumps({k: v.get("1m") for k, v in macro.items()}, default=str)}
+Regioni 1m%: {json.dumps({k: v.get("1m") for k, v in regions.items()}, default=str)}
+"""
 
     spec_section = ""
     if tier2:
         spec_section = f"""
-TIER 2 — CATALYST / SPECULATIVE (small-cap con segnali attivi):
-Questi titoli NON sono raccomandazioni di investimento. Sono small-cap e micro-cap
-che mostrano ≥1 segnale catalyst (volume spike, momentum, short squeeze, revenue
-acceleration, ecc.). Meritano menzione solo se il segnale è forte (≥3 segnali).
-{json.dumps(tier2[:20], indent=2, default=str)[:6000]}
+TIER 2 — CATALYST / SPECULATIVE (small-cap, segnali attivi):
+Menziona solo titoli con ≥3 segnali nella sezione "Radar Speculativo".
+{json.dumps(tier2[:20], indent=2, default=str)[:5000]}
+"""
+
+    special_section = ""
+    if tier3:
+        special_section = f"""
+TIER 3 — SPECIAL SITUATIONS (deep value PE/PB + fallen angels):
+Deep value = PE 2-8 oppure P/B<0.8. Fallen angel = yield >6%.
+Inserisci 2-3 nella sezione "Filiere strategiche" se il Piotroski ≥5.
+{json.dumps(tier3[:15], indent=2, default=str)[:4000]}
 """
 
     return f"""Genera il briefing per {user_data['user'].upper()} in data {datetime.now():%Y-%m-%d}.
 
 MODE: {mode}
-
+{ctx_section}
 PORTAFOGLIO:
 {json.dumps(user_data, indent=2, default=str)}
 
-MARKET SNAPSHOT:
+MARKET SNAPSHOT (real-time):
 {json.dumps(market, indent=2)}
 
-TIER 1 — SCREENER QUALITY (top 30 candidati pre-filtrati MVF v3.0):
+TIER 1 — SCREENER QUALITY (top 40 candidati, score composito MVF v3.0):
+Include Piotroski F-score, moat score, DCF upside, filiera tag, valuation multiples,
+sector-relative PE/FCF, earnings acceleration.
 {json.dumps(tier1, indent=2, default=str)[:10000]}
-{spec_section}
+{spec_section}{special_section}
 TODO DEL GIORNO:
 {todo[:3000]}
 
@@ -251,8 +280,7 @@ BRIEFING PRECEDENTI ({len(previous)} disponibili):
 {json.dumps([p['date'] for p in previous], indent=2)}
 
 Produci markdown strutturato secondo le specifiche del system prompt.
-Se ci sono candidati Tier 2 con ≥3 segnali, aggiungi una sezione
-"🔬 Radar Speculativo" in fondo (breve, 3-5 titoli max, con disclaimer).
+Usa il market context per contestualizzare (es. "in un mercato dove XLE +12% YTD...").
 """
 
 

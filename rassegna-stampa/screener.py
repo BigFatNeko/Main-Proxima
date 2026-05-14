@@ -59,8 +59,8 @@ except ImportError:
 # =============================================================================
 
 CONFIG: dict[str, Any] = {
-    "min_market_cap_million": 500,
-    "min_price_usd": 1.0,
+    "min_market_cap_million": 300,   # abbassato da 500 → include small-cap 300M+
+    "min_price_usd": 0.50,           # abbassato da 1.0 → cattura azioni < 1$ in EM
     "data_years": 5,
     "wacc_proxies": {
         "US": 0.085, "EU_core": 0.075, "IT": 0.090, "ES": 0.082,
@@ -75,12 +75,16 @@ TV_MARKETS = {
     "US": ["america"],
     "EU": ["italy", "germany", "france", "spain", "netherlands",
            "switzerland", "uk", "sweden", "denmark", "norway",
-           "finland", "belgium", "ireland", "austria", "portugal"],
+           "finland", "belgium", "ireland", "austria", "portugal",
+           "poland", "turkey", "greece", "hungary", "czech_republic"],
     "ASIA": ["japan", "china", "hong_kong", "korea", "india",
              "singapore", "taiwan", "australia", "indonesia",
-             "malaysia", "thailand"],
+             "malaysia", "thailand", "vietnam", "philippines", "new_zealand"],
+    "LATAM": ["brazil", "mexico", "chile", "colombia", "argentina"],
+    "AFRICA_ME": ["south_africa", "saudi_arabia", "israel", "uae"],
 }
-TV_MARKETS["GLOBAL"] = TV_MARKETS["US"] + TV_MARKETS["EU"] + TV_MARKETS["ASIA"]
+TV_MARKETS["GLOBAL"] = (TV_MARKETS["US"] + TV_MARKETS["EU"] + TV_MARKETS["ASIA"]
+                        + TV_MARKETS["LATAM"] + TV_MARKETS["AFRICA_ME"])
 
 # TradingView exchange prefix → yfinance suffix
 TV_TO_YF_SUFFIX = {
@@ -93,6 +97,27 @@ TV_TO_YF_SUFFIX = {
     "SGX": ".SI", "ASX": ".AX",
     "OMXSTO": ".ST", "OMXCOP": ".CO", "OMXHEX": ".HE",
     "OSL": ".OL", "WBO": ".VI", "ELI": ".LS", "BVMF": ".SA",
+    # EM / frontier additions
+    "WSE": ".WA",     # Poland Warsaw
+    "BIST": ".IS",    # Turkey Istanbul
+    "BMV": ".MX",     # Mexico
+    "JSE": ".JO",     # South Africa
+    "TASE": ".TA",    # Israel
+    "TADAWUL": ".SR", # Saudi Arabia
+    "NZX": ".NZ",     # New Zealand
+    "SET": ".BK",     # Thailand Bangkok
+    "IDX": ".JK",     # Indonesia
+    "PSE": ".PSE",    # Philippines
+    "HNX": ".HN",     # Vietnam Hanoi
+    "HOSE": ".VN",    # Vietnam Ho Chi Minh
+    "BCS": ".BA",     # Argentina Buenos Aires
+    "BVL": ".LM",     # Peru Lima (bonus)
+    "BCS_CL": ".SN",  # Chile Santiago
+    "COLCAP": ".CL",  # Colombia
+    "ATHEX": ".AT",   # Greece Athens
+    "BUX": ".BD",     # Hungary Budapest
+    "PSE_CZ": ".PR",  # Czech Republic Prague
+    "DFM": ".DU",     # UAE Dubai
 }
 
 SPECIAL_SECTORS = {
@@ -138,6 +163,31 @@ FILIERE_STRATEGIC: dict[str, str] = {
     "Electrical Equipment & Parts": "batterie_litio",
     "Industrial Distribution": "helium_gas_industriali",
 }
+
+# ETF per Market Context Layer (settori US + regioni globali + macro)
+SECTOR_ETFS: dict[str, str] = {
+    "US_Tech": "XLK", "US_Energy": "XLE", "US_Finance": "XLF",
+    "US_Healthcare": "XLV", "US_Industrial": "XLI", "US_ConsStaples": "XLP",
+    "US_ConsDisc": "XLY", "US_CommSvc": "XLC", "US_RealEstate": "XLRE",
+    "US_Utilities": "XLU", "US_Materials": "XLB",
+}
+REGIONAL_ETFS: dict[str, str] = {
+    "EuroStoxx": "FEZ", "UK": "EWU", "Germany": "EWG", "Italy": "EWI",
+    "Japan": "EWJ", "China": "FXI", "India": "INDA", "Korea": "EWY",
+    "EM_Broad": "VWO", "Brazil": "EWZ", "Australia": "EWA",
+    "LatAm": "ILF", "EMEA": "EEMEA",
+}
+MACRO_INDICATORS: dict[str, str] = {
+    "10Y_UST": "^TNX", "2Y_UST": "^IRX", "VIX": "^VIX",
+    "Gold": "GC=F", "Oil_Brent": "BZ=F", "Dollar_Index": "DX-Y.NYB",
+    "Copper": "HG=F", "IG_Credit": "LQD",
+}
+
+# Tier 2 — Speculative / Catalyst universe
+SPEC_MIN_MCAP_M = 5
+SPEC_MAX_MCAP_M = 500
+SPEC_MIN_PRICE  = 0.10
+SPEC_MAX_TV_PER_CHUNK = 600   # alzato da 300 → più copertura small-cap
 
 
 # =============================================================================
@@ -192,6 +242,11 @@ class IntrinsicMetrics:
     tax_rate: Optional[float] = None
     accruals_ratio: Optional[float] = None
     cash_conversion_ratio: Optional[float] = None
+    # Valuation multiples (nuovi — per confronto inter-mercato)
+    ev_ebitda: Optional[float] = None      # EV/EBITDA: <8 eccellente, >20 caro
+    fcf_yield: Optional[float] = None      # FCF/Market cap: >8% forte
+    pb_ratio: Optional[float] = None       # Price/Book: <1 sotto book
+    ps_ratio: Optional[float] = None       # Price/Sales: <1 value, >5 caro
 
 
 @dataclass
@@ -260,6 +315,27 @@ class SpeculativeCandidate:
     revenue_growth_yoy: Optional[float] = None
     short_float: Optional[float] = None
     speculative_score: float = 0.0
+    notes: list[str] = field(default_factory=list)
+
+
+@dataclass
+class SpecialCandidate:
+    """Tier 3: situazioni speciali — deep value, fallen angel, turnaround."""
+    ticker: str
+    name: str
+    sector: str
+    industry: str
+    market: str
+    price: Optional[float]
+    market_cap_million: Optional[float]
+    situation_type: str          # "deep_value_pe", "deep_value_pb", "fallen_angel", "turnaround"
+    pe_ratio: Optional[float] = None
+    pb_ratio: Optional[float] = None
+    div_yield: Optional[float] = None
+    price_change_1y: Optional[float] = None
+    piotroski_f: Optional[int] = None
+    fcf_positive: bool = False
+    situation_score: float = 0.0
     notes: list[str] = field(default_factory=list)
 
 
@@ -720,6 +796,22 @@ def compute_metrics(data):
     inter["fcf_series"] = history_series(cf, "Free Cash Flow", 3)
     inter["sector"] = info.get("sector", "")
     inter["shares_change_pct"] = ((sh_now - sh_old) / sh_old) if (sh_now and sh_old) else None
+
+    # Valuation multiples
+    mc_v = info.get("marketCap")
+    ebitda_abs = info.get("ebitda") or safe_row(fin, "EBITDA")
+    debt_v = safe_row(bs, "Total Debt") or 0
+    cash_v = info.get("totalCash") or 0
+    if mc_v and ebitda_abs and ebitda_abs > 0:
+        ev = mc_v + debt_v - cash_v
+        if ev > 0:
+            m.ev_ebitda = ev / ebitda_abs
+    fcf_abs = safe_row(cf, "Free Cash Flow")
+    if fcf_abs is not None and mc_v and mc_v > 0:
+        m.fcf_yield = fcf_abs / mc_v
+    m.pb_ratio = info.get("priceToBook")
+    m.ps_ratio = info.get("priceToSalesTrailing12Months")
+
     return m, inter
 
 
@@ -1003,6 +1095,49 @@ def compute_composite_score(c):
     # Earnings acceleration bonus
     if c.earnings_acceleration is not None and c.earnings_acceleration > 0.05:
         raw += 5
+
+    # EV/EBITDA: <8 = molto conveniente, >20 = caro
+    ev_eb = c.metrics.ev_ebitda
+    if ev_eb is not None and ev_eb > 0:
+        if ev_eb < 8:
+            raw += 8
+        elif ev_eb < 12:
+            raw += 4
+        elif ev_eb > 20:
+            raw -= 4
+
+    # FCF yield: rendimento reale per l'azionista
+    fcf_y = c.metrics.fcf_yield
+    if fcf_y is not None:
+        if fcf_y > 0.08:
+            raw += 8
+        elif fcf_y > 0.05:
+            raw += 4
+        elif fcf_y > 0.03:
+            raw += 2
+        elif fcf_y < 0:
+            raw -= 3
+
+    # P/B: sotto book = margine di sicurezza
+    pb = c.metrics.pb_ratio
+    if pb is not None and pb > 0:
+        if pb < 1.0:
+            raw += 6
+        elif pb < 1.5:
+            raw += 3
+        elif pb > 4.0:
+            raw -= 2
+
+    # P/S: utile per growth e loss-making
+    ps = c.metrics.ps_ratio
+    if ps is not None and ps > 0:
+        if ps < 1.0:
+            raw += 4
+        elif ps < 2.0:
+            raw += 2
+        elif ps > 8.0:
+            raw -= 3
+
     return round(max(0, min(100, raw)), 1)
 
 
@@ -1378,8 +1513,347 @@ def screen_speculative_universe(tickers: list[str], max_workers: int = 30,
     return out[:top_n]
 
 
+# =============================================================================
+# SEZIONE 8b — MARKET CONTEXT LAYER
+# =============================================================================
+
+def build_market_context() -> dict:
+    """Fetch ETF settoriali e regionali per contestualizzare lo screening.
+
+    Ritorna: performance per settore US (11 SPDR), per regione (13 ETF),
+    e macro indicators (VIX, yield curve, commodities).
+    Claude usa questo contesto per capire quale mercato/settore è in momentum
+    vs quale è in value territory.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    all_instruments = {**SECTOR_ETFS, **REGIONAL_ETFS, **MACRO_INDICATORS}
+    results: dict[str, dict] = {}
+
+    def fetch_etf(label: str, tkr: str) -> tuple[str, Optional[dict]]:
+        try:
+            t = yf.Ticker(tkr)
+            h = t.history(period="1y", auto_adjust=True)
+            if h.empty or len(h) < 20:
+                return label, None
+            closes = h["Close"]
+            last = float(closes.iloc[-1])
+            def pct(n):
+                if len(closes) >= n:
+                    p = float(closes.iloc[-n])
+                    return round((last - p) / p * 100, 2) if p > 0 else None
+                return None
+            vols = h["Volume"]
+            avg_vol_10 = float(vols.iloc[-10:].mean()) if len(vols) >= 10 else None
+            avg_vol_30 = float(vols.iloc[-30:].mean()) if len(vols) >= 30 else None
+            rel_vol = round(avg_vol_10 / avg_vol_30, 2) if (avg_vol_10 and avg_vol_30 and avg_vol_30 > 0) else None
+            return label, {
+                "ticker": tkr, "last": round(last, 3),
+                "1m": pct(22), "3m": pct(63), "6m": pct(126), "1y": pct(252),
+                "rel_vol_10d": rel_vol,
+            }
+        except Exception:
+            return label, None
+
+    with ThreadPoolExecutor(max_workers=40) as ex:
+        futs = {ex.submit(fetch_etf, lbl, tkr): lbl for lbl, tkr in all_instruments.items()}
+        for fut in as_completed(futs):
+            lbl, rec = fut.result()
+            if rec:
+                results[lbl] = rec
+
+    # Classificazione settori US: leaders vs laggards su 1 mese
+    sector_perf = {k: v.get("1m") or 0 for k, v in results.items() if k in SECTOR_ETFS}
+    sorted_sectors = sorted(sector_perf.items(), key=lambda x: x[1], reverse=True)
+    sector_leaders = [k for k, _ in sorted_sectors[:3]]
+    sector_laggards = [k for k, _ in sorted_sectors[-3:]]
+
+    # Yield curve: spread 10y-2y (>0 normale, <0 invertita)
+    y10 = results.get("10Y_UST", {}).get("last")
+    y2  = results.get("2Y_UST",  {}).get("last")
+    yield_spread = round(y10 - y2, 3) if (y10 and y2) else None
+
+    return {
+        "sectors": {k: results[k] for k in SECTOR_ETFS if k in results},
+        "regions": {k: results[k] for k in REGIONAL_ETFS if k in results},
+        "macro": {k: results[k] for k in MACRO_INDICATORS if k in results},
+        "sector_leaders_1m": sector_leaders,
+        "sector_laggards_1m": sector_laggards,
+        "yield_curve_spread_10y2y": yield_spread,
+        "vix": results.get("VIX", {}).get("last"),
+    }
+
+
+# =============================================================================
+# SEZIONE 8c — SECTOR-RELATIVE SCORING
+# =============================================================================
+
+def compute_sector_relative_scores(candidates: list) -> None:
+    """Post-processing: aggiusta composite_score in base a valutazione relativa al settore.
+
+    Un'azienda con PE molto sotto la mediana del suo settore ottiene un bonus,
+    anche se in assoluto il PE non è bassissimo. Muta i candidati in-place.
+    """
+    from collections import defaultdict
+
+    by_sector: dict[str, list] = defaultdict(list)
+    for c in candidates:
+        if c.sector:
+            by_sector[c.sector].append(c)
+
+    for sector, group in by_sector.items():
+        if len(group) < 3:
+            continue
+        pes   = [c.pe_ratio for c in group if c.pe_ratio and 0 < c.pe_ratio < 100]
+        fcf_y = [c.metrics.fcf_yield for c in group if c.metrics.fcf_yield]
+        ev_eb = [c.metrics.ev_ebitda for c in group if c.metrics.ev_ebitda and c.metrics.ev_ebitda > 0]
+        scores = [c.composite_score for c in group if c.composite_score]
+
+        med_pe    = float(np.median(pes))    if pes    else None
+        med_fcfy  = float(np.median(fcf_y))  if fcf_y  else None
+        med_eveb  = float(np.median(ev_eb))  if ev_eb  else None
+        med_score = float(np.median(scores)) if scores else None
+
+        for c in group:
+            bonus = 0.0
+            reasons = []
+            # PE 25% sotto la mediana del settore
+            if med_pe and c.pe_ratio and 0 < c.pe_ratio < med_pe * 0.75:
+                bonus += 5.0
+                reasons.append(f"PE {c.pe_ratio:.1f}x vs settore {med_pe:.1f}x (-25%)")
+            # FCF yield 30% sopra la mediana del settore
+            if med_fcfy and c.metrics.fcf_yield and c.metrics.fcf_yield > med_fcfy * 1.30:
+                bonus += 4.0
+                reasons.append(f"FCF yield {c.metrics.fcf_yield:.1%} vs settore {med_fcfy:.1%}")
+            # EV/EBITDA 20% sotto la mediana del settore
+            if med_eveb and c.metrics.ev_ebitda and 0 < c.metrics.ev_ebitda < med_eveb * 0.80:
+                bonus += 4.0
+                reasons.append(f"EV/EBITDA {c.metrics.ev_ebitda:.1f}x vs settore {med_eveb:.1f}x (-20%)")
+            # Score nel top 20% del settore
+            if med_score and c.composite_score and c.composite_score > med_score * 1.20:
+                bonus += 3.0
+                reasons.append(f"Top performer {sector}")
+            if bonus > 0:
+                c.composite_score = round(min(100, (c.composite_score or 0) + bonus), 1)
+                for r in reasons:
+                    c.notes.append(r)
+
+
+# =============================================================================
+# SEZIONE 8d — TIER 3: SPECIAL SITUATIONS
+# =============================================================================
+
+def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
+    """Tier 3: tre query TV separate per deep value e fallen angels.
+
+    Ritorna dict con 3 bucket: deep_value_pe, deep_value_pb, fallen_angel.
+    Ogni bucket è una lista di ticker yfinance-format.
+    """
+    if not TV_OK:
+        return {}
+    markets = TV_MARKETS.get(region, ["america"])
+    chunks = ([TV_MARKETS["US"], TV_MARKETS["EU"], TV_MARKETS["ASIA"]]
+              if region == "GLOBAL" else [markets])
+
+    buckets: dict[str, list[str]] = {
+        "deep_value_pe": [], "deep_value_pb": [], "fallen_angel": []
+    }
+    failed: list[str] = []
+
+    def query_chunk(chunk, filters, label):
+        try:
+            q = (Query()
+                 .set_markets(*chunk)
+                 .select("name", "close", "market_cap_basic",
+                         "price_earnings_ttm", "price_to_book_fq",
+                         "dividends_yield", "change_from_open_percent")
+                 .where(
+                     Column("market_cap_basic") > CONFIG["min_market_cap_million"] * 1_000_000,
+                     Column("close") > CONFIG["min_price_usd"],
+                     *filters,
+                 )
+                 .order_by("market_cap_basic", ascending=False)
+                 .limit(200 * len(chunk)))
+            _count, df = q.get_scanner_data()
+            if df is None or df.empty:
+                return []
+            tickers = []
+            for _, row in df.iterrows():
+                yf_tkr = tv_to_yf_ticker(row["ticker"])
+                if yf_tkr is None:
+                    failed.append(row["ticker"])
+                    continue
+                tickers.append(yf_tkr)
+            return tickers
+        except Exception as e:
+            log.warning("Tier 3 query %s fallita: %s", label, e)
+            return []
+
+    for chunk in chunks:
+        # Deep value by PE: PE 2-8 (positivo ma molto basso)
+        t_pe = query_chunk(chunk, [
+            Column("price_earnings_ttm") > 2,
+            Column("price_earnings_ttm") < 8,
+        ], "deep_value_pe")
+        buckets["deep_value_pe"].extend(t_pe)
+
+        # Deep value by P/B: P/B < 0.8 (sotto book)
+        t_pb = query_chunk(chunk, [
+            Column("price_to_book_fq") > 0,
+            Column("price_to_book_fq") < 0.8,
+        ], "deep_value_pb")
+        buckets["deep_value_pb"].extend(t_pb)
+
+        # Fallen angel: yield > 6% (potenziale value trap o vera opportunità)
+        t_fa = query_chunk(chunk, [
+            Column("dividends_yield") > 6,
+        ], "fallen_angel")
+        buckets["fallen_angel"].extend(t_fa)
+
+    if failed:
+        log.info("Tier 3: %d ticker non mappati skipped", len(failed))
+
+    # Dedup each bucket
+    for k in buckets:
+        seen: set[str] = set()
+        unique = [t for t in buckets[k] if t not in seen and not seen.add(t)]  # type: ignore[func-returns-value]
+        buckets[k] = unique
+        log.info("Tier 3 bucket '%s': %d ticker", k, len(unique))
+
+    return buckets
+
+
+def screen_special_situations(buckets: dict[str, list[str]],
+                               tier1_set: set[str],
+                               tier2_set: set[str],
+                               top_n: int = 15,
+                               max_workers: int = 30) -> list[SpecialCandidate]:
+    """Fase 2 Tier 3: fetch fondamentali e classifica special situations.
+
+    Esclude ticker già presenti in Tier 1 o Tier 2 per evitare duplicati.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # Unifica i bucket tenendo traccia del tipo
+    all_tickers: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for bucket_name, tickers in buckets.items():
+        for t in tickers:
+            if t not in tier1_set and t not in tier2_set and t not in seen:
+                all_tickers.append((t, bucket_name))
+                seen.add(t)
+
+    log.info("Tier 3 Fase 1/2: info fetch su %d ticker unici...", len(all_tickers))
+    phase1: list[tuple[str, dict, str]] = []
+    ticker_to_bucket = {t: b for t, b in all_tickers}
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futs = {ex.submit(fetch_info_only, t): t for t, _ in all_tickers}
+        for fut in as_completed(futs):
+            try:
+                result = fut.result()
+            except Exception:
+                continue
+            if result is None:
+                continue
+            info = result["info"]
+            # Filtro quick: deve avere dati base
+            mc = info.get("marketCap", 0) or 0
+            if mc < CONFIG["min_market_cap_million"] * 1e6:
+                continue
+            bucket = ticker_to_bucket.get(result["ticker"], "deep_value_pe")
+            phase1.append((result["ticker"], info, bucket))
+
+    log.info("Tier 3 Fase 2/2: fondamentali su %d ticker...", len(phase1))
+    candidates: list[SpecialCandidate] = []
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futs = {ex.submit(fetch_remaining, tkr, inf): (tkr, bkt)
+                for tkr, inf, bkt in phase1}
+        for fut in as_completed(futs):
+            tkr, bkt = futs[fut]
+            try:
+                data = fut.result()
+            except Exception:
+                continue
+            if data is None:
+                continue
+            info = data["info"]
+            mc = info.get("marketCap", 0) or 0
+            price = info.get("currentPrice") or info.get("regularMarketPrice")
+            if not price:
+                continue
+            market, _ = detect_market(info)
+            sector = info.get("sector", "")
+            m, inter = compute_metrics(data)
+
+            # Piotroski rapido
+            pf, _ = compute_piotroski(info, data["financials"],
+                                       data["balance_sheet"], data["cashflow"])
+
+            # Price change 1y
+            hist = data.get("history")
+            pc_1y = None
+            if hist is not None and not hist.empty and len(hist) >= 252:
+                p_old = float(hist["Close"].iloc[-252])
+                if p_old > 0:
+                    pc_1y = round((price - p_old) / p_old, 4)
+
+            # FCF positivo?
+            fcf_pos = (m.fcf_margin is not None and m.fcf_margin > 0)
+
+            # Scoring Tier 3
+            score = 0.0
+            if bkt == "deep_value_pe":
+                pe = info.get("trailingPE")
+                score += max(0, (8 - (pe or 8))) * 2  # max +16 con PE=0
+                if pf and pf >= 6:
+                    score += 10
+                if fcf_pos:
+                    score += 8
+            elif bkt == "deep_value_pb":
+                pb = m.pb_ratio
+                if pb and pb < 0.8:
+                    score += (0.8 - pb) * 50   # max 40 con P/B=0
+                if pf and pf >= 6:
+                    score += 10
+                if m.roe and m.roe > 0.10:
+                    score += 8
+            elif bkt == "fallen_angel":
+                dy = m.dividend_yield
+                if dy and dy > 0.06:
+                    score += dy * 100            # max ~15 con yield 15%
+                if pf and pf >= 5:
+                    score += 8                   # dividendo ancora coperto
+                if fcf_pos:
+                    score += 10                  # cash flow support
+
+            sc = SpecialCandidate(
+                ticker=data["ticker"],
+                name=info.get("longName") or info.get("shortName") or data["ticker"],
+                sector=sector, industry=info.get("industry", ""),
+                market=market, price=price,
+                market_cap_million=round(mc / 1e6, 1) if mc else None,
+                situation_type=bkt,
+                pe_ratio=info.get("trailingPE"),
+                pb_ratio=m.pb_ratio,
+                div_yield=m.dividend_yield,
+                price_change_1y=pc_1y,
+                piotroski_f=pf,
+                fcf_positive=fcf_pos,
+                situation_score=round(score, 1),
+            )
+            candidates.append(sc)
+
+    candidates.sort(key=lambda c: c.situation_score, reverse=True)
+    log.info("Tier 3 special situations: %d candidati", len(candidates))
+    return candidates[:top_n]
+
+
 def output_results(cands, out_dir, top_n=30,
-                    speculative_cands: Optional[list] = None):
+                    speculative_cands: Optional[list] = None,
+                    special_cands: Optional[list] = None,
+                    market_context: Optional[dict] = None):
     cands.sort(key=lambda c: c.composite_score or 0, reverse=True)
     top = cands[:top_n]
     rows = []
@@ -1426,8 +1900,26 @@ def output_results(cands, out_dir, top_n=30,
                 "notes": sc.notes,
             })
 
+    special_list = []
+    if special_cands:
+        for sc in special_cands:
+            special_list.append({
+                "ticker": sc.ticker, "name": sc.name, "sector": sc.sector,
+                "industry": sc.industry, "market": sc.market,
+                "price": sc.price, "market_cap_M": sc.market_cap_million,
+                "situation_type": sc.situation_type,
+                "situation_score": sc.situation_score,
+                "pe": sc.pe_ratio, "pb": sc.pb_ratio,
+                "div_yield": sc.div_yield,
+                "price_change_1y": sc.price_change_1y,
+                "piotroski_f": sc.piotroski_f,
+                "fcf_positive": sc.fcf_positive,
+                "notes": sc.notes,
+            })
+
     payload = {
         "date": date_tag, "n_screened": len(cands), "n_passing": len(top),
+        "market_context": market_context or {},
         "candidates": [{
             "ticker": c.ticker, "name": c.name, "sector": c.sector,
             "market": c.market, "tags": c.strategy_tags, "score": c.composite_score,
@@ -1443,6 +1935,7 @@ def output_results(cands, out_dir, top_n=30,
             "earnings_acceleration": c.earnings_acceleration,
         } for c in top],
         "speculative_candidates": spec_list,
+        "special_situations": special_list,
     }
     with open(json_path, "w") as f:
         json.dump(payload, f, indent=2, default=str)
@@ -1454,33 +1947,47 @@ def output_results(cands, out_dir, top_n=30,
 # =============================================================================
 
 def main():
-    p = argparse.ArgumentParser(description="MVF v3.0 Stock Screener (due tier: quality + catalyst)")
-    p.add_argument("--region", choices=["US", "EU", "ASIA", "GLOBAL"], default="GLOBAL")
+    p = argparse.ArgumentParser(description="MVF v3.0 Stock Screener (tre tier + market context)")
+    p.add_argument("--region",
+                   choices=["US", "EU", "ASIA", "GLOBAL", "LATAM", "AFRICA_ME"],
+                   default="GLOBAL")
     p.add_argument("--strategy", choices=["income", "post_news", "quality", "all"], default="all")
     p.add_argument("--min-mcap", type=int, default=CONFIG["min_market_cap_million"])
-    p.add_argument("--top", type=int, default=30)
-    p.add_argument("--top-speculative", type=int, default=20,
-                   help="Max candidati speculativi nel JSON output")
-    p.add_argument("--limit-per-market", type=int, default=150,
-                   help="Righe TV per mercato per Tier 1 (default 150, nessun cap totale)")
-    p.add_argument("--no-speculative", action="store_true",
-                   help="Salta il Tier 2 catalyst screening")
+    p.add_argument("--top", type=int, default=40)
+    p.add_argument("--top-speculative", type=int, default=25)
+    p.add_argument("--top-special", type=int, default=15)
+    p.add_argument("--limit-per-market", type=int, default=400,
+                   help="Righe TV per mercato Tier 1 (default 400 → ~8-12k tickers globali)")
+    p.add_argument("--no-speculative", action="store_true")
+    p.add_argument("--no-special", action="store_true")
+    p.add_argument("--no-market-context", action="store_true")
     p.add_argument("--sector", default=None)
     p.add_argument("--output", type=Path, default=Path("./data/screener_results"))
     args = p.parse_args()
 
     CONFIG["min_market_cap_million"] = args.min_mcap
 
-    # ---- Tier 1: Quality universe ----
-    log.info("=== TIER 1: Quality/Income Universe ===")
+    # ---- Market Context Layer (in parallelo con Tier 1 TV fetch) ----
+    market_ctx: dict = {}
+    if not args.no_market_context:
+        log.info("=== MARKET CONTEXT: fetch ETF settoriali e regionali ===")
+        market_ctx = build_market_context()
+        log.info("Market context: %d settori, %d regioni, %d macro",
+                 len(market_ctx.get("sectors", {})),
+                 len(market_ctx.get("regions", {})),
+                 len(market_ctx.get("macro", {})))
+
+    # ---- Tier 1: Quality/Income Universe ----
+    log.info("=== TIER 1: Quality/Income Universe (mcap>%dM, limit/mkt=%d) ===",
+             args.min_mcap, args.limit_per_market)
     tickers = build_universe_tradingview(
         region=args.region, min_mcap_m=args.min_mcap,
         min_price=CONFIG["min_price_usd"],
         limit_per_market=args.limit_per_market,
         sector_filter=args.sector,
-        total_limit=None,   # nessun cap — GitHub Actions ha tutto il tempo
+        total_limit=None,
     )
-    if not tickers and args.region == "US" and FINVIZ_OK:
+    if not tickers and args.region in ("US", "GLOBAL") and FINVIZ_OK:
         log.warning("Tentativo fallback finvizfinance...")
         tickers = build_universe_finviz_fallback(args.min_mcap, args.sector, args.limit_per_market)
     if not tickers:
@@ -1488,32 +1995,54 @@ def main():
         sys.exit(1)
 
     cands = screen_universe(tickers, strategy=args.strategy)
-    log.info("Tier 1 candidati che passano filtri: %d", len(cands))
+    log.info("Tier 1 candidati post-filtri: %d", len(cands))
 
-    # ---- Tier 2: Speculative / Catalyst universe ----
+    # Sector-relative scoring (aggiusta score in funzione del peer group)
+    compute_sector_relative_scores(cands)
+    log.info("Sector-relative scoring applicato")
+
+    tier1_set = set(tickers)
+
+    # ---- Tier 2: Speculative / Catalyst Universe ----
     spec_cands: list[SpeculativeCandidate] = []
+    tier2_set: set[str] = set()
     if not args.no_speculative:
         log.info("=== TIER 2: Speculative/Catalyst Universe ===")
         spec_tickers = build_speculative_universe_tv(region=args.region)
         if spec_tickers:
-            # Rimuovi ticker già presenti nel Tier 1 per evitare duplicati
-            tier1_set = set(tickers)
             spec_tickers_new = [t for t in spec_tickers if t not in tier1_set]
             log.info("Tier 2: %d ticker nuovi (esclusi %d già in Tier 1)",
                      len(spec_tickers_new), len(spec_tickers) - len(spec_tickers_new))
-            spec_cands = screen_speculative_universe(
-                spec_tickers_new, top_n=args.top_speculative
-            )
-            log.info("Tier 2 candidati con catalyst signal: %d", len(spec_cands))
+            spec_cands = screen_speculative_universe(spec_tickers_new, top_n=args.top_speculative)
+            tier2_set = {sc.ticker for sc in spec_cands}
+            log.info("Tier 2 candidati: %d", len(spec_cands))
         else:
             log.warning("Tier 2 universe vuoto.")
 
+    # ---- Tier 3: Special Situations ----
+    special_cands: list[SpecialCandidate] = []
+    if not args.no_special:
+        log.info("=== TIER 3: Special Situations (deep value + fallen angels) ===")
+        sp_buckets = build_special_situations_tv(region=args.region)
+        if any(sp_buckets.values()):
+            special_cands = screen_special_situations(
+                sp_buckets, tier1_set, tier2_set, top_n=args.top_special
+            )
+            log.info("Tier 3 special situations: %d", len(special_cands))
+        else:
+            log.warning("Tier 3 universe vuoto.")
+
+    # ---- Output ----
     csv_path, json_path = output_results(
-        cands, args.output, top_n=args.top, speculative_cands=spec_cands
+        cands, args.output, top_n=args.top,
+        speculative_cands=spec_cands,
+        special_cands=special_cands,
+        market_context=market_ctx,
     )
     log.info("Output: %s | %s", csv_path, json_path)
-    log.info("Tier 1: %d candidati quality | Tier 2: %d catalyst signals",
-             min(len(cands), args.top), len(spec_cands))
+    log.info("TOTALE — T1:%d quality | T2:%d catalyst | T3:%d special | ctx:%s",
+             min(len(cands), args.top), len(spec_cands), len(special_cands),
+             "ok" if market_ctx else "skip")
 
 
 if __name__ == "__main__":
