@@ -207,8 +207,9 @@ def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
                                 total_limit: Optional[int] = None) -> list[str]:
     """Auto-build universe da TradingView in formato yfinance.
 
-    total_limit: se impostato, cap finale sul numero di ticker passati a yfinance.
-    TradingView li ordina già per market_cap desc, quindi i top-N sono i più liquidi.
+    Ordina per composite score (dividend yield + value PE, non solo market cap)
+    così le mid/small-cap di qualità non vengono penalizzate.
+    total_limit: cap finale prima di passare a yfinance.
     """
     if not TV_OK:
         log.error("tradingview-screener non installato.")
@@ -216,10 +217,9 @@ def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
     markets = TV_MARKETS.get(region, ["america"])
     log.info("Universe TV: region=%s, mercati=%d", region, len(markets))
 
-    all_tickers: list[str] = []
+    all_rows: list[dict] = []
     failed = []
 
-    # Spezza per regione per non saturare la query
     chunks = ([TV_MARKETS["US"], TV_MARKETS["EU"], TV_MARKETS["ASIA"]]
               if region == "GLOBAL" else [markets])
 
@@ -240,24 +240,57 @@ def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
             _count, df = q.get_scanner_data()
             if df is None or df.empty:
                 continue
-            for tv_tkr in df["ticker"].tolist():
-                yf_tkr = tv_to_yf_ticker(tv_tkr)
+            for _, row in df.iterrows():
+                yf_tkr = tv_to_yf_ticker(row["ticker"])
                 if yf_tkr is None:
-                    failed.append(tv_tkr)
+                    failed.append(row["ticker"])
                     continue
-                all_tickers.append(yf_tkr)
+                all_rows.append({
+                    "yf_ticker": yf_tkr,
+                    "market_cap": row.get("market_cap_basic") or 0,
+                    "pe": row.get("price_earnings_ttm"),
+                    "div_yield": row.get("dividends_yield") or 0,
+                })
         except Exception as e:
             log.warning("TradingView query fallita per %s: %s", chunk, e)
 
     if failed:
         log.info("Exchange non mappati (skipped): %d (es. %s)",
                  len(failed), ", ".join(failed[:3]))
-    deduped = list(dict.fromkeys(all_tickers))
-    if total_limit and len(deduped) > total_limit:
-        deduped = deduped[:total_limit]
-        log.info("Universe cappato a %d ticker (total_limit)", total_limit)
-    log.info("Universe finale: %d ticker unici", len(deduped))
-    return deduped
+
+    # Deduplica
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for r in all_rows:
+        if r["yf_ticker"] not in seen:
+            seen.add(r["yf_ticker"])
+            unique.append(r)
+
+    # Composite score: income + value, mid-cap preferita ma non esclusiva
+    def tv_score(r: dict) -> float:
+        s = 0.0
+        dy = r["div_yield"]
+        if dy > 0:
+            s += min(dy * 10, 4.0)          # max 4 pt (yield 4%+)
+        pe = r["pe"]
+        if pe and 5 < pe < 40:
+            s += (40 - pe) / 40 * 3.0       # max 3 pt (PE basso)
+        mc = r["market_cap"]
+        if 1e9 < mc <= 1e10:                 # mid-cap: leggero bonus
+            s += 1.0
+        elif mc > 1e10:                      # large-cap: mezzo punto
+            s += 0.5
+        return s
+
+    unique.sort(key=tv_score, reverse=True)
+
+    if total_limit and len(unique) > total_limit:
+        unique = unique[:total_limit]
+        log.info("Universe cappato a %d ticker (composite score TV)", total_limit)
+
+    tickers = [r["yf_ticker"] for r in unique]
+    log.info("Universe finale: %d ticker unici", len(tickers))
+    return tickers
 
 
 def build_universe_finviz_fallback(min_mcap_m: int = 500,
@@ -419,7 +452,53 @@ def compute_accruals(fin, bs, cf):
 # SEZIONE 5 — CALCOLO METRICHE
 # =============================================================================
 
+def fetch_info_only(ticker: str) -> Optional[dict]:
+    """Fase 1: una sola chiamata HTTP — solo t.info."""
+    try:
+        t = yf.Ticker(ticker)
+        info = t.info or {}
+        if not info or info.get("marketCap") is None:
+            return None
+        return {"ticker": ticker, "info": info}
+    except Exception:
+        return None
+
+
+def passes_quick_filter(info: dict) -> bool:
+    """Filtro rapido su info: elimina solo i chiari rejects, non le opportunità."""
+    price = info.get("currentPrice") or info.get("regularMarketPrice", 0) or 0
+    if price < CONFIG["min_price_usd"]:
+        return False
+    mc = info.get("marketCap", 0) or 0
+    if mc < CONFIG["min_market_cap_million"] * 1e6:
+        return False
+    # Elimina solo perdite estreme (> -50% net margin) — preserva growth companies
+    margin = info.get("profitMargins")
+    if margin is not None and margin < -0.50:
+        return False
+    return True
+
+
+def fetch_remaining(ticker: str, prefetched_info: dict) -> Optional[dict]:
+    """Fase 2: fetch fondamentali — riusa info già scaricato in fase 1."""
+    try:
+        t = yf.Ticker(ticker)
+        return {
+            "ticker": ticker,
+            "info": prefetched_info,
+            "financials": t.financials,
+            "balance_sheet": t.balance_sheet,
+            "cashflow": t.cashflow,
+            "dividends": t.dividends,
+            "history": t.history(period="5y", auto_adjust=True),
+            "earnings_dates": getattr(t, "earnings_dates", None),
+        }
+    except Exception:
+        return None
+
+
 def fetch_data(ticker):
+    """Compat: fetch completo in un'unica chiamata (usato standalone)."""
     try:
         t = yf.Ticker(ticker)
         info = t.info or {}
@@ -656,27 +735,73 @@ def screen_ticker(ticker):
 
 
 def screen_universe(tickers, strategy="all", max_workers=30):
+    """Screening a due fasi per minimizzare le chiamate HTTP totali.
+
+    Fase 1: t.info per tutti (1 call/ticker) → quick filter → ~40% eliminati
+    Fase 2: fondamentali completi solo sui superstiti (5 call/ticker)
+    Risparmio: ~40% delle chiamate HTTP totali vs approccio monofase.
+    """
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    out = []
+
     n = len(tickers)
-    log.info("Screening su %d ticker (workers=%d)...", n, max_workers)
-    done = 0
+    log.info("Fase 1/2: info fetch su %d ticker (%d workers)...", n, max_workers)
+
+    phase1: list[tuple[str, dict]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futures = {ex.submit(screen_ticker, t): t for t in tickers}
-        for fut in as_completed(futures):
-            done += 1
-            if done % 50 == 0:
-                log.info("  elaborati %d/%d", done, n)
+        futs = {ex.submit(fetch_info_only, t): t for t in tickers}
+        for fut in as_completed(futs):
             try:
-                c = fut.result(timeout=20)
+                result = fut.result()
             except Exception:
                 continue
-            if c is None or not c.passes_hard_filters:
+            if result and passes_quick_filter(result["info"]):
+                phase1.append((result["ticker"], result["info"]))
+
+    log.info("Fase 1/2: %d/%d passano il filtro rapido", len(phase1), n)
+
+    log.info("Fase 2/2: fondamentali su %d ticker...", len(phase1))
+    out: list[Candidate] = []
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futs = {ex.submit(fetch_remaining, tkr, inf): tkr for tkr, inf in phase1}
+        for fut in as_completed(futs):
+            try:
+                data = fut.result()
+            except Exception:
                 continue
-            if strategy != "all":
-                if not any(tag.startswith(strategy) for tag in c.strategy_tags):
-                    continue
+            if data is None:
+                continue
+            info = data["info"]
+            mc = info.get("marketCap")
+            if not mc or mc < CONFIG["min_market_cap_million"] * 1e6:
+                continue
+            price = info.get("currentPrice") or info.get("regularMarketPrice")
+            if price is None or price < CONFIG["min_price_usd"]:
+                continue
+            market, ccy = detect_market(info)
+            sector = info.get("sector", "")
+            special = SPECIAL_SECTORS.get(sector)
+            m, inter = compute_metrics(data)
+            hard = apply_hard_filters(m, inter, special)
+            wacc = CONFIG["wacc_proxies"].get(market, 0.08)
+            soft = apply_soft_filters(m, inter, wacc)
+            c = Candidate(
+                ticker=data["ticker"],
+                name=info.get("longName") or info.get("shortName") or data["ticker"],
+                sector=sector, industry=info.get("industry", ""),
+                market=market, currency=ccy, price=price,
+                market_cap_million=mc / 1e6, pe_ratio=info.get("trailingPE"),
+                metrics=m, hard_filters=hard, soft_filters=soft,
+            )
+            c.strategy_tags = tag_strategy(c, data["history"], data["earnings_dates"])
+            c.composite_score = compute_composite_score(c)
+            if special:
+                c.notes.append(f"settore speciale: {special} (vedi MVF v3.0 Sez. 9)")
+            if not c.passes_hard_filters:
+                continue
+            if strategy != "all" and not any(tag.startswith(strategy) for tag in c.strategy_tags):
+                continue
             out.append(c)
+
     return out
 
 
