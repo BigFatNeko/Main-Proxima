@@ -123,19 +123,6 @@ Storia approfondita, ~1500-2000 parole, scelta con cura estrema in base alla per
 
 In modalità daily/catchup: long read OMESSO, solo teaser+link al weekend.
 
-### Comandi cross-cutting (sempre in chiusura)
-
-4 prompt cliccabili (resi come bottoni nel template HTML) che generano NUOVO contenuto al click — non duplicano il briefing:
-
-```markdown
-## Comandi cross-cutting
-
-- **Piano operativo 2 settimane sul portafogli** → calendario giorno-per-giorno con ex-date, cash, PAC
-- **3 scenari del prossimo evento macro** → impatti portafogli + azioni 48h
-- **5 azioni Proxima della settimana** → task list con scadenze + ownership Alex/Vale
-- **Dove allocare il PAC del mese** → confronto pro/contro 3 candidati con cifre
-```
-
 ---
 
 ## Regole di stile (immutabili)
@@ -252,7 +239,6 @@ Prima di chiudere, controlla:
 - [ ] Box "COSA SAPERE" presente almeno una volta nella sezione 1
 - [ ] Decisione concreta per ogni posizione del portafogli
 - [ ] Almeno una idea di Proxima dai blocchi 5/6/7/8
-- [ ] 4 comandi cross-cutting finali (non duplicano contenuto)
 - [ ] Disclaimer una sola volta in fondo
 - [ ] Niente parole superflue (rileggi mentalmente, taglia)
 
