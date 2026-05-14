@@ -1665,8 +1665,8 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
             q = (Query()
                  .set_markets(*chunk)
                  .select("name", "close", "market_cap_basic",
-                         "price_earnings_ttm", "price_to_book_fq",
-                         "dividends_yield", "change_from_open_percent")
+                         "price_earnings_ttm", "price_book_fq",
+                         "dividends_yield")
                  .where(
                      Column("market_cap_basic") > CONFIG["min_market_cap_million"] * 1_000_000,
                      Column("close") > CONFIG["min_price_usd"],
@@ -1699,8 +1699,8 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
 
         # Deep value by P/B: P/B < 0.8 (sotto book)
         t_pb = query_chunk(chunk, [
-            Column("price_to_book_fq") > 0,
-            Column("price_to_book_fq") < 0.8,
+            Column("price_book_fq") > 0,
+            Column("price_book_fq") < 0.8,
         ], "deep_value_pb")
         buckets["deep_value_pb"].extend(t_pb)
 

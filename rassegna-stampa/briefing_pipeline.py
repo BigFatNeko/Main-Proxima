@@ -379,10 +379,12 @@ def render_html(markdown_briefing: str, user: str, mode: str) -> Path:
 
 def deliver(output_path: Path, user: str):
     log.info("Step 6/6: delivery → %s", output_path)
-    try:
-        webbrowser.open(f"file://{output_path.absolute()}")
-    except Exception:
-        pass
+    # Skip browser open su CI (GitHub Actions): runner headless, può hangare
+    if not (os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")):
+        try:
+            webbrowser.open(f"file://{output_path.absolute()}")
+        except Exception:
+            pass
     tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     tg_chat = os.environ.get("TELEGRAM_CHAT_ID")
     if tg_token and tg_chat:
