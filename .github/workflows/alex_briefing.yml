@@ -1,12 +1,19 @@
 name: Alex — Briefing Mattutino
 
 on:
+  schedule:
+    # 5:30 UTC = 6:30 CET (inverno) / 7:30 CEST (estate)
+    - cron: '30 5 * * 1-5'
+    # Sabato: 6:00 UTC = 7:00 CET
+    - cron: '0 6 * * 6'
   workflow_dispatch:
-    # Triggered dall'iPad via Shortcut → GitHub API
-    # Nessun cron: gira solo quando Alex accende il dispositivo
+    # Trigger manuale di emergenza (app GitHub su iPad)
+
+permissions:
+  contents: write   # necessario per pubblicare su gh-pages
 
 jobs:
-  generate-briefing:
+  generate-and-publish:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -14,7 +21,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Calcola data di oggi
+      - name: Calcola data
         id: date
         run: echo "today=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
 
@@ -41,24 +48,22 @@ jobs:
           cd rassegna-stampa
           python briefing_pipeline.py --user alex
 
-      - name: Invia briefing via email
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          secure: true
-          username: ${{ secrets.GMAIL_USERNAME }}
-          password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: "Proxima Daily — Alex ${{ steps.date.outputs.today }}"
-          to: ${{ secrets.ALEX_EMAIL }}
-          from: "Proxima Briefing <${{ secrets.GMAIL_USERNAME }}>"
-          body: "Briefing allegato. Aprilo in Safari per la visualizzazione ottimale."
-          attachments: briefings/${{ steps.date.outputs.today }}-alex.html
+      - name: Prepara cartella per GitHub Pages
+        run: |
+          mkdir -p pages
+          # URL fissa: alex-latest.html (il Shortcut punta sempre qui)
+          cp briefings/${{ steps.date.outputs.today }}-alex.html pages/alex-latest.html
+          # Archivia anche con data per storico
+          cp briefings/${{ steps.date.outputs.today }}-alex.html \
+             pages/${{ steps.date.outputs.today }}-alex.html
+          # Pagina indice minimale per navigazione storico
+          echo "<meta http-equiv='refresh' content='0;url=alex-latest.html'>" > pages/index.html
 
-      - name: Salva come artifact (backup 30 giorni)
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Pubblica su GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          name: briefing-alex-${{ github.run_id }}
-          path: briefings/*.html
-          retention-days: 30
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./pages
+          publish_branch: gh-pages
+          keep_files: true   # mantiene i briefing storici
+          commit_message: "briefing Alex ${{ steps.date.outputs.today }}"
