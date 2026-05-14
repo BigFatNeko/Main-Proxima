@@ -344,15 +344,20 @@ def deliver(output_path: Path, user: str):
     if tg_token and tg_chat:
         try:
             import requests
-            requests.post(
-                f"https://api.telegram.org/bot{tg_token}/sendMessage",
-                data={"chat_id": tg_chat,
-                      "text": f"📰 Briefing {user} pronto: {output_path.name}"},
-                timeout=10,
-            )
-            log.info("Notifica Telegram inviata")
+            date_label = datetime.now().strftime("%d/%m/%Y")
+            # Invia il file HTML vero (non solo testo) — apribile su iPad/mobile
+            with open(output_path, "rb") as f:
+                requests.post(
+                    f"https://api.telegram.org/bot{tg_token}/sendDocument",
+                    data={"chat_id": tg_chat,
+                          "caption": f"Proxima Daily — {user.title()} {date_label}"},
+                    files={"document": (output_path.name, f, "text/html")},
+                    timeout=30,
+                )
+            log.info("File HTML inviato via Telegram")
         except Exception as e:
             log.warning("Telegram fallito: %s", e)
+
 
 
 # =============================================================================

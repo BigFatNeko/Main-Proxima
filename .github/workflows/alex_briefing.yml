@@ -1,0 +1,53 @@
+name: Alex — Briefing Mattutino
+
+on:
+  schedule:
+    # 5:30 UTC = 6:30 CET (inverno) / 7:30 CEST (estate)
+    # Cambia in '30 4 * * 1-5' per avere 6:30 in estate
+    - cron: '30 5 * * 1-5'
+    # Sabato 7:00 CET (weekend mode)
+    - cron: '0 6 * * 6'
+  workflow_dispatch:
+    # Permette lancio manuale dall'app GitHub su iPad
+
+jobs:
+  generate-briefing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Installa dipendenze
+        run: pip install -r rassegna-stampa/requirements.txt
+
+      - name: Crea cartelle output
+        run: |
+          mkdir -p briefings
+          mkdir -p rassegna-stampa/code/data/screener_results
+
+      - name: Genera briefing Alex
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID_ALEX }}
+          BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
+          BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
+        run: |
+          cd rassegna-stampa
+          python briefing_pipeline.py --user alex
+
+      - name: Salva briefing come artifact (backup)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: briefing-alex-${{ github.run_id }}
+          path: briefings/*.html
+          retention-days: 30
