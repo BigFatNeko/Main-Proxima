@@ -1,0 +1,136 @@
+name: Proxima — Briefing Mattutino (Alex + Vale)
+
+on:
+  schedule:
+    # 3:00 UTC = 4:00 CET inverno / 5:00 CEST estate
+    # Briefing pronto in ~30-40 min → accessibile da ~5:00 CET
+    - cron: '0 3 * * 1-5'
+    # Sabato: 3:30 UTC = 4:30 CET
+    - cron: '30 3 * * 6'
+  workflow_dispatch:
+    # Trigger manuale (app GitHub su iPad o PC)
+
+permissions:
+  contents: write
+
+jobs:
+  generate-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Calcola data
+        id: date
+        run: echo "today=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Installa dipendenze
+        run: pip install -r rassegna-stampa/requirements.txt
+
+      - name: Crea cartelle output
+        run: |
+          mkdir -p briefings
+          mkdir -p rassegna-stampa/data/screener_results
+
+      - name: Genera briefing Alex
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
+          BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
+        run: |
+          cd rassegna-stampa
+          python briefing_pipeline.py --user alex
+
+      - name: Genera briefing Vale
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
+          BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
+        run: |
+          cd rassegna-stampa
+          python briefing_pipeline.py --user vale
+
+      - name: Prepara portale GitHub Pages
+        run: |
+          mkdir -p pages
+          DATE="${{ steps.date.outputs.today }}"
+
+          # Copia briefing con URL fissa (Shortcut punta sempre qui)
+          cp briefings/${DATE}-alex.html pages/alex-latest.html
+          cp briefings/${DATE}-vale.html pages/vale-latest.html
+
+          # Archivia con data per storico
+          cp briefings/${DATE}-alex.html pages/${DATE}-alex.html
+          cp briefings/${DATE}-vale.html pages/${DATE}-vale.html
+
+          # Portale index: link a entrambi + pulsante trigger
+          cat > pages/index.html << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html lang="it">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Proxima Daily</title>
+            <style>
+              *{box-sizing:border-box;margin:0;padding:0}
+              body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                   background:#f5f5f5;min-height:100vh;display:flex;
+                   flex-direction:column;align-items:center;justify-content:center;padding:2rem}
+              h1{font-size:1.8rem;font-weight:700;letter-spacing:-0.5px;margin-bottom:.3rem}
+              .sub{color:#666;font-size:.9rem;margin-bottom:2.5rem}
+              .cards{display:flex;gap:1.2rem;flex-wrap:wrap;justify-content:center;margin-bottom:2rem}
+              .card{background:#fff;border-radius:16px;padding:2rem 2.5rem;text-align:center;
+                    box-shadow:0 2px 12px rgba(0,0,0,.08);text-decoration:none;color:inherit;
+                    min-width:160px;transition:transform .15s,box-shadow .15s}
+              .card:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,.13)}
+              .card .initial{font-size:3rem;font-weight:700;line-height:1}
+              .card .label{font-size:.85rem;color:#888;margin-top:.4rem}
+              .card.alex .initial{color:#3a7bd5}
+              .card.vale .initial{color:#e05c5c}
+              .btn{background:#222;color:#fff;border:none;border-radius:12px;
+                   padding:.85rem 2rem;font-size:.95rem;cursor:pointer;
+                   text-decoration:none;display:inline-block;
+                   transition:background .15s}
+              .btn:hover{background:#444}
+              .ts{font-size:.75rem;color:#aaa;margin-top:1.5rem}
+            </style>
+          </head>
+          <body>
+            <h1>Proxima Daily</h1>
+            <p class="sub">Briefing mattutino · aggiornato ogni giorno</p>
+            <div class="cards">
+              <a class="card alex" href="alex-latest.html">
+                <div class="initial">A</div>
+                <div class="label">Alex</div>
+              </a>
+              <a class="card vale" href="vale-latest.html">
+                <div class="initial">V</div>
+                <div class="label">Vale</div>
+              </a>
+            </div>
+            <a class="btn" href="https://github.com/bigfatneko/main-marketing/actions/workflows/briefing.yml"
+               target="_blank">⟳ Rigenera ora</a>
+            <p class="ts">Generato automaticamente · non costituisce consulenza finanziaria</p>
+          </body>
+          </html>
+          HTMLEOF
+
+          # Salva timestamp
+          echo "$DATE" > pages/last-generated.txt
+
+      - name: Pubblica su GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./pages
+          publish_branch: gh-pages
+          keep_files: true
+          commit_message: "briefing Alex + Vale ${{ steps.date.outputs.today }}"

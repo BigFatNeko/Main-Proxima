@@ -110,6 +110,35 @@ SPEC_MAX_MCAP_M = 500      # $500M maximum (small-cap ceiling)
 SPEC_MIN_PRICE  = 0.10     # penny stock floor
 SPEC_MAX_TV_PER_CHUNK = 300   # TV rows per chunk for speculative query
 
+FILIERE_STRATEGIC: dict[str, str] = {
+    "Semiconductors": "chip",
+    "Semiconductor Equipment & Materials": "chip",
+    "Electronic Components": "chip",
+    "Oil & Gas Integrated": "energia",
+    "Oil & Gas E&P": "energia",
+    "Oil & Gas Midstream": "energia",
+    "Oil & Gas Refining & Marketing": "energia",
+    "Oil & Gas Equipment & Services": "energia",
+    "Uranium": "uranio",
+    "Aerospace & Defense": "difesa",
+    "Waste Management": "gestione_rifiuti",
+    "Environmental & Waste Services": "gestione_rifiuti",
+    "Pollution & Treatment Controls": "gestione_rifiuti",
+    "Food Distribution": "consumer_staples",
+    "Packaged Foods": "consumer_staples",
+    "Household & Personal Products": "consumer_staples",
+    "Beverages—Non-Alcoholic": "consumer_staples",
+    "Tobacco": "consumer_staples",
+    "Industrial Metals & Mining": "rare_earth_metalli",
+    "Other Precious Metals & Mining": "rare_earth_metalli",
+    "Specialty Chemicals": "rare_earth_metalli",
+    "Copper": "rare_earth_metalli",
+    "Lithium & Battery Tech": "batterie_litio",
+    "Auto Parts": "batterie_litio",
+    "Electrical Equipment & Parts": "batterie_litio",
+    "Industrial Distribution": "helium_gas_industriali",
+}
+
 
 # =============================================================================
 # SEZIONE 2 — DATA CLASSES
@@ -182,6 +211,13 @@ class Candidate:
     strategy_tags: list[str] = field(default_factory=list)
     composite_score: Optional[float] = None
     notes: list[str] = field(default_factory=list)
+    piotroski_f: Optional[int] = None
+    piotroski_factors: list[str] = field(default_factory=list)
+    moat_score: Optional[float] = None
+    moat_signals: list[str] = field(default_factory=list)
+    dcf_upside_pct: Optional[float] = None
+    filiera_tag: Optional[str] = None
+    earnings_acceleration: Optional[float] = None
 
     @property
     def passes_hard_filters(self) -> bool:
@@ -600,6 +636,7 @@ def fetch_remaining(ticker: str, prefetched_info: dict) -> Optional[dict]:
             "dividends": t.dividends,
             "history": t.history(period="5y", auto_adjust=True),
             "earnings_dates": getattr(t, "earnings_dates", None),
+            "quarterly_financials": t.quarterly_financials,
         }
     except Exception:
         return None
@@ -744,6 +781,149 @@ def apply_soft_filters(m, inter, wacc):
 
 
 # =============================================================================
+# SEZIONE 6.5 — PIOTROSKI · MOAT · DCF · FILIERA · EARNINGS ACCEL
+# =============================================================================
+
+def compute_piotroski(info: dict, fin, bs, cf) -> tuple[int, list[str]]:
+    """Piotroski F-Score (0-9). High score = improving fundamentals."""
+    score = 0
+    factors: list[str] = []
+
+    ni = safe_row(fin, "Net Income")
+    ta = safe_row(bs, "Total Assets")
+    roa = (ni / ta) if (ni is not None and ta and ta > 0) else None
+    if roa is not None and roa > 0:
+        score += 1; factors.append("F1:ROA+")
+
+    cfo = safe_row(cf, "Cash From Operations")
+    if cfo is not None and cfo > 0:
+        score += 1; factors.append("F2:CFO+")
+
+    ni_p = safe_row(fin, "Net Income", 1)
+    ta_p = safe_row(bs, "Total Assets", 1)
+    roa_p = (ni_p / ta_p) if (ni_p is not None and ta_p and ta_p > 0) else None
+    if roa is not None and roa_p is not None and roa > roa_p:
+        score += 1; factors.append("F3:ROA↑")
+
+    if cfo is not None and ta and ta > 0 and roa is not None:
+        if cfo / ta > roa:
+            score += 1; factors.append("F4:accruals_ok")
+
+    d = safe_row(bs, "Total Debt"); d_p = safe_row(bs, "Total Debt", 1)
+    ta_p2 = safe_row(bs, "Total Assets", 1)
+    lev = d / ta if (d is not None and ta and ta > 0) else None
+    lev_p = d_p / ta_p2 if (d_p is not None and ta_p2 and ta_p2 > 0) else None
+    if lev is not None and lev_p is not None and lev < lev_p:
+        score += 1; factors.append("F5:leverage↓")
+
+    ca = safe_row(bs, "Current Assets"); cl = safe_row(bs, "Current Liabilities")
+    ca_p = safe_row(bs, "Current Assets", 1); cl_p = safe_row(bs, "Current Liabilities", 1)
+    cr = ca / cl if (ca is not None and cl and cl > 0) else None
+    cr_p = ca_p / cl_p if (ca_p is not None and cl_p and cl_p > 0) else None
+    if cr is not None and cr_p is not None and cr > cr_p:
+        score += 1; factors.append("F6:curr_ratio↑")
+
+    sh = info.get("sharesOutstanding"); sh_f = info.get("floatShares")
+    if sh is not None and sh_f is not None and sh <= sh_f * 1.02:
+        score += 1; factors.append("F7:no_dilution")
+
+    rev = safe_row(fin, "Total Revenue"); gp = safe_row(fin, "Gross Profit")
+    rev_p = safe_row(fin, "Total Revenue", 1); gp_p = safe_row(fin, "Gross Profit", 1)
+    gm = gp / rev if (gp is not None and rev and rev > 0) else None
+    gm_p = gp_p / rev_p if (gp_p is not None and rev_p and rev_p > 0) else None
+    if gm is not None and gm_p is not None and gm > gm_p:
+        score += 1; factors.append("F8:GM↑")
+
+    at_ = rev / ta if (rev is not None and ta and ta > 0) else None
+    at_p = rev_p / ta_p2 if (rev_p is not None and ta_p2 and ta_p2 > 0) else None
+    if at_ is not None and at_p is not None and at_ > at_p:
+        score += 1; factors.append("F9:asset_turn↑")
+
+    return score, factors
+
+
+def compute_moat_score(m: IntrinsicMetrics) -> tuple[float, list[str]]:
+    """Moat proxy (0-10): pricing power + capital efficiency + asset-light + R&D."""
+    score = 0.0
+    signals: list[str] = []
+    if m.gross_margin is not None:
+        if m.gross_margin > 0.60:
+            score += 3.0; signals.append("GM>60%")
+        elif m.gross_margin > 0.40:
+            score += 2.0; signals.append("GM>40%")
+        elif m.gross_margin > 0.25:
+            score += 1.0
+    if m.roic is not None:
+        if m.roic > 0.25:
+            score += 3.0; signals.append("ROIC>25%")
+        elif m.roic > 0.15:
+            score += 2.0; signals.append("ROIC>15%")
+        elif m.roic > 0.08:
+            score += 1.0
+    if m.capex_revenue is not None:
+        if m.capex_revenue < 0.03:
+            score += 1.5; signals.append("asset-light")
+        elif m.capex_revenue < 0.07:
+            score += 0.5
+    if m.rd_revenue is not None and 0.05 <= m.rd_revenue <= 0.20:
+        score += 0.5; signals.append("R&D")
+    total_ret = (m.dividend_yield or 0) + (m.buyback_yield or 0)
+    if total_ret > 0.05:
+        score += 1.0; signals.append("shareholder_ret")
+    return round(min(score, 10.0), 1), signals
+
+
+def compute_dcf_upside(m: IntrinsicMetrics, info: dict, wacc: float) -> Optional[float]:
+    """Simple 5y DCF + terminal: returns % upside vs market cap. Crude but directional."""
+    try:
+        mc = info.get("marketCap")
+        rev = info.get("totalRevenue") or info.get("revenue")
+        if not mc or not rev or mc <= 0 or rev <= 0:
+            return None
+        if m.fcf_margin is None or m.fcf_margin <= 0:
+            return None
+        fcf = m.fcf_margin * rev
+        g_est = min(abs(m.price_cagr_5y or 0.05), 0.15)
+        g_term = min(CONFIG["g_terminal_max"], g_est * 0.30)
+        if wacc <= g_term:
+            return None
+        pv = sum(fcf * (1 + g_est) ** yr / (1 + wacc) ** yr for yr in range(1, 6))
+        terminal_pv = (fcf * (1 + g_est) ** 5 * (1 + g_term) / (wacc - g_term)) / (1 + wacc) ** 5
+        return round((pv + terminal_pv - mc) / mc, 3)
+    except Exception:
+        return None
+
+
+def compute_filiera_tag(sector: str, industry: str) -> Optional[str]:
+    """Map sector/industry → strategic supply chain theme (filiera)."""
+    combined = f"{industry} {sector}".lower()
+    for key, tag in FILIERE_STRATEGIC.items():
+        if key.lower() in combined:
+            return tag
+    return None
+
+
+def compute_earnings_acceleration(quarterly_fin) -> Optional[float]:
+    """YoY revenue growth: latest quarter vs prior quarter. Positive = accelerating."""
+    if quarterly_fin is None or quarterly_fin.empty:
+        return None
+    try:
+        for alias in ["Total Revenue", "Revenue"]:
+            if alias in quarterly_fin.index:
+                rev = quarterly_fin.loc[alias]
+                if len(rev) >= 8:
+                    vals = [float(v) if pd.notna(v) else None for v in rev.iloc[:8]]
+                    r0, r4, r1, r5 = vals[0], vals[4], vals[1], vals[5]
+                    if all(v and v > 0 for v in [r0, r4, r1, r5]):
+                        yoy_now = (r0 - r4) / r4
+                        yoy_prev = (r1 - r5) / r5
+                        return round(yoy_now - yoy_prev, 4)
+    except Exception:
+        pass
+    return None
+
+
+# =============================================================================
 # SEZIONE 7 — TILT STRATEGICI
 # =============================================================================
 
@@ -803,6 +983,26 @@ def compute_composite_score(c):
     if tw == 0:
         return 0.0
     raw = ts / tw * 100 - c.warning_count * 3
+    # Piotroski bonus/malus
+    if c.piotroski_f is not None:
+        if c.piotroski_f >= 8:
+            raw += 10
+        elif c.piotroski_f >= 6:
+            raw += 5
+        elif c.piotroski_f < 4:
+            raw -= 5
+    # Moat bonus (0-10 scale → max +15 pts)
+    if c.moat_score is not None:
+        raw += c.moat_score * 1.5
+    # DCF upside bonus
+    if c.dcf_upside_pct is not None and c.dcf_upside_pct > 0.10:
+        raw += min(c.dcf_upside_pct * 20, 10)
+    # Filiera strategica bonus
+    if c.filiera_tag:
+        raw += 5
+    # Earnings acceleration bonus
+    if c.earnings_acceleration is not None and c.earnings_acceleration > 0.05:
+        raw += 5
     return round(max(0, min(100, raw)), 1)
 
 
@@ -901,6 +1101,13 @@ def screen_universe(tickers, strategy="all", max_workers=30):
                 metrics=m, hard_filters=hard, soft_filters=soft,
             )
             c.strategy_tags = tag_strategy(c, data["history"], data["earnings_dates"])
+            c.piotroski_f, c.piotroski_factors = compute_piotroski(
+                info, data["financials"], data["balance_sheet"], data["cashflow"])
+            c.moat_score, c.moat_signals = compute_moat_score(c.metrics)
+            c.dcf_upside_pct = compute_dcf_upside(c.metrics, info, wacc)
+            c.filiera_tag = compute_filiera_tag(sector, info.get("industry", ""))
+            c.earnings_acceleration = compute_earnings_acceleration(
+                data.get("quarterly_financials"))
             c.composite_score = compute_composite_score(c)
             if special:
                 c.notes.append(f"settore speciale: {special} (vedi MVF v3.0 Sez. 9)")
@@ -1227,6 +1434,13 @@ def output_results(cands, out_dir, top_n=30,
             "metrics": {k: v for k, v in asdict(c.metrics).items() if v is not None},
             "warnings": [k for k, v in asdict(c.soft_filters).items() if v],
             "notes": c.notes,
+            "piotroski_f": c.piotroski_f,
+            "piotroski_factors": c.piotroski_factors,
+            "moat_score": c.moat_score,
+            "moat_signals": c.moat_signals,
+            "dcf_upside_pct": c.dcf_upside_pct,
+            "filiera_tag": c.filiera_tag,
+            "earnings_acceleration": c.earnings_acceleration,
         } for c in top],
         "speculative_candidates": spec_list,
     }
