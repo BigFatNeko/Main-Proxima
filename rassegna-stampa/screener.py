@@ -104,6 +104,12 @@ SPECIAL_SECTORS = {
     "Healthcare": "pharma_or_biotech",
 }
 
+# Tier 2 — Speculative / Catalyst universe
+SPEC_MIN_MCAP_M = 5        # $5M minimum (includes micro/nano-cap)
+SPEC_MAX_MCAP_M = 500      # $500M maximum (small-cap ceiling)
+SPEC_MIN_PRICE  = 0.10     # penny stock floor
+SPEC_MAX_TV_PER_CHUNK = 300   # TV rows per chunk for speculative query
+
 
 # =============================================================================
 # SEZIONE 2 — DATA CLASSES
@@ -184,6 +190,41 @@ class Candidate:
     @property
     def warning_count(self) -> int:
         return sum(asdict(self.soft_filters).values())
+
+
+@dataclass
+class CatalystSignals:
+    volume_spike_3d: bool = False       # 3-day avg vol > 3× 30-day avg vol
+    volume_spike_30d: bool = False      # 30-day avg vol > 2× 90-day avg vol
+    momentum_30d_strong: bool = False   # price +20% in 30 days
+    momentum_90d_strong: bool = False   # price +40% in 90 days
+    near_52w_low: bool = False          # within 15% of 52-week low (coiled)
+    revenue_acceleration: bool = False  # latest YoY revenue growth > prior year
+    earnings_beat: bool = False         # last earnings surprise > 10%
+    high_short_float: bool = False      # short float > 20% (squeeze potential)
+    cash_rich: bool = False             # cash/market_cap > 0.50
+    low_float: bool = False             # float shares < 10M (thin float)
+
+
+@dataclass
+class SpeculativeCandidate:
+    ticker: str
+    name: str
+    sector: str
+    industry: str
+    market: str
+    price: Optional[float]
+    market_cap_million: Optional[float]
+    signals: CatalystSignals = field(default_factory=CatalystSignals)
+    signal_count: int = 0
+    signal_labels: list[str] = field(default_factory=list)
+    price_change_30d: Optional[float] = None
+    price_change_90d: Optional[float] = None
+    volume_ratio_3d: Optional[float] = None   # 3d avg vs 30d avg
+    revenue_growth_yoy: Optional[float] = None
+    short_float: Optional[float] = None
+    speculative_score: float = 0.0
+    notes: list[str] = field(default_factory=list)
 
 
 # =============================================================================
@@ -310,6 +351,73 @@ def build_universe_finviz_fallback(min_mcap_m: int = 500,
     except Exception as e:
         log.error("finvizfinance error: %s", e)
         return []
+
+
+def build_speculative_universe_tv(region: str = "GLOBAL") -> list[str]:
+    """Tier 2: small-cap/penny universe da TradingView ordinato per relative volume.
+
+    Cerca titoli 5M-500M market cap con attività di volume sopra la media —
+    segnale che qualcosa sta succedendo (notizie, contratti, rumors, squeeze).
+    Nessun filtro su PE, profittabilità o dividend yield.
+    """
+    if not TV_OK:
+        log.error("tradingview-screener non installato.")
+        return []
+
+    markets = TV_MARKETS.get(region, ["america"])
+    log.info("Speculative universe TV: region=%s, mercati=%d", region, len(markets))
+
+    chunks = ([TV_MARKETS["US"], TV_MARKETS["EU"], TV_MARKETS["ASIA"]]
+              if region == "GLOBAL" else [markets])
+
+    all_rows: list[dict] = []
+    failed = []
+
+    for chunk in chunks:
+        try:
+            q = (Query()
+                 .set_markets(*chunk)
+                 .select("name", "close", "market_cap_basic",
+                         "relative_volume_10d_calc", "volume", "sector")
+                 .where(
+                     Column("market_cap_basic") > SPEC_MIN_MCAP_M * 1_000_000,
+                     Column("market_cap_basic") < SPEC_MAX_MCAP_M * 1_000_000,
+                     Column("close") > SPEC_MIN_PRICE,
+                     Column("relative_volume_10d_calc") > 1.5,
+                 )
+                 .order_by("relative_volume_10d_calc", ascending=False)
+                 .limit(SPEC_MAX_TV_PER_CHUNK * len(chunk)))
+            _count, df = q.get_scanner_data()
+            if df is None or df.empty:
+                continue
+            for _, row in df.iterrows():
+                yf_tkr = tv_to_yf_ticker(row["ticker"])
+                if yf_tkr is None:
+                    failed.append(row["ticker"])
+                    continue
+                all_rows.append({
+                    "yf_ticker": yf_tkr,
+                    "market_cap": row.get("market_cap_basic") or 0,
+                    "rel_vol": row.get("relative_volume_10d_calc") or 0,
+                })
+        except Exception as e:
+            log.warning("Speculative TV query fallita per %s: %s", chunk, e)
+
+    if failed:
+        log.info("Speculative: exchange non mappati: %d", len(failed))
+
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for r in all_rows:
+        if r["yf_ticker"] not in seen:
+            seen.add(r["yf_ticker"])
+            unique.append(r)
+
+    # Sort by relative volume (most active first = highest catalyst probability)
+    unique.sort(key=lambda r: r["rel_vol"], reverse=True)
+    tickers = [r["yf_ticker"] for r in unique]
+    log.info("Speculative universe: %d ticker unici", len(tickers))
+    return tickers
 
 
 # =============================================================================
@@ -805,7 +913,266 @@ def screen_universe(tickers, strategy="all", max_workers=30):
     return out
 
 
-def output_results(cands, out_dir, top_n=30):
+def passes_speculative_quick_filter(info: dict) -> bool:
+    """Filtro rapido per Tier 2: molto più permissivo del Tier 1.
+    Elimina solo ghost ticker e dati palesemente corrotti.
+    """
+    price = info.get("currentPrice") or info.get("regularMarketPrice", 0) or 0
+    if price < SPEC_MIN_PRICE:
+        return False
+    mc = info.get("marketCap", 0) or 0
+    if mc < SPEC_MIN_MCAP_M * 1e6:
+        return False
+    if mc > SPEC_MAX_MCAP_M * 1e6:
+        return False
+    # Elimina solo perdite catastrofiche (> -90% net margin) — growth pre-profit è OK
+    margin = info.get("profitMargins")
+    if margin is not None and margin < -0.90:
+        return False
+    return True
+
+
+def fetch_speculative_data(ticker: str, prefetched_info: dict) -> Optional[dict]:
+    """Fetch dati per analisi catalyst: history 1y + financials base."""
+    try:
+        t = yf.Ticker(ticker)
+        return {
+            "ticker": ticker,
+            "info": prefetched_info,
+            "financials": t.quarterly_financials,   # quarterly per revenue acceleration
+            "cashflow": t.quarterly_cashflow,
+            "history": t.history(period="1y", auto_adjust=True),
+            "earnings_dates": getattr(t, "earnings_dates", None),
+        }
+    except Exception:
+        return None
+
+
+def detect_catalyst_signals(data: dict) -> tuple[CatalystSignals, dict]:
+    """Analizza segnali catalyst su un titolo small-cap.
+
+    Ritorna (CatalystSignals, extra_metrics) dove extra_metrics contiene
+    valori numerici utili per il briefing (price change, volume ratio, ecc.).
+    """
+    info = data["info"]
+    hist = data.get("history")
+    fin = data.get("financials")
+    sig = CatalystSignals()
+    extra: dict = {}
+
+    # ---- Volume analysis ----
+    if hist is not None and not hist.empty and len(hist) >= 30:
+        vols = hist["Volume"].values
+        avg_3d  = float(np.mean(vols[-3:]))   if len(vols) >= 3  else None
+        avg_30d = float(np.mean(vols[-30:]))  if len(vols) >= 30 else None
+        avg_90d = float(np.mean(vols[-90:]))  if len(vols) >= 90 else None
+
+        if avg_3d and avg_30d and avg_30d > 0:
+            ratio_3d = avg_3d / avg_30d
+            extra["volume_ratio_3d"] = round(ratio_3d, 2)
+            if ratio_3d >= 3.0:
+                sig.volume_spike_3d = True
+        if avg_30d and avg_90d and avg_90d > 0:
+            if avg_30d / avg_90d >= 2.0:
+                sig.volume_spike_30d = True
+
+    # ---- Price momentum ----
+    if hist is not None and not hist.empty:
+        closes = hist["Close"]
+        last_price = float(closes.iloc[-1])
+        if len(closes) >= 30:
+            p30 = float(closes.iloc[-30])
+            if p30 > 0:
+                chg30 = (last_price - p30) / p30
+                extra["price_change_30d"] = round(chg30, 4)
+                if chg30 >= 0.20:
+                    sig.momentum_30d_strong = True
+        if len(closes) >= 63:
+            p90 = float(closes.iloc[-63])
+            if p90 > 0:
+                chg90 = (last_price - p90) / p90
+                extra["price_change_90d"] = round(chg90, 4)
+                if chg90 >= 0.40:
+                    sig.momentum_90d_strong = True
+
+        # 52-week low proximity
+        high52 = info.get("fiftyTwoWeekHigh")
+        low52  = info.get("fiftyTwoWeekLow")
+        if low52 and low52 > 0 and last_price > 0:
+            if last_price <= low52 * 1.15:
+                sig.near_52w_low = True
+
+    # ---- Revenue acceleration (quarterly) ----
+    if fin is not None and not fin.empty:
+        try:
+            rev_row = None
+            for alias in ["Total Revenue", "Revenue"]:
+                if alias in fin.index:
+                    rev_row = fin.loc[alias]
+                    break
+            if rev_row is not None and len(rev_row) >= 8:
+                # YoY: Q0 vs Q4, Q1 vs Q5 (4 quarters back)
+                rev_q0 = float(rev_row.iloc[0]) if pd.notna(rev_row.iloc[0]) else None
+                rev_q4 = float(rev_row.iloc[4]) if pd.notna(rev_row.iloc[4]) else None
+                rev_q1 = float(rev_row.iloc[1]) if pd.notna(rev_row.iloc[1]) else None
+                rev_q5 = float(rev_row.iloc[5]) if pd.notna(rev_row.iloc[5]) else None
+                if all(v and v > 0 for v in [rev_q0, rev_q4, rev_q1, rev_q5]):
+                    yoy_latest = (rev_q0 - rev_q4) / rev_q4
+                    yoy_prior  = (rev_q1 - rev_q5) / rev_q5
+                    extra["revenue_growth_yoy"] = round(yoy_latest, 4)
+                    if yoy_latest > yoy_prior and yoy_latest > 0:
+                        sig.revenue_acceleration = True
+        except Exception:
+            pass
+
+    # ---- Earnings beat ----
+    ed = data.get("earnings_dates")
+    if ed is not None and not ed.empty:
+        try:
+            col = "Surprise(%)" if "Surprise(%)" in ed.columns else None
+            if col:
+                valid = ed.dropna(subset=[col])
+                if not valid.empty:
+                    surprise = float(valid.iloc[0][col])
+                    extra["earnings_surprise_pct"] = round(surprise, 2)
+                    if surprise > 10:
+                        sig.earnings_beat = True
+        except Exception:
+            pass
+
+    # ---- Short squeeze potential ----
+    sf = info.get("shortPercentOfFloat") or info.get("shortRatio")
+    if sf is not None:
+        extra["short_float"] = round(float(sf), 4)
+        if float(sf) > 0.20:
+            sig.high_short_float = True
+
+    # ---- Cash rich relative to market cap ----
+    mc = info.get("marketCap") or 0
+    cash = info.get("totalCash") or 0
+    if mc > 0 and cash / mc >= 0.50:
+        sig.cash_rich = True
+
+    # ---- Low float (thin float = big moves possible) ----
+    float_shares = info.get("floatShares")
+    if float_shares is not None and float_shares < 10_000_000:
+        sig.low_float = True
+
+    return sig, extra
+
+
+def _spec_score(sig: CatalystSignals, extra: dict) -> float:
+    """Punteggio speculativo: segnali pesati per intensità catalyst."""
+    score = 0.0
+    # Volume spike è il segnale più affidabile che qualcosa sta succedendo
+    if sig.volume_spike_3d:
+        vol_ratio = extra.get("volume_ratio_3d", 3.0)
+        score += min(vol_ratio * 5, 25)   # max 25pt, +5 per ogni X di volume
+    if sig.volume_spike_30d:
+        score += 10
+    # Momentum conferma la direzione
+    if sig.momentum_30d_strong:
+        chg = extra.get("price_change_30d", 0.20)
+        score += min(chg * 50, 20)        # max 20pt
+    if sig.momentum_90d_strong:
+        score += 15
+    # Near 52w low: setup per reversal con catalyst
+    if sig.near_52w_low:
+        score += 8
+    # Fondamentali catalyst
+    if sig.revenue_acceleration:
+        score += 12
+    if sig.earnings_beat:
+        score += 10
+    # Squeeze / thin float
+    if sig.high_short_float:
+        score += 15
+    if sig.low_float:
+        score += 8
+    if sig.cash_rich:
+        score += 5
+    return round(score, 1)
+
+
+def screen_speculative_universe(tickers: list[str], max_workers: int = 30,
+                                 top_n: int = 30) -> list[SpeculativeCandidate]:
+    """Screening a due fasi per Tier 2 (small-cap / catalyst).
+
+    Fase 1: t.info quick filter (lenient — solo elimina ghost ticker)
+    Fase 2: history + quarterly financials per detect_catalyst_signals()
+    Non applica hard filter MVF — questi titoli non devono essere "sani",
+    devono avere un catalyst che giustifichi attenzione speculativa.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    n = len(tickers)
+    log.info("Spec Fase 1/2: info fetch su %d ticker...", n)
+
+    phase1: list[tuple[str, dict]] = []
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futs = {ex.submit(fetch_info_only, t): t for t in tickers}
+        for fut in as_completed(futs):
+            try:
+                result = fut.result()
+            except Exception:
+                continue
+            if result and passes_speculative_quick_filter(result["info"]):
+                phase1.append((result["ticker"], result["info"]))
+
+    log.info("Spec Fase 1/2: %d/%d passano il filtro rapido", len(phase1), n)
+
+    log.info("Spec Fase 2/2: catalyst analysis su %d ticker...", len(phase1))
+    out: list[SpeculativeCandidate] = []
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futs = {ex.submit(fetch_speculative_data, tkr, inf): tkr for tkr, inf in phase1}
+        for fut in as_completed(futs):
+            try:
+                data = fut.result()
+            except Exception:
+                continue
+            if data is None:
+                continue
+            info = data["info"]
+            sig, extra = detect_catalyst_signals(data)
+            sig_dict = asdict(sig)
+            active_signals = [k for k, v in sig_dict.items() if v]
+            count = len(active_signals)
+            if count == 0:
+                continue   # nessun segnale, non interessa
+
+            mc = info.get("marketCap", 0) or 0
+            price = info.get("currentPrice") or info.get("regularMarketPrice")
+            market, _ = detect_market(info)
+            score = _spec_score(sig, extra)
+
+            sc = SpeculativeCandidate(
+                ticker=data["ticker"],
+                name=info.get("longName") or info.get("shortName") or data["ticker"],
+                sector=info.get("sector", ""),
+                industry=info.get("industry", ""),
+                market=market,
+                price=price,
+                market_cap_million=round(mc / 1e6, 2) if mc else None,
+                signals=sig,
+                signal_count=count,
+                signal_labels=active_signals,
+                price_change_30d=extra.get("price_change_30d"),
+                price_change_90d=extra.get("price_change_90d"),
+                volume_ratio_3d=extra.get("volume_ratio_3d"),
+                revenue_growth_yoy=extra.get("revenue_growth_yoy"),
+                short_float=extra.get("short_float"),
+                speculative_score=score,
+            )
+            out.append(sc)
+
+    out.sort(key=lambda c: c.speculative_score, reverse=True)
+    log.info("Speculative candidati con signal>=1: %d", len(out))
+    return out[:top_n]
+
+
+def output_results(cands, out_dir, top_n=30,
+                    speculative_cands: Optional[list] = None):
     cands.sort(key=lambda c: c.composite_score or 0, reverse=True)
     top = cands[:top_n]
     rows = []
@@ -832,6 +1199,26 @@ def output_results(cands, out_dir, top_n=30):
     csv_path = out_dir / f"screener_{date_tag}.csv"
     json_path = out_dir / f"screener_{date_tag}.json"
     df.to_csv(csv_path, index=False)
+
+    spec_list = []
+    if speculative_cands:
+        for sc in speculative_cands:
+            spec_list.append({
+                "ticker": sc.ticker, "name": sc.name, "sector": sc.sector,
+                "industry": sc.industry, "market": sc.market,
+                "price": sc.price,
+                "market_cap_M": sc.market_cap_million,
+                "speculative_score": sc.speculative_score,
+                "signal_count": sc.signal_count,
+                "signals": sc.signal_labels,
+                "price_change_30d": sc.price_change_30d,
+                "price_change_90d": sc.price_change_90d,
+                "volume_ratio_3d": sc.volume_ratio_3d,
+                "revenue_growth_yoy": sc.revenue_growth_yoy,
+                "short_float": sc.short_float,
+                "notes": sc.notes,
+            })
+
     payload = {
         "date": date_tag, "n_screened": len(cands), "n_passing": len(top),
         "candidates": [{
@@ -841,6 +1228,7 @@ def output_results(cands, out_dir, top_n=30):
             "warnings": [k for k, v in asdict(c.soft_filters).items() if v],
             "notes": c.notes,
         } for c in top],
+        "speculative_candidates": spec_list,
     }
     with open(json_path, "w") as f:
         json.dump(payload, f, indent=2, default=str)
@@ -852,38 +1240,66 @@ def output_results(cands, out_dir, top_n=30):
 # =============================================================================
 
 def main():
-    p = argparse.ArgumentParser(description="MVF v3.0 Stock Screener (auto-universe)")
+    p = argparse.ArgumentParser(description="MVF v3.0 Stock Screener (due tier: quality + catalyst)")
     p.add_argument("--region", choices=["US", "EU", "ASIA", "GLOBAL"], default="GLOBAL")
     p.add_argument("--strategy", choices=["income", "post_news", "quality", "all"], default="all")
     p.add_argument("--min-mcap", type=int, default=CONFIG["min_market_cap_million"])
     p.add_argument("--top", type=int, default=30)
-    p.add_argument("--limit-per-market", type=int, default=100)
-    p.add_argument("--total-limit", type=int, default=None,
-                   help="Cap totale ticker passati a yfinance (es. 60 per run veloci)")
+    p.add_argument("--top-speculative", type=int, default=20,
+                   help="Max candidati speculativi nel JSON output")
+    p.add_argument("--limit-per-market", type=int, default=150,
+                   help="Righe TV per mercato per Tier 1 (default 150, nessun cap totale)")
+    p.add_argument("--no-speculative", action="store_true",
+                   help="Salta il Tier 2 catalyst screening")
     p.add_argument("--sector", default=None)
     p.add_argument("--output", type=Path, default=Path("./data/screener_results"))
     args = p.parse_args()
 
     CONFIG["min_market_cap_million"] = args.min_mcap
 
+    # ---- Tier 1: Quality universe ----
+    log.info("=== TIER 1: Quality/Income Universe ===")
     tickers = build_universe_tradingview(
         region=args.region, min_mcap_m=args.min_mcap,
         min_price=CONFIG["min_price_usd"],
         limit_per_market=args.limit_per_market,
         sector_filter=args.sector,
-        total_limit=args.total_limit,
+        total_limit=None,   # nessun cap — GitHub Actions ha tutto il tempo
     )
     if not tickers and args.region == "US" and FINVIZ_OK:
         log.warning("Tentativo fallback finvizfinance...")
         tickers = build_universe_finviz_fallback(args.min_mcap, args.sector, args.limit_per_market)
     if not tickers:
-        log.error("Universe vuoto.")
+        log.error("Universe Tier 1 vuoto.")
         sys.exit(1)
 
     cands = screen_universe(tickers, strategy=args.strategy)
-    log.info("Candidati che passano filtri: %d", len(cands))
-    csv_path, json_path = output_results(cands, args.output, top_n=args.top)
+    log.info("Tier 1 candidati che passano filtri: %d", len(cands))
+
+    # ---- Tier 2: Speculative / Catalyst universe ----
+    spec_cands: list[SpeculativeCandidate] = []
+    if not args.no_speculative:
+        log.info("=== TIER 2: Speculative/Catalyst Universe ===")
+        spec_tickers = build_speculative_universe_tv(region=args.region)
+        if spec_tickers:
+            # Rimuovi ticker già presenti nel Tier 1 per evitare duplicati
+            tier1_set = set(tickers)
+            spec_tickers_new = [t for t in spec_tickers if t not in tier1_set]
+            log.info("Tier 2: %d ticker nuovi (esclusi %d già in Tier 1)",
+                     len(spec_tickers_new), len(spec_tickers) - len(spec_tickers_new))
+            spec_cands = screen_speculative_universe(
+                spec_tickers_new, top_n=args.top_speculative
+            )
+            log.info("Tier 2 candidati con catalyst signal: %d", len(spec_cands))
+        else:
+            log.warning("Tier 2 universe vuoto.")
+
+    csv_path, json_path = output_results(
+        cands, args.output, top_n=args.top, speculative_cands=spec_cands
+    )
     log.info("Output: %s | %s", csv_path, json_path)
+    log.info("Tier 1: %d candidati quality | Tier 2: %d catalyst signals",
+             min(len(cands), args.top), len(spec_cands))
 
 
 if __name__ == "__main__":

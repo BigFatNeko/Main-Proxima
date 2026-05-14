@@ -88,14 +88,15 @@ def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
     log.info("Step 1/6: lancio screener (region=%s, strategy=%s)...", region, strategy)
     cmd = [
         sys.executable, str(SCRIPT_DIR / "screener.py"),
-        "--region", region, "--strategy", strategy, "--top", "30",
-        "--limit-per-market", "20", "--total-limit", "60",
+        "--region", region, "--strategy", strategy,
+        "--top", "30", "--top-speculative", "20",
+        "--limit-per-market", "150",   # nessun --total-limit: GitHub Actions ha tempo
         "--output", str(SCREENER_OUTPUT_DIR),
     ]
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=600)
+        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=5400)
     except subprocess.TimeoutExpired:
-        log.error("Screener timeout (>10min).")
+        log.error("Screener timeout (>90min).")
         return None
     except subprocess.CalledProcessError as e:
         log.error("Screener fallito: %s", e.stderr[:500])
@@ -217,6 +218,19 @@ def build_system_prompt() -> str:
 
 
 def build_user_prompt(user_data, screener_data, market, todo, previous, mode):
+    tier1 = screener_data.get("candidates", [])
+    tier2 = screener_data.get("speculative_candidates", [])
+
+    spec_section = ""
+    if tier2:
+        spec_section = f"""
+TIER 2 — CATALYST / SPECULATIVE (small-cap con segnali attivi):
+Questi titoli NON sono raccomandazioni di investimento. Sono small-cap e micro-cap
+che mostrano ≥1 segnale catalyst (volume spike, momentum, short squeeze, revenue
+acceleration, ecc.). Meritano menzione solo se il segnale è forte (≥3 segnali).
+{json.dumps(tier2[:20], indent=2, default=str)[:6000]}
+"""
+
     return f"""Genera il briefing per {user_data['user'].upper()} in data {datetime.now():%Y-%m-%d}.
 
 MODE: {mode}
@@ -227,9 +241,9 @@ PORTAFOGLIO:
 MARKET SNAPSHOT:
 {json.dumps(market, indent=2)}
 
-SCREENER OUTPUT (top 30 candidati pre-filtrati MVF v3.0):
-{json.dumps(screener_data, indent=2, default=str)[:10000]}
-
+TIER 1 — SCREENER QUALITY (top 30 candidati pre-filtrati MVF v3.0):
+{json.dumps(tier1, indent=2, default=str)[:10000]}
+{spec_section}
 TODO DEL GIORNO:
 {todo[:3000]}
 
@@ -237,6 +251,8 @@ BRIEFING PRECEDENTI ({len(previous)} disponibili):
 {json.dumps([p['date'] for p in previous], indent=2)}
 
 Produci markdown strutturato secondo le specifiche del system prompt.
+Se ci sono candidati Tier 2 con ≥3 segnali, aggiungi una sezione
+"🔬 Radar Speculativo" in fondo (breve, 3-5 titoli max, con disclaimer).
 """
 
 
