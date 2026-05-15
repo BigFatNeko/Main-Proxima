@@ -77,17 +77,26 @@ Per OGNI filiera con candidati disponibili produci un blocco così. Filiere atti
 
 <2-3 frasi su perché la filiera ora ha rilevanza (catalisi geopolitica, scarsità materia prima, consolidamento, regolamentazione)>
 
-**Candidati screener** (top 2-3 per voto MVF):
+**Candidati screener** (top 2-3):
 
+I candidati filiera hanno DUE tipi di dati, indicati dal prefisso nel contesto:
+
+**Se `[MVF]`** (candidato analizzato anche nel Tier 1 con MVF v3.0):
 | Ticker | Nome | Voto /100 | V. intrinseco | V. relativo (PE/EV-EBITDA) | Dividendo | Prezzo ideale (MoS) |
 |---|---|---|---|---|---|---|
-| MSFT | Microsoft | 87 | $445 | 28x / 22x | 0.6% pay 25% | $312 (30%) |
-| ... | ... | ... | ... | ... | ... | ... |
+| NVDA | Nvidia | 87 | $445 | 28x / 22x | 0.6% pay 25% | $312 (30%) |
+
+**Se `[TV]`** (solo dati TradingView, nessuna analisi MVF disponibile):
+| Ticker | Nome | Market Cap | PE | Div. Yield | Rel. Vol | Upside analisti |
+|---|---|---|---|---|---|---|
+| GETTEX:PC6 | Shell | $230B | 12x | 4.1% | 1.8x | +18% |
+
+Non inventare voto MVF, valore intrinseco o prezzo ideale per candidati `[TV]` — quei calcoli non sono stati eseguiti su di loro. Scrivi solo i dati che hai.
 
 **Verdetto filiera**: direzionale / saldo reale / aspetta. <Una riga di motivazione.>
 ```
 
-**REGOLA INVIOLABILE**: per ogni candidato MVF mostra SOLO questi 5 campi (voto, V intrinseco, V relativo, dividendi, prezzo ideale + MoS). Tutti gli altri parametri sono stati calcolati ma NON devono apparire nel briefing (scelta esplicita dell'utente per output compatto).
+**REGOLA INVIOLABILE**: per candidati `[MVF]` mostra SOLO i 5 campi (voto, V intrinseco, V relativo, dividendi, prezzo ideale + MoS). Per candidati `[TV]` mostra: PE, dividend yield, upside analisti, relative volume. Non mischiare le due tipologie nella stessa tabella.
 
 **Filiere silenziose**: dedica attenzione particolare alle 6 nuove filiere poco analizzate (agroalimentare upstream, siderurgia, shipping, acqua, riassicurazione, packaging). Sono spesso i veri colli di bottiglia — bassa copertura analisti = alpha potenziale. Se hanno candidati, non ometterle.
 
@@ -254,7 +263,7 @@ Prima di chiudere, controlla:
 - [ ] Box "COSA SAPERE" presente almeno una volta nella sezione 1
 - [ ] Decisione concreta per ogni posizione del portafogli
 - [ ] Almeno una idea di Proxima dai blocchi 5/6/7/8
-- [ ] Disclaimer una sola volta in fondo
+- [ ] Nessun disclaimer aggiunto (regola 7)
 - [ ] Niente parole superflue (rileggi mentalmente, taglia)
 
 Buon lavoro.

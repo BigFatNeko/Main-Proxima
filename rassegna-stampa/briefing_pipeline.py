@@ -228,9 +228,38 @@ def fetch_market_snapshot() -> dict:
             else:
                 snap[label] = {"value": None, "change_pct": None}
         except Exception as e:
-            log.debug("market snapshot %s (%s) err: %s", label, tkr, e)
+            log.warning("market snapshot %s (%s) err: %s", label, tkr, e)
             snap[label] = {"value": None, "change_pct": None}
     return snap
+
+
+def _market_from_context(ctx: dict) -> dict:
+    """Costruisce market snapshot dai dati macro già fetchati dallo screener.
+
+    Usa i dati pre-fetchati all'inizio della run dello screener (sessione fresca,
+    prima del carico pesante su Yahoo Finance) per evitare rate-limit al momento
+    del briefing.
+    """
+    macro = ctx.get("macro", {})
+    mapping = [
+        ("S&P 500",  "SP500"),
+        ("FTSE MIB", "FTSE_MIB"),
+        ("Nikkei",   "Nikkei"),
+        ("Brent",    "Oil_Brent"),
+        ("EUR/USD",  "EURUSD"),
+        ("10Y UST",  "10Y_UST"),
+    ]
+    result = {}
+    for label, key in mapping:
+        rec = macro.get(key, {})
+        last = rec.get("last")
+        prev = rec.get("prev")
+        if last:
+            change = round((float(last) - float(prev)) / float(prev) * 100, 2) if prev and prev > 0 else 0.0
+            result[label] = {"value": round(float(last), 2), "change_pct": change}
+        else:
+            result[label] = {"value": None, "change_pct": None}
+    return result
 
 
 # =============================================================================
@@ -304,7 +333,15 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode):
     tier1_top = sorted(tier1, key=lambda c: c.get("mvf_vote_100") or 0, reverse=True)[:40]
     tier1_mvf = [_mvf_synthesis(c) for c in tier1_top]
 
-    # Filiere: top 8 per filiera con dati base TV
+    # Lookup Tier 1 per ticker symbol (per cross-reference filiere ↔ MVF)
+    tier1_lookup: dict = {}
+    for c in tier1:
+        tkr = c.get("ticker", "")
+        tier1_lookup[tkr] = c
+        base = tkr.split(".")[0] if "." in tkr else tkr
+        tier1_lookup[base] = c
+
+    # Filiere: top 8 per filiera — MVF data dove disponibile, TV data altrimenti
     filiere_section = ""
     if filiere:
         fil_blocks = []
@@ -314,12 +351,33 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode):
             top_per_fil = candidates[:8]
             fil_blocks.append(f"  {fname.upper()} ({len(candidates)} totali, top 8 mostrati):")
             for cand in top_per_fil:
-                fil_blocks.append(
-                    f"    - {cand.get('tv_ticker')} | {cand.get('name','')[:40]} | "
-                    f"mcap=${cand.get('market_cap', 0)/1e9:.1f}B | "
-                    f"PE={cand.get('pe', 'n/a')} | DY={(cand.get('div_yield') or 0)*100:.1f}% | "
-                    f"relvol={cand.get('rel_vol', 1):.1f}"
-                )
+                tv_tkr = cand.get("tv_ticker", "")
+                # Extract base symbol: "NASDAQ:NVDA" → "NVDA", "LSE:SHEL" → "SHEL"
+                base_sym = tv_tkr.split(":")[1] if ":" in tv_tkr else tv_tkr
+                base_sym2 = base_sym.split(".")[0]
+                t1 = tier1_lookup.get(base_sym) or tier1_lookup.get(base_sym2)
+                if t1 and t1.get("mvf_vote_100"):
+                    mvf = _mvf_synthesis(t1)
+                    fil_blocks.append(
+                        f"    - {tv_tkr} | {cand.get('name','')[:40]} | "
+                        f"[MVF] voto={mvf['voto_mvf_100']}/100 | "
+                        f"V.intrinseco={mvf['valore_intrinseco']} | "
+                        f"prezzo_ideale={mvf['prezzo_ideale_acquisto']} | "
+                        f"PE={cand.get('pe', 'n/a')} | DY={(cand.get('div_yield') or 0)*100:.1f}%"
+                    )
+                else:
+                    price = cand.get("price") or 0
+                    pt = cand.get("price_target") or 0
+                    upside_str = (
+                        f" | upside_analisti={((pt - price) / price * 100):.0f}%"
+                        if pt > 0 and price > 0 else ""
+                    )
+                    fil_blocks.append(
+                        f"    - {tv_tkr} | {cand.get('name','')[:40]} | "
+                        f"[TV] mcap=${cand.get('market_cap', 0)/1e9:.1f}B | "
+                        f"PE={cand.get('pe', 'n/a')} | DY={(cand.get('div_yield') or 0)*100:.1f}% | "
+                        f"relvol={cand.get('rel_vol', 1):.1f}{upside_str}"
+                    )
         filiere_section = "FILIERE STRATEGICHE (screener dedicato per settori cruciali):\n" + "\n".join(fil_blocks)
 
     # Market context: leaders/laggards + macro summary
@@ -571,10 +629,24 @@ def main():
     mode = args.mode if args.mode != "auto" else detect_mode_auto(previous)
     log.info("Modalità: %s", mode)
 
-    market = fetch_market_snapshot() if not args.dry_run else {}
-    if market:
-        log.info("Market snapshot: %d indici",
-                 sum(1 for v in market.values() if v.get("value")))
+    # Market snapshot: primary = dati già fetchati dallo screener (evita rate-limit)
+    market = {}
+    if not args.dry_run:
+        ctx = screener_data.get("market_context", {})
+        if ctx.get("macro"):
+            market = _market_from_context(ctx)
+            valid_ctx = sum(1 for v in market.values() if v.get("value"))
+            log.info("Market snapshot da context screener: %d/6 indici", valid_ctx)
+        # Fallback live fetch per indici mancanti
+        missing = [k for k, v in market.items() if not v.get("value")]
+        if not market or len(missing) > 2:
+            log.info("Fallback: fetch live market snapshot (context ha %d/6 indici)", len(market) - len(missing))
+            live = fetch_market_snapshot()
+            for k, v in live.items():
+                if k not in market or not market[k].get("value"):
+                    market[k] = v
+        valid = sum(1 for v in market.values() if v.get("value"))
+        log.info("Market snapshot finale: %d/6 indici validi", valid)
 
     system = build_system_prompt()
     user_prompt = build_user_prompt(user_data, screener_data, market, todo, previous, mode)

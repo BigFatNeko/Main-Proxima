@@ -189,6 +189,8 @@ MACRO_INDICATORS: dict[str, str] = {
     "10Y_UST": "^TNX", "2Y_UST": "^IRX", "VIX": "^VIX",
     "Gold": "GC=F", "Oil_Brent": "BZ=F", "Dollar_Index": "DX-Y.NYB",
     "Copper": "HG=F", "IG_Credit": "LQD",
+    # Indici principali per strip mercato nel briefing
+    "SP500": "^GSPC", "FTSE_MIB": "FTSEMIB.MI", "Nikkei": "^N225", "EURUSD": "EURUSD=X",
 }
 
 # Tier 2 — Speculative / Catalyst universe
@@ -1947,8 +1949,9 @@ def build_market_context() -> dict:
             avg_vol_10 = float(vols.iloc[-10:].mean()) if len(vols) >= 10 else None
             avg_vol_30 = float(vols.iloc[-30:].mean()) if len(vols) >= 30 else None
             rel_vol = round(avg_vol_10 / avg_vol_30, 2) if (avg_vol_10 and avg_vol_30 and avg_vol_30 > 0) else None
+            prev_close = round(float(closes.iloc[-2]), 3) if len(closes) >= 2 else None
             return label, {
-                "ticker": tkr, "last": round(last, 3),
+                "ticker": tkr, "last": round(last, 3), "prev": prev_close,
                 "1m": pct(22), "3m": pct(63), "6m": pct(126), "1y": pct(252),
                 "rel_vol_10d": rel_vol,
             }
