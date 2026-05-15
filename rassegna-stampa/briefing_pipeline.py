@@ -96,12 +96,14 @@ def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
         "--output", str(SCREENER_OUTPUT_DIR),
     ]
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=7200)
+        # NON cattura output: i log dello screener vanno direttamente
+        # su stdout/stderr del processo padre → visibili in GitHub Actions.
+        subprocess.run(cmd, check=True, timeout=7200)
     except subprocess.TimeoutExpired:
         log.error("Screener timeout (>2h).")
         return None
     except subprocess.CalledProcessError as e:
-        log.error("Screener fallito: %s", e.stderr[:500])
+        log.error("Screener fallito (exit=%s)", e.returncode)
         return None
     if not json_path.exists():
         log.warning("Output screener non trovato.")
