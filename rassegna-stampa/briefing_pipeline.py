@@ -537,7 +537,6 @@ def main():
     args = p.parse_args()
 
     if args.test_snapshot:
-        import json
         snap = fetch_market_snapshot()
         print(json.dumps(snap, indent=2))
         return
