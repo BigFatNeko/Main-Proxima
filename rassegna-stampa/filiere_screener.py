@@ -103,51 +103,62 @@ FILIERE_MARKETS = [
 
 
 def screen_filiera_tv(filiera_name: str, definition: dict,
-                       chunks_of_markets: list[list[str]]) -> list[dict]:
-    """Lancia una query TradingView per una specifica filiera."""
+                       markets: list[str]) -> list[dict]:
+    """Lancia query TradingView per una filiera, una per (mercato, industry)."""
     if not TV_OK:
         return []
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     all_rows: list[dict] = []
     industries = definition["industries"]
     min_mcap = definition["min_mcap_m"] * 1_000_000
 
-    for chunk in chunks_of_markets:
-        for industry in industries:
-            try:
-                q = (Query()
-                     .set_markets(*chunk)
-                     .select("name", "close", "market_cap_basic",
-                             "price_earnings_ttm", "sector", "industry",
-                             "dividends_yield", "relative_volume_10d_calc",
-                             "price_target_average")
-                     .where(
-                         Column("market_cap_basic") > min_mcap,
-                         Column("close") > 1.0,
-                         Column("industry") == industry,
-                     )
-                     .order_by("market_cap_basic", ascending=False)
-                     .limit(200))
-                _count, df = q.get_scanner_data()
-                if df is None or df.empty:
-                    continue
-                for _, row in df.iterrows():
-                    all_rows.append({
-                        "tv_ticker": row["ticker"],
-                        "name": row.get("name", ""),
-                        "industry": row.get("industry", ""),
-                        "sector": row.get("sector", ""),
-                        "market_cap": row.get("market_cap_basic") or 0,
-                        "price": row.get("close") or 0,
-                        "pe": row.get("price_earnings_ttm"),
-                        "div_yield": row.get("dividends_yield") or 0,
-                        "rel_vol": row.get("relative_volume_10d_calc") or 1.0,
-                        "price_target": row.get("price_target_average"),
-                        "filiera": filiera_name,
-                    })
-            except Exception as e:
-                log.debug("filiera=%s industry=%s err=%s",
-                          filiera_name, industry, e)
+    def query_one(mkt: str, industry: str) -> list[dict]:
+        rows: list[dict] = []
+        try:
+            q = (Query()
+                 .set_markets(mkt)
+                 .select("name", "close", "market_cap_basic",
+                         "price_earnings_ttm", "sector", "industry",
+                         "dividends_yield", "relative_volume_10d_calc",
+                         "price_target_average")
+                 .where(
+                     Column("market_cap_basic") > min_mcap,
+                     Column("close") > 1.0,
+                     Column("industry") == industry,
+                 )
+                 .order_by("market_cap_basic", ascending=False)
+                 .limit(50))
+            _count, df = q.get_scanner_data()
+            if df is None or df.empty:
+                return rows
+            for _, row in df.iterrows():
+                rows.append({
+                    "tv_ticker": row["ticker"],
+                    "name": row.get("name", ""),
+                    "industry": row.get("industry", ""),
+                    "sector": row.get("sector", ""),
+                    "market_cap": row.get("market_cap_basic") or 0,
+                    "price": row.get("close") or 0,
+                    "pe": row.get("price_earnings_ttm"),
+                    "div_yield": row.get("dividends_yield") or 0,
+                    "rel_vol": row.get("relative_volume_10d_calc") or 1.0,
+                    "price_target": row.get("price_target_average"),
+                    "filiera": filiera_name,
+                })
+        except Exception as e:
+            log.debug("filiera=%s mkt=%s industry=%s err=%s",
+                      filiera_name, mkt, industry, e)
+        return rows
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futs = []
+        for mkt in markets:
+            for industry in industries:
+                futs.append(ex.submit(query_one, mkt, industry))
+        for fut in as_completed(futs):
+            all_rows.extend(fut.result())
 
     # dedupe per ticker
     seen = set()
@@ -196,12 +207,12 @@ def screen_filiera_tv(filiera_name: str, definition: dict,
 
 def run_all_filiere() -> dict:
     """Lancia screening per tutte le filiere. Ritorna dict filiera→[candidati]."""
-    log.info("Filiere screener: avvio %d filiere", len(FILIERE_DEFINITIONS))
-    chunks = [FILIERE_MARKETS]  # singolo chunk grande
+    log.info("Filiere screener: avvio %d filiere su %d mercati",
+             len(FILIERE_DEFINITIONS), len(FILIERE_MARKETS))
     result = {}
     for fname, fdef in FILIERE_DEFINITIONS.items():
         try:
-            candidates = screen_filiera_tv(fname, fdef, chunks)
+            candidates = screen_filiera_tv(fname, fdef, FILIERE_MARKETS)
             result[fname] = candidates
             log.info("Filiera %s: %d candidati", fname, len(candidates))
         except Exception as e:

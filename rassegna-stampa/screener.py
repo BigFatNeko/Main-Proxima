@@ -514,16 +514,13 @@ def build_speculative_universe_tv(region: str = "GLOBAL") -> list[str]:
     markets = TV_MARKETS.get(region, ["america"])
     log.info("Speculative universe TV: region=%s, mercati=%d", region, len(markets))
 
-    chunks = ([TV_MARKETS["US"], TV_MARKETS["EU"], TV_MARKETS["ASIA"]]
-              if region == "GLOBAL" else [markets])
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    all_rows: list[dict] = []
-    failed = []
-
-    for chunk in chunks:
+    def query_market(mkt: str) -> list[dict]:
+        rows: list[dict] = []
         try:
             q = (Query()
-                 .set_markets(*chunk)
+                 .set_markets(mkt)
                  .select("name", "close", "market_cap_basic",
                          "relative_volume_10d_calc", "volume", "sector")
                  .where(
@@ -533,25 +530,28 @@ def build_speculative_universe_tv(region: str = "GLOBAL") -> list[str]:
                      Column("relative_volume_10d_calc") > 1.5,
                  )
                  .order_by("relative_volume_10d_calc", ascending=False)
-                 .limit(SPEC_MAX_TV_PER_CHUNK * len(chunk)))
+                 .limit(150))
             _count, df = q.get_scanner_data()
             if df is None or df.empty:
-                continue
+                return rows
             for _, row in df.iterrows():
                 yf_tkr = tv_to_yf_ticker(row["ticker"])
                 if yf_tkr is None:
-                    failed.append(row["ticker"])
                     continue
-                all_rows.append({
+                rows.append({
                     "yf_ticker": yf_tkr,
                     "market_cap": row.get("market_cap_basic") or 0,
                     "rel_vol": row.get("relative_volume_10d_calc") or 0,
                 })
         except Exception as e:
-            log.warning("Speculative TV query fallita per %s: %s", chunk, e)
+            log.debug("Speculative TV market=%s fallito: %s", mkt, e)
+        return rows
 
-    if failed:
-        log.info("Speculative: exchange non mappati: %d", len(failed))
+    all_rows: list[dict] = []
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futs = {ex.submit(query_market, m): m for m in markets}
+        for fut in as_completed(futs):
+            all_rows.extend(fut.result())
 
     seen: set[str] = set()
     unique: list[dict] = []
@@ -1530,12 +1530,16 @@ def screen_ticker(ticker):
     return c
 
 
-def screen_universe(tickers, strategy="all", max_workers=30):
+def screen_universe(tickers, strategy="all", max_workers=15):
     """Screening a due fasi per minimizzare le chiamate HTTP totali.
 
     Fase 1: t.info per tutti (1 call/ticker) → quick filter → ~40% eliminati
     Fase 2: fondamentali completi solo sui superstiti (5 call/ticker)
     Risparmio: ~40% delle chiamate HTTP totali vs approccio monofase.
+
+    Workers ridotti a 15 (era 30): Yahoo Finance blocca con >250 req/sec
+    sostenuti — con 30 worker e migliaia di ticker il crumb viene
+    invalidato e Phase 2 fallisce in massa.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -1555,9 +1559,15 @@ def screen_universe(tickers, strategy="all", max_workers=30):
 
     log.info("Fase 1/2: %d/%d passano il filtro rapido", len(phase1), n)
 
+    # Refresh sessione yfinance per evitare 401 Unauthorized in Phase 2
+    # (dopo migliaia di .info calls il crumb può essere invalidato).
+    _refresh_yfinance_session()
+
     log.info("Fase 2/2: fondamentali su %d ticker...", len(phase1))
     out: list[Candidate] = []
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+    # Phase 2 ha 5 chiamate HTTP/ticker → ulteriore riduzione a 10 workers
+    # per non saturare la nuova sessione Yahoo Finance.
+    with ThreadPoolExecutor(max_workers=max(5, max_workers - 5)) as ex:
         futs = {ex.submit(fetch_remaining, tkr, inf): tkr for tkr, inf in phase1}
         for fut in as_completed(futs):
             try:
@@ -2010,18 +2020,16 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
     if not TV_OK:
         return {}
     markets = TV_MARKETS.get(region, ["america"])
-    chunks = ([TV_MARKETS["US"], TV_MARKETS["EU"], TV_MARKETS["ASIA"]]
-              if region == "GLOBAL" else [markets])
 
     buckets: dict[str, list[str]] = {
         "deep_value_pe": [], "deep_value_pb": [], "fallen_angel": []
     }
     failed: list[str] = []
 
-    def query_chunk(chunk, filters, label):
+    def query_market(mkt, filters, label):
         try:
             q = (Query()
-                 .set_markets(*chunk)
+                 .set_markets(mkt)
                  .select("name", "close", "market_cap_basic",
                          "price_earnings_ttm", "price_book_fq",
                          "dividends_yield")
@@ -2031,7 +2039,7 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
                      *filters,
                  )
                  .order_by("market_cap_basic", ascending=False)
-                 .limit(200 * len(chunk)))
+                 .limit(80))
             _count, df = q.get_scanner_data()
             if df is None or df.empty:
                 return []
@@ -2044,29 +2052,27 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
                 tickers.append(yf_tkr)
             return tickers
         except Exception as e:
-            log.warning("Tier 3 query %s fallita: %s", label, e)
+            log.debug("Tier 3 query %s market=%s fallita: %s", label, mkt, e)
             return []
 
-    for chunk in chunks:
-        # Deep value by PE: PE 2-8 (positivo ma molto basso)
-        t_pe = query_chunk(chunk, [
-            Column("price_earnings_ttm") > 2,
-            Column("price_earnings_ttm") < 8,
-        ], "deep_value_pe")
-        buckets["deep_value_pe"].extend(t_pe)
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        # Deep value by P/B: P/B < 0.8 (sotto book)
-        t_pb = query_chunk(chunk, [
-            Column("price_book_fq") > 0,
-            Column("price_book_fq") < 0.8,
-        ], "deep_value_pb")
-        buckets["deep_value_pb"].extend(t_pb)
+    bucket_filters = {
+        "deep_value_pe": [Column("price_earnings_ttm") > 2,
+                          Column("price_earnings_ttm") < 8],
+        "deep_value_pb": [Column("price_book_fq") > 0,
+                          Column("price_book_fq") < 0.8],
+        "fallen_angel": [Column("dividends_yield") > 6],
+    }
 
-        # Fallen angel: yield > 6% (potenziale value trap o vera opportunità)
-        t_fa = query_chunk(chunk, [
-            Column("dividends_yield") > 6,
-        ], "fallen_angel")
-        buckets["fallen_angel"].extend(t_fa)
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futs = {}
+        for label, filters in bucket_filters.items():
+            for mkt in markets:
+                futs[ex.submit(query_market, mkt, filters, label)] = label
+        for fut in as_completed(futs):
+            label = futs[fut]
+            buckets[label].extend(fut.result())
 
     if failed:
         log.info("Tier 3: %d ticker non mappati skipped", len(failed))
@@ -2328,8 +2334,10 @@ def main():
                    help="Top N candidati con valutazione MVF v3.0 completa (default 500)")
     p.add_argument("--top-speculative", type=int, default=25)
     p.add_argument("--top-special", type=int, default=15)
-    p.add_argument("--limit-per-market", type=int, default=400,
-                   help="Righe TV per mercato Tier 1 (default 400 → ~8-12k tickers globali)")
+    p.add_argument("--limit-per-market", type=int, default=150,
+                   help="Righe TV per singolo mercato (default 150 → ~3-4k pre-dedup)")
+    p.add_argument("--universe-cap", type=int, default=2500,
+                   help="Cap finale universe Tier 1 prima di yfinance (default 2500)")
     p.add_argument("--no-speculative", action="store_true")
     p.add_argument("--no-special", action="store_true")
     p.add_argument("--no-market-context", action="store_true")
@@ -2359,7 +2367,7 @@ def main():
         min_price=CONFIG["min_price_usd"],
         limit_per_market=args.limit_per_market,
         sector_filter=args.sector,
-        total_limit=None,
+        total_limit=args.universe_cap,
     )
     if not tickers and args.region in ("US", "GLOBAL") and FINVIZ_OK:
         log.warning("Tentativo fallback finvizfinance...")
