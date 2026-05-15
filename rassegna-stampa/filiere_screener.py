@@ -46,36 +46,34 @@ FILIERE_DEFINITIONS = {
         "bottleneck_keywords": ["missile", "radar", "satellite", "drone"],
     },
     "uranio_nucleare": {
-        # TradingView non ha "Uranium" come industria; i miner cadono in Basic Materials.
-        # Usiamo sector="Basic Materials" con mcap piccola (uranium miner = small/mid cap).
+        # TV taxonomy: uranio/carbone/gas → "Energy Minerals"; miner metalli → "Non-Energy Minerals"
         "industries": [],
-        "sectors": ["Basic Materials"],
+        "sectors": ["Energy Minerals", "Non-Energy Minerals"],
         "min_mcap_m": 50,
         "max_per_filiera": 25,
         "bottleneck_keywords": ["uranium", "nuclear", "fuel cycle"],
     },
     "energia_oilgas": {
-        # I nomi industry TV per oil/gas (Oil & Gas E&P, ecc.) non matchano —
-        # ma "Energy" come sector funziona su tutti i mercati.
+        # TV taxonomy: petrolio/gas/carbone → "Energy Minerals" (non "Energy")
         "industries": [],
-        "sectors": ["Energy"],
+        "sectors": ["Energy Minerals"],
         "min_mcap_m": 300,
         "max_per_filiera": 35,
         "bottleneck_keywords": ["LNG", "midstream", "pipeline", "oil", "gas", "refin"],
     },
     "rare_earth_metalli": {
-        # Basic Materials copre mining + specialty chemicals (rare earth, cobalt, lithium).
+        # TV taxonomy: minerali → "Non-Energy Minerals"; fertilizzanti/chimici → "Process Industries"
         "industries": [],
-        "sectors": ["Basic Materials"],
+        "sectors": ["Non-Energy Minerals", "Process Industries"],
         "min_mcap_m": 100,
         "max_per_filiera": 30,
         "bottleneck_keywords": ["rare earth", "neodymium", "lithium",
                                 "cobalt", "tungsten", "nickel", "copper", "zinc"],
     },
     "batterie_litio_storage": {
-        # Battery tech copre Consumer Cyclical (EV parts) e Technology (storage systems).
+        # TV taxonomy: batterie/EV → "Electronic Technology" + "Consumer Durables"
         "industries": [],
-        "sectors": ["Consumer Cyclical", "Technology"],
+        "sectors": ["Electronic Technology", "Consumer Durables"],
         "min_mcap_m": 100,
         "max_per_filiera": 25,
         "bottleneck_keywords": ["battery", "lithium", "storage", "EV", "electric"],
@@ -98,10 +96,10 @@ FILIERE_DEFINITIONS = {
         "bottleneck_keywords": ["brand", "distribution"],
     },
     "helium_gas_industriali": {
-        # Air Products, Linde, Air Liquide → Basic Materials (Specialty Chemicals in TV).
-        # Industrial Distribution per distributori (Airgas parent ecc.).
+        # TV taxonomy: gas industriali (Air Products, Linde, Air Liquide) → "Process Industries"
+        # Distributori industriali → "Distribution Services"
         "industries": [],
-        "sectors": ["Basic Materials", "Industrials"],
+        "sectors": ["Process Industries", "Distribution Services"],
         "min_mcap_m": 300,
         "max_per_filiera": 15,
         "bottleneck_keywords": ["helium", "industrial gas", "air", "gas", "linde",
@@ -111,11 +109,10 @@ FILIERE_DEFINITIONS = {
     # ── NUOVE FILIERE POCO ANALIZZATE ─────────────────────────────────────────
 
     "agroalimentare_upstream": {
-        # Fertilizzanti, pesticidi, sementi, macchinari agricoli.
-        # "Agricultural Inputs" e "Farm & Heavy Construction Machinery" non matchano in TV.
-        # Fertilizzanti → Basic Materials; macchinari agri → Industrials.
+        # TV taxonomy: fertilizzanti/pesticidi → "Process Industries"
+        # Macchinari agricoli (Deere, AGCO, CNH) → "Producer Manufacturing"
         "industries": [],
-        "sectors": ["Basic Materials", "Industrials"],
+        "sectors": ["Process Industries", "Producer Manufacturing"],
         "min_mcap_m": 200,
         "max_per_filiera": 25,
         "bottleneck_keywords": ["fertilizer", "potash", "nitrogen", "seed",
@@ -159,11 +156,9 @@ FILIERE_DEFINITIONS = {
     },
 
     "riassicurazione_specialty": {
-        # "Insurance—Reinsurance", "Insurance—Specialty" non matchano in TV.
-        # Sector "Financial Services" copre assicurazioni + banche + fintech:
-        # lo scoring per DY e PE moderato favorisce le assicuratrici tradizionali.
+        # TV taxonomy: assicurazioni/banche → "Finance" (non "Financial Services")
         "industries": [],
-        "sectors": ["Financial Services"],
+        "sectors": ["Finance"],
         "min_mcap_m": 500,
         "max_per_filiera": 20,
         "bottleneck_keywords": ["reinsurance", "insurance", "casualty",
@@ -171,11 +166,10 @@ FILIERE_DEFINITIONS = {
     },
 
     "packaging_foreste": {
-        # "Packaging & Containers", "Paper & Paper Products", "Lumber & Wood Production"
-        # non matchano in TV. Basic Materials copre paper/packaging; Consumer Cyclical
-        # copre packaging per e-commerce.
+        # TV taxonomy: carta/packaging/legno → "Process Industries"
+        # (include chimica, gomma, vetro, carta, packaging)
         "industries": [],
-        "sectors": ["Basic Materials"],
+        "sectors": ["Process Industries"],
         "min_mcap_m": 200,
         "max_per_filiera": 20,
         "bottleneck_keywords": ["packaging", "cardboard", "corrugated",
