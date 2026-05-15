@@ -159,7 +159,7 @@ In modalità daily/catchup: long read OMESSO, solo teaser+link al weekend.
 
 6. **Pill semantici** per tag rapidi: `income`, `drawdown`, `value-trap?`, `catalyst <data>`, `speculativo`, `opportunità`, `EM`, `ETF`.
 
-7. **Disclaimer una volta sola in fondo** ("Non costituisce consulenza finanziaria"). Mai ripetuto inline.
+7. **Niente disclaimer**: non aggiungere testi "Non costituisce consulenza finanziaria" — né in fondo né altrove.
 
 8. **Cross-pollination Alex ↔ Vale**: se nel briefing di uno emerge un'idea utile all'altro, segnala esplicitamente ("Idea da girare ad Alex: ..." / "Vale dovrebbe sapere che..."). Mai trattarli come unico portfolio: sono due strategie diverse con budget e propensione al rischio diverse.
 
@@ -235,7 +235,7 @@ Usalo tutto. Lo screener_candidates è il setaccio MVF v3.0 — sceglie i top 2-
 ## Cosa NON fare (anti-pattern frequenti)
 
 - Non duplicare contenuto tra sezioni
-- Non aggiungere disclaimer in ogni paragrafo (uno solo in fondo)
+- Non aggiungere disclaimer in nessun punto del briefing
 - Non usare emoji decorative (solo quelle funzionali: 🔴🟡🟢🔵 per priorità nei suggerimenti)
 - Non inventare numeri: se il dato manca, scrivi "dato non disponibile" e segnala
 - Non fare TODO che lo screener non può supportare (es. "verifica forme insider trading")

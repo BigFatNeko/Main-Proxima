@@ -201,14 +201,34 @@ def fetch_market_snapshot() -> dict:
     for label, tkr in indices.items():
         try:
             t = yf.Ticker(tkr)
-            hist = t.history(period="2d")
-            if not hist.empty:
-                close = hist["Close"].iloc[-1]
-                prev = hist["Close"].iloc[-2] if len(hist) > 1 else close
-                change = (close - prev) / prev * 100 if prev else 0
+            close = None
+            # Try fast_info first (no crumb needed, works for most instruments)
+            fi = getattr(t, "fast_info", None)
+            if fi is not None:
+                close = getattr(fi, "last_price", None) or getattr(fi, "regularMarketPrice", None)
+            # Fallback: history with longer period for sparse instruments
+            if not close:
+                hist = t.history(period="5d")
+                if not hist.empty:
+                    close = hist["Close"].dropna().iloc[-1]
+            if close:
+                # For change_pct: use previousClose from fast_info or history
+                prev = None
+                if fi is not None:
+                    prev = getattr(fi, "previous_close", None)
+                if not prev:
+                    hist = t.history(period="5d")
+                    closes = hist["Close"].dropna()
+                    if len(closes) >= 2:
+                        prev = closes.iloc[-2]
+                        close = closes.iloc[-1]
+                change = (float(close) - float(prev)) / float(prev) * 100 if prev else 0
                 snap[label] = {"value": round(float(close), 2),
                                "change_pct": round(float(change), 2)}
-        except Exception:
+            else:
+                snap[label] = {"value": None, "change_pct": None}
+        except Exception as e:
+            log.debug("market snapshot %s (%s) err: %s", label, tkr, e)
             snap[label] = {"value": None, "change_pct": None}
     return snap
 

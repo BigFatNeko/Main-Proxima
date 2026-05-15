@@ -1836,7 +1836,7 @@ def _spec_score(sig: CatalystSignals, extra: dict) -> float:
     return round(score, 1)
 
 
-def screen_speculative_universe(tickers: list[str], max_workers: int = 30,
+def screen_speculative_universe(tickers: list[str], max_workers: int = 8,
                                  top_n: int = 30) -> list[SpeculativeCandidate]:
     """Screening a due fasi per Tier 2 (small-cap / catalyst).
 
@@ -2071,7 +2071,7 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
                      *filters,
                  )
                  .order_by("market_cap_basic", ascending=False)
-                 .limit(80))
+                 .limit(15))
             _count, df = q.get_scanner_data()
             if df is None or df.empty:
                 return []
@@ -2123,7 +2123,7 @@ def screen_special_situations(buckets: dict[str, list[str]],
                                tier1_set: set[str],
                                tier2_set: set[str],
                                top_n: int = 15,
-                               max_workers: int = 30) -> list[SpecialCandidate]:
+                               max_workers: int = 8) -> list[SpecialCandidate]:
     """Fase 2 Tier 3: fetch fondamentali e classifica special situations.
 
     Esclude ticker già presenti in Tier 1 o Tier 2 per evitare duplicati.

@@ -40,7 +40,10 @@ FILIERE_DEFINITIONS = {
         "bottleneck_keywords": ["missile", "radar", "satellite", "drone"],
     },
     "uranio_nucleare": {
-        "industries": ["Uranium", "Other Industrial Metals & Mining"],
+        # TradingView non ha "Uranium" come industria separata;
+        # i miner di uranio cadono in "Other Industrial Metals & Mining"
+        "industries": ["Other Industrial Metals & Mining",
+                       "Other Precious Metals & Mining"],
         "min_mcap_m": 50,
         "max_per_filiera": 25,
         "bottleneck_keywords": ["uranium", "nuclear", "fuel cycle"],
@@ -49,14 +52,15 @@ FILIERE_DEFINITIONS = {
         "industries": ["Oil & Gas Integrated", "Oil & Gas E&P",
                        "Oil & Gas Midstream", "Oil & Gas Refining & Marketing",
                        "Oil & Gas Equipment & Services"],
-        "min_mcap_m": 500,
+        "min_mcap_m": 300,
         "max_per_filiera": 35,
         "bottleneck_keywords": ["LNG", "midstream", "pipeline"],
     },
     "rare_earth_metalli": {
+        # "Industrial Metals & Mining" non esiste in TV; si usa "Other Industrial Metals & Mining"
         "industries": ["Other Precious Metals & Mining",
-                       "Industrial Metals & Mining", "Specialty Chemicals",
-                       "Copper"],
+                       "Other Industrial Metals & Mining",
+                       "Specialty Chemicals", "Copper"],
         "min_mcap_m": 100,
         "max_per_filiera": 30,
         "bottleneck_keywords": ["rare earth", "neodymium", "lithium",
@@ -64,15 +68,17 @@ FILIERE_DEFINITIONS = {
     },
     "batterie_litio_storage": {
         "industries": ["Lithium & Battery Tech", "Auto Parts",
-                       "Electrical Equipment & Parts"],
-        "min_mcap_m": 200,
+                       "Electrical Equipment & Parts",
+                       "Specialty Chemicals"],
+        "min_mcap_m": 100,
         "max_per_filiera": 25,
         "bottleneck_keywords": ["battery", "lithium", "storage"],
     },
     "gestione_rifiuti": {
+        # "Environmental & Waste Services" non è un'industria TV standard
         "industries": ["Waste Management",
-                       "Environmental & Waste Services",
-                       "Pollution & Treatment Controls"],
+                       "Pollution & Treatment Controls",
+                       "Engineering & Construction"],
         "min_mcap_m": 200,
         "max_per_filiera": 20,
         "bottleneck_keywords": ["landfill", "recycling", "hazardous"],
@@ -86,7 +92,9 @@ FILIERE_DEFINITIONS = {
         "bottleneck_keywords": ["brand", "distribution"],
     },
     "helium_gas_industriali": {
-        "industries": ["Industrial Distribution", "Specialty Industrial Machinery"],
+        # Air Products, Linde, Air Liquide → Specialty Chemicals in TV
+        "industries": ["Industrial Distribution", "Specialty Industrial Machinery",
+                       "Specialty Chemicals"],
         "min_mcap_m": 300,
         "max_per_filiera": 15,
         "bottleneck_keywords": ["helium", "industrial gas"],
@@ -148,8 +156,8 @@ def screen_filiera_tv(filiera_name: str, definition: dict,
                     "filiera": filiera_name,
                 })
         except Exception as e:
-            log.debug("filiera=%s mkt=%s industry=%s err=%s",
-                      filiera_name, mkt, industry, e)
+            log.warning("filiera=%s mkt=%s industry=%s err=%s",
+                        filiera_name, mkt, industry, e)
         return rows
 
     with ThreadPoolExecutor(max_workers=8) as ex:
@@ -159,6 +167,8 @@ def screen_filiera_tv(filiera_name: str, definition: dict,
                 futs.append(ex.submit(query_one, mkt, industry))
         for fut in as_completed(futs):
             all_rows.extend(fut.result())
+
+    log.info("Filiera %s: %d righe prima di dedup", filiera_name, len(all_rows))
 
     # dedupe per ticker
     seen = set()
