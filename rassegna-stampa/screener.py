@@ -373,62 +373,78 @@ def tv_to_yf_ticker(tv_ticker: str) -> Optional[str]:
     return f"{symbol}{suffix}" if suffix else symbol
 
 
+def _query_one_market(market: str, min_mcap_m: int, min_price: float,
+                       limit: int, sector_filter: Optional[str]) -> list[dict]:
+    """Query TV per un singolo mercato. Ritorna lista di row-dict."""
+    rows: list[dict] = []
+    try:
+        q = (Query()
+             .set_markets(market)
+             .select("name", "close", "market_cap_basic",
+                     "price_earnings_ttm", "sector", "dividends_yield")
+             .where(
+                 Column("market_cap_basic") > min_mcap_m * 1_000_000,
+                 Column("close") > min_price,
+             )
+             .order_by("market_cap_basic", ascending=False)
+             .limit(limit))
+        if sector_filter:
+            q = q.where(Column("sector") == sector_filter)
+        _count, df = q.get_scanner_data()
+        if df is None or df.empty:
+            return rows
+        for _, row in df.iterrows():
+            yf_tkr = tv_to_yf_ticker(row["ticker"])
+            if yf_tkr is None:
+                continue
+            rows.append({
+                "yf_ticker": yf_tkr,
+                "market_cap": row.get("market_cap_basic") or 0,
+                "pe": row.get("price_earnings_ttm"),
+                "div_yield": row.get("dividends_yield") or 0,
+            })
+    except Exception as e:
+        log.debug("TV query fallita market=%s: %s", market, e)
+    return rows
+
+
 def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
                                 min_price: float = 1.0, limit_per_market: int = 100,
                                 sector_filter: Optional[str] = None,
                                 total_limit: Optional[int] = None) -> list[str]:
     """Auto-build universe da TradingView in formato yfinance.
 
-    Ordina per composite score (dividend yield + value PE, non solo market cap)
-    così le mid/small-cap di qualità non vengono penalizzate.
-    total_limit: cap finale prima di passare a yfinance.
+    Query per singolo mercato in parallelo (ThreadPoolExecutor) — questo è
+    critico: la query multi-mercato con set_markets(*many) ritorna solo i top
+    globali per market cap (~200-300 totali). Le query per-mercato danno
+    `limit_per_market` titoli locali per ciascun mercato, coprendo mid/small-cap
+    che altrimenti verrebbero escluse.
     """
     if not TV_OK:
         log.error("tradingview-screener non installato.")
         return []
     markets = TV_MARKETS.get(region, ["america"])
-    log.info("Universe TV: region=%s, mercati=%d", region, len(markets))
+    log.info("Universe TV: region=%s, %d mercati × %d righe = max %d ticker",
+             region, len(markets), limit_per_market, len(markets) * limit_per_market)
 
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     all_rows: list[dict] = []
-    failed = []
 
-    chunks = ([TV_MARKETS["US"], TV_MARKETS["EU"], TV_MARKETS["ASIA"]]
-              if region == "GLOBAL" else [markets])
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futs = {ex.submit(_query_one_market, mkt, min_mcap_m, min_price,
+                          limit_per_market, sector_filter): mkt
+                for mkt in markets}
+        ok, fail = 0, 0
+        for fut in as_completed(futs):
+            rows = fut.result()
+            if rows:
+                all_rows.extend(rows)
+                ok += 1
+            else:
+                fail += 1
 
-    for chunk in chunks:
-        try:
-            q = (Query()
-                 .set_markets(*chunk)
-                 .select("name", "close", "market_cap_basic",
-                         "price_earnings_ttm", "sector", "dividends_yield")
-                 .where(
-                     Column("market_cap_basic") > min_mcap_m * 1_000_000,
-                     Column("close") > min_price,
-                 )
-                 .order_by("market_cap_basic", ascending=False)
-                 .limit(limit_per_market * len(chunk)))
-            if sector_filter:
-                q = q.where(Column("sector") == sector_filter)
-            _count, df = q.get_scanner_data()
-            if df is None or df.empty:
-                continue
-            for _, row in df.iterrows():
-                yf_tkr = tv_to_yf_ticker(row["ticker"])
-                if yf_tkr is None:
-                    failed.append(row["ticker"])
-                    continue
-                all_rows.append({
-                    "yf_ticker": yf_tkr,
-                    "market_cap": row.get("market_cap_basic") or 0,
-                    "pe": row.get("price_earnings_ttm"),
-                    "div_yield": row.get("dividends_yield") or 0,
-                })
-        except Exception as e:
-            log.warning("TradingView query fallita per %s: %s", chunk, e)
-
-    if failed:
-        log.info("Exchange non mappati (skipped): %d (es. %s)",
-                 len(failed), ", ".join(failed[:3]))
+    log.info("TV: %d mercati OK, %d falliti, %d righe totali pre-dedup",
+             ok, fail, len(all_rows))
 
     # Deduplica
     seen: set[str] = set()
@@ -443,14 +459,14 @@ def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
         s = 0.0
         dy = r["div_yield"]
         if dy > 0:
-            s += min(dy * 10, 4.0)          # max 4 pt (yield 4%+)
+            s += min(dy * 10, 4.0)
         pe = r["pe"]
         if pe and 5 < pe < 40:
-            s += (40 - pe) / 40 * 3.0       # max 3 pt (PE basso)
+            s += (40 - pe) / 40 * 3.0
         mc = r["market_cap"]
-        if 1e9 < mc <= 1e10:                 # mid-cap: leggero bonus
+        if 1e9 < mc <= 1e10:
             s += 1.0
-        elif mc > 1e10:                      # large-cap: mezzo punto
+        elif mc > 1e10:
             s += 0.5
         return s
 
@@ -1466,6 +1482,22 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
 # SEZIONE 8 — PIPELINE
 # =============================================================================
 
+def _refresh_yfinance_session() -> None:
+    """Rinnova la sessione yfinance per evitare errori 401/crumb scaduto.
+
+    Dopo molte richieste parallele Yahoo Finance invalida il crumb.
+    Questo chiama yf.Ticker su un ticker noto per forzare un nuovo handshake.
+    """
+    try:
+        import time
+        time.sleep(2)  # breve pausa prima del refresh
+        t = yf.Ticker("AAPL")
+        _ = t.info.get("marketCap")
+        log.info("yfinance session refreshed OK")
+    except Exception as e:
+        log.debug("yfinance session refresh fallito (non critico): %s", e)
+
+
 def screen_ticker(ticker):
     data = fetch_data(ticker)
     if data is None:
@@ -2345,6 +2377,10 @@ def main():
 
     tier1_set = set(tickers)
 
+    # Refresh sessione yfinance tra i tier per evitare 401 Unauthorized
+    # (il crumb Yahoo Finance si invalida dopo molte richieste parallele)
+    _refresh_yfinance_session()
+
     # ---- Tier 2: Speculative / Catalyst Universe ----
     spec_cands: list[SpeculativeCandidate] = []
     tier2_set: set[str] = set()
@@ -2355,11 +2391,14 @@ def main():
             spec_tickers_new = [t for t in spec_tickers if t not in tier1_set]
             log.info("Tier 2: %d ticker nuovi (esclusi %d già in Tier 1)",
                      len(spec_tickers_new), len(spec_tickers) - len(spec_tickers_new))
-            spec_cands = screen_speculative_universe(spec_tickers_new, top_n=args.top_speculative)
+            spec_cands = screen_speculative_universe(spec_tickers_new, top_n=args.top_speculative,
+                                                      max_workers=15)
             tier2_set = {sc.ticker for sc in spec_cands}
             log.info("Tier 2 candidati: %d", len(spec_cands))
         else:
             log.warning("Tier 2 universe vuoto.")
+
+    _refresh_yfinance_session()
 
     # ---- Tier 3: Special Situations ----
     special_cands: list[SpecialCandidate] = []
@@ -2368,7 +2407,8 @@ def main():
         sp_buckets = build_special_situations_tv(region=args.region)
         if any(sp_buckets.values()):
             special_cands = screen_special_situations(
-                sp_buckets, tier1_set, tier2_set, top_n=args.top_special
+                sp_buckets, tier1_set, tier2_set, top_n=args.top_special,
+                max_workers=15,
             )
             log.info("Tier 3 special situations: %d", len(special_cands))
         else:
