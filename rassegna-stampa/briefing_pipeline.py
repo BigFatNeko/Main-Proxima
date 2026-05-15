@@ -92,9 +92,10 @@ def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
         "--top", "500",            # MVF v3.0 completa su top 500
         "--top-speculative", "30",
         "--top-special", "20",
-        # universe: 150 righe × ~30 mercati ≈ 3-4k pre-dedup, cap 2500 ticker
-        "--limit-per-market", "150",
-        "--universe-cap", "2500",
+        # universe: pre-filtri TV (PE 0-80, vol>10k) × 50 righe/mercato → cap 600
+        # Mantiene yfinance sotto la soglia di rate-limit (~600 req Phase 1)
+        "--limit-per-market", "50",
+        "--universe-cap", "600",
         "--output", str(SCREENER_OUTPUT_DIR),
     ]
     try:

@@ -375,16 +375,26 @@ def tv_to_yf_ticker(tv_ticker: str) -> Optional[str]:
 
 def _query_one_market(market: str, min_mcap_m: int, min_price: float,
                        limit: int, sector_filter: Optional[str]) -> list[dict]:
-    """Query TV per un singolo mercato. Ritorna lista di row-dict."""
+    """Query TV per un singolo mercato con pre-filtri qualità. Ritorna lista di row-dict.
+
+    Pre-filtri TV (riducono significativamente l'universo prima di toccare yfinance):
+    - PE > 0 AND PE < 80  → esclude loss-making e mega-growth costosi
+    - volume > 10000      → esclude illiquidi che yfinance non sa gestire
+    Questo porta l'universo da ~2500 a ~200-300 ticker dove yfinance non viene saturato.
+    """
     rows: list[dict] = []
     try:
         q = (Query()
              .set_markets(market)
              .select("name", "close", "market_cap_basic",
-                     "price_earnings_ttm", "sector", "dividends_yield")
+                     "price_earnings_ttm", "sector", "dividends_yield",
+                     "volume")
              .where(
                  Column("market_cap_basic") > min_mcap_m * 1_000_000,
                  Column("close") > min_price,
+                 Column("price_earnings_ttm") > 0,
+                 Column("price_earnings_ttm") < 80,
+                 Column("volume") > 10000,
              )
              .order_by("market_cap_basic", ascending=False)
              .limit(limit))
@@ -1483,19 +1493,42 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
 # =============================================================================
 
 def _refresh_yfinance_session() -> None:
-    """Rinnova la sessione yfinance per evitare errori 401/crumb scaduto.
+    """Forza un nuovo crumb Yahoo Finance per evitare errori 401.
 
-    Dopo molte richieste parallele Yahoo Finance invalida il crumb.
-    Questo chiama yf.Ticker su un ticker noto per forzare un nuovo handshake.
+    Il crumb (cookie di sessione) viene invalidato dopo molte richieste
+    parallele. yfinance lo cachea a livello di modulo — per resettarlo
+    bisogna cancellare gli attributi interni del CrumbManager o del session
+    manager. Come fallback, forza yf.download() che inizializza sempre
+    una sessione pulita.
     """
+    import time
+    time.sleep(3)
     try:
-        import time
-        time.sleep(2)  # breve pausa prima del refresh
-        t = yf.Ticker("AAPL")
-        _ = t.info.get("marketCap")
-        log.info("yfinance session refreshed OK")
+        # Tentativo 1: reset interno CrumbManager (yfinance 0.2.x)
+        import yfinance.utils as yf_utils
+        for attr in ("_crumb", "_crumb_timestamp", "_CRUMB",
+                     "_cookies", "_session"):
+            if hasattr(yf_utils, attr):
+                try:
+                    setattr(yf_utils, attr, None)
+                except Exception:
+                    pass
+        # Tentativo 2: reset via yf.base
+        import yfinance.base as yf_base
+        for attr in ("_crumb", "_session", "session"):
+            if hasattr(yf_base, attr):
+                try:
+                    setattr(yf_base, attr, None)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    try:
+        # Trigger fresh session: yf.download forza sempre un nuovo handshake
+        yf.download("AAPL", period="1d", progress=False, auto_adjust=True)
+        log.info("yfinance session refreshed OK (download handshake)")
     except Exception as e:
-        log.debug("yfinance session refresh fallito (non critico): %s", e)
+        log.debug("yfinance session refresh warning: %s", e)
 
 
 def screen_ticker(ticker):
@@ -1530,16 +1563,15 @@ def screen_ticker(ticker):
     return c
 
 
-def screen_universe(tickers, strategy="all", max_workers=15):
+def screen_universe(tickers, strategy="all", max_workers=8):
     """Screening a due fasi per minimizzare le chiamate HTTP totali.
 
     Fase 1: t.info per tutti (1 call/ticker) → quick filter → ~40% eliminati
     Fase 2: fondamentali completi solo sui superstiti (5 call/ticker)
-    Risparmio: ~40% delle chiamate HTTP totali vs approccio monofase.
 
-    Workers ridotti a 15 (era 30): Yahoo Finance blocca con >250 req/sec
-    sostenuti — con 30 worker e migliaia di ticker il crumb viene
-    invalidato e Phase 2 fallisce in massa.
+    Workers a 8: Yahoo Finance blocca con >~50 req/sec sostenuti (crumb
+    invalidato). Con pre-filtri TV l'universo è già ~300-600 ticker, quindi
+    8 workers bilanciano velocità e stabilità (~40 req/s).
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -2334,10 +2366,10 @@ def main():
                    help="Top N candidati con valutazione MVF v3.0 completa (default 500)")
     p.add_argument("--top-speculative", type=int, default=25)
     p.add_argument("--top-special", type=int, default=15)
-    p.add_argument("--limit-per-market", type=int, default=150,
-                   help="Righe TV per singolo mercato (default 150 → ~3-4k pre-dedup)")
-    p.add_argument("--universe-cap", type=int, default=2500,
-                   help="Cap finale universe Tier 1 prima di yfinance (default 2500)")
+    p.add_argument("--limit-per-market", type=int, default=50,
+                   help="Righe TV per singolo mercato dopo pre-filtri qualità (default 50)")
+    p.add_argument("--universe-cap", type=int, default=600,
+                   help="Cap finale universe Tier 1 prima di yfinance (default 600)")
     p.add_argument("--no-speculative", action="store_true")
     p.add_argument("--no-special", action="store_true")
     p.add_argument("--no-market-context", action="store_true")
@@ -2348,6 +2380,10 @@ def main():
     args = p.parse_args()
 
     CONFIG["min_market_cap_million"] = args.min_mcap
+
+    # Inizializza sessione yfinance prima di qualsiasi chiamata
+    log.info("Inizializzazione sessione yfinance...")
+    _refresh_yfinance_session()
 
     # ---- Market Context Layer (in parallelo con Tier 1 TV fetch) ----
     market_ctx: dict = {}
