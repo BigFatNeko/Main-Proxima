@@ -85,11 +85,13 @@ def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
         log.info("Step 1/6: screener cache hit (%s), skip.", json_path.name)
         return json_path
 
-    log.info("Step 1/6: lancio screener (region=%s, strategy=%s)...", region, strategy)
+    log.info("Step 1/6: lancio screener MVF v3.0 (region=%s, strategy=%s)...", region, strategy)
     cmd = [
         sys.executable, str(SCRIPT_DIR / "screener.py"),
         "--region", region, "--strategy", strategy,
-        "--top", "40", "--top-speculative", "25", "--top-special", "15",
+        "--top", "500",            # MVF v3.0 completa su top 500
+        "--top-speculative", "30",
+        "--top-special", "20",
         "--limit-per-market", "400",
         "--output", str(SCREENER_OUTPUT_DIR),
     ]
@@ -217,11 +219,83 @@ def build_system_prompt() -> str:
     return SYSTEM_PROMPT_PATH.read_text()
 
 
+def _mvf_synthesis(c: dict) -> dict:
+    """Estrai solo i 5 campi richiesti per il briefing MVF v3.0:
+    voto finale, valore intrinseco, valore relativo, dividendi, prezzo ideale + MoS."""
+    val = c.get("mvf_valuation") or {}
+    metrics = c.get("metrics") or {}
+    return {
+        "ticker": c.get("ticker"),
+        "name": c.get("name"),
+        "sector": c.get("sector"),
+        "industry": c.get("industry"),
+        "price": c.get("price"),
+        "currency": c.get("currency"),
+        "filiera": c.get("filiera_tag"),
+        # 1. VOTO FINALE
+        "voto_mvf_100": c.get("mvf_vote_100"),
+        "confidence_score_100": (c.get("confidence_score") or {}).get("total"),
+        # 2. VALORE INTRINSECO (media ponderata 5 modelli)
+        "valore_intrinseco": c.get("intrinsic_value"),
+        "modelli_fair_value": {
+            "graham": val.get("graham_fv"),
+            "ddm": val.get("ddm_2stage_fv") or val.get("ddm_1stage_fv"),
+            "dcf": val.get("dcf_2stage_fv"),
+            "epv": val.get("epv_fv"),
+        },
+        # 3. VALORE RELATIVO (multipli vs settore)
+        "valore_relativo": {
+            "pe": metrics.get("ev_ebitda") and round(c.get("metrics", {}).get("ev_ebitda", 0), 2),
+            "pe_ratio": c.get("metrics", {}).get("pe_ratio"),
+            "ev_ebitda": metrics.get("ev_ebitda"),
+            "fcf_yield": metrics.get("fcf_yield"),
+            "pb": metrics.get("pb_ratio"),
+            "ps": metrics.get("ps_ratio"),
+        },
+        # 4. DIVIDENDI
+        "dividendi": {
+            "yield": metrics.get("dividend_yield"),
+            "payout": metrics.get("payout_ratio"),
+            "growth_5y": metrics.get("dividend_growth_5y"),
+            "buyback_yield": metrics.get("buyback_yield"),
+        },
+        # 5. PREZZO IDEALE DI ACQUISTO CON MoS
+        "prezzo_ideale_acquisto": c.get("ideal_purchase_price_mos"),
+        "margin_of_safety_pct": c.get("margin_of_safety_pct"),
+        "upside_vs_current": val.get("upside_at_current_pct"),
+        # Red flags critici (solo flag se presenti)
+        "red_flags_critici": (c.get("mvf_red_flags") or {}).get("critical", []),
+    }
+
+
 def build_user_prompt(user_data, screener_data, market, todo, previous, mode):
     tier1 = screener_data.get("candidates", [])
     tier2 = screener_data.get("speculative_candidates", [])
     tier3 = screener_data.get("special_situations", [])
+    filiere = screener_data.get("filiere_strategiche", {})
     ctx   = screener_data.get("market_context", {})
+
+    # Top 40 per la rassegna stampa (di 500 analizzati), in formato MVF v3.0 sintetico
+    tier1_top = sorted(tier1, key=lambda c: c.get("mvf_vote_100") or 0, reverse=True)[:40]
+    tier1_mvf = [_mvf_synthesis(c) for c in tier1_top]
+
+    # Filiere: top 8 per filiera con dati base TV
+    filiere_section = ""
+    if filiere:
+        fil_blocks = []
+        for fname, candidates in filiere.items():
+            if not candidates:
+                continue
+            top_per_fil = candidates[:8]
+            fil_blocks.append(f"  {fname.upper()} ({len(candidates)} totali, top 8 mostrati):")
+            for cand in top_per_fil:
+                fil_blocks.append(
+                    f"    - {cand.get('tv_ticker')} | {cand.get('name','')[:40]} | "
+                    f"mcap=${cand.get('market_cap', 0)/1e9:.1f}B | "
+                    f"PE={cand.get('pe', 'n/a')} | DY={(cand.get('div_yield') or 0)*100:.1f}% | "
+                    f"relvol={cand.get('rel_vol', 1):.1f}"
+                )
+        filiere_section = "FILIERE STRATEGICHE (screener dedicato per settori cruciali):\n" + "\n".join(fil_blocks)
 
     # Market context: leaders/laggards + macro summary
     ctx_section = ""
@@ -268,11 +342,19 @@ PORTAFOGLIO:
 MARKET SNAPSHOT (real-time):
 {json.dumps(market, indent=2)}
 
-TIER 1 — SCREENER QUALITY (top 40 candidati, score composito MVF v3.0):
-Include Piotroski F-score, moat score, DCF upside, filiera tag, valuation multiples,
-sector-relative PE/FCF, earnings acceleration.
-{json.dumps(tier1, indent=2, default=str)[:10000]}
+TIER 1 — TOP 40 CANDIDATI MVF v3.0 (di 500 analizzati a fondo).
+Per ogni titolo hai SOLO i 5 indicatori sintetici (per scelta dell'utente):
+1) Voto finale MVF /100  2) Valore intrinseco (media ponderata 5 modelli)
+3) Valore relativo (multipli)  4) Dividendi  5) Prezzo ideale di acquisto + MoS
+
+REGOLA OUTPUT: nella rassegna stampa cita SOLO questi 5 valori per titolo
+(non l'intera analisi MVF). Tutti gli altri dati MVF non vengono mostrati al
+lettore — il calcolo è stato fatto, ma l'output è volutamente compatto.
+
+{json.dumps(tier1_mvf, indent=2, default=str)[:15000]}
 {spec_section}{special_section}
+{filiere_section}
+
 TODO DEL GIORNO:
 {todo[:3000]}
 
@@ -280,6 +362,12 @@ BRIEFING PRECEDENTI ({len(previous)} disponibili):
 {json.dumps([p['date'] for p in previous], indent=2)}
 
 Produci markdown strutturato secondo le specifiche del system prompt.
+Per la sezione "Occasioni in filiere strategiche e colli di bottiglia":
+- Usa i candidati delle filiere strategiche sopra
+- Identifica per ciascuna filiera 2-3 titoli più interessanti
+- Spiega il "perché" della filiera (bottleneck, scarsità, posizionamento)
+- Riporta multipli e momentum dei candidati
+
 Usa il market context per contestualizzare (es. "in un mercato dove XLE +12% YTD...").
 """
 

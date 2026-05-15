@@ -62,23 +62,36 @@ d) **Suggerimenti per il portafogli** — 4 card brevi: 🔴 Da rivedere / 🟡 
 
 2-3 news strutturate identicamente: titolo H3, 3-4 frasi di corpo, blockquote `> **Perché ti riguarda:**` 3-5 bullet, fonte primaria verificata in fondo. Include geopolitica, banche centrali, energia/oil, conflitti, elezioni, sanzioni.
 
-### 3. Filiere strategiche — colli di bottiglia non prezzati
+### 3. Occasioni MVF v3.0 — filiere strategiche e colli di bottiglia
 
-1-2 candidati di filiere dove il mercato non ha ancora prezzato il bottleneck. **Obbligatorio**: pro/contro al prezzo corrente. Format:
+Questa è la **sezione screener** del briefing. Lo screener MVF v3.0 ha già analizzato 500 titoli a fondo (5 modelli di valutazione, voto pesato, Confidence Score, red flags) e per ciascuno restituisce solo 5 dati sintetici che vanno mostrati: voto finale, valore intrinseco, valore relativo, dividendi, prezzo ideale di acquisto + MoS.
+
+**Struttura obbligatoria della sezione**:
+
+Per OGNI filiera con candidati disponibili (semiconduttori, difesa, uranio_nucleare, energia_oilgas, rare_earth_metalli, batterie_litio_storage, gestione_rifiuti, consumer_staples, helium_gas_industriali) produci un blocco così:
 
 ```markdown
-### <Titolo filiera>
+### <Nome filiera> — <una frase sul bottleneck/scarsità>
 
-<3-4 frasi descrittive>
+<2-3 frasi su perché la filiera ora ha rilevanza (catalisi geopolitica, scarsità materia prima, consolidamento, regolamentazione)>
 
-**Pro al prezzo corrente:** ...
-**Contro al prezzo corrente:** ...
-**Verdetto:** direzionale / saldo reale / aspetta
+**Candidati screener** (top 2-3 per voto MVF):
+
+| Ticker | Nome | Voto /100 | V. intrinseco | V. relativo (PE/EV-EBITDA) | Dividendo | Prezzo ideale (MoS) |
+|---|---|---|---|---|---|---|
+| MSFT | Microsoft | 87 | $445 | 28x / 22x | 0.6% pay 25% | $312 (30%) |
+| ... | ... | ... | ... | ... | ... | ... |
+
+**Verdetto filiera**: direzionale / saldo reale / aspetta. <Una riga di motivazione.>
 ```
 
-Filiere che devi monitorare di default: chip (CoWoS, photoresist EUV, substrato HBM), uranio, energia, difesa, gestione rifiuti, consumer staples, rare earths, helium, batterie/litio. Attenzione alle filiere SILENZIOSE (waste management può muovere titoli in modo importante e nessuno lo nota).
+**REGOLA INVIOLABILE**: per ogni candidato MVF mostra SOLO questi 5 campi (voto, V intrinseco, V relativo, dividendi, prezzo ideale + MoS). Tutti gli altri parametri sono stati calcolati ma NON devono apparire nel briefing (scelta esplicita dell'utente per output compatto).
 
-**Onestà metodologica**: se non riesci a trovare candidati genuinamente sotto-prezzati, dillo. Meglio segnalare il vuoto che inventare nomi.
+**Filiere silenziose**: dedica attenzione a settori che si muovono senza copertura (waste management, helium industriale, fornitori chip secondari). Sono spesso i veri colli di bottiglia.
+
+**Onestà metodologica**: se una filiera non ha candidati con voto MVF > 50, segnala "filiera presente nello screener ma nessun candidato di qualità oggi". Meglio il vuoto che nomi inventati.
+
+**Cross-tier**: se un Tier 1 (quality) appartiene a una filiera, includilo nella tabella di quella filiera. Non duplicare in due sezioni.
 
 ### 4. Fintech globale
 

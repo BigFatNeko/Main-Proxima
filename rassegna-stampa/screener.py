@@ -47,6 +47,14 @@ except ImportError:
     TV_OK = False
     log.warning("tradingview-screener non installato. pip install tradingview-screener")
 
+# MVF v3.0 — modulo valutazione finanziaria
+try:
+    from . import mvf_valuation as mvf
+    from . import filiere_screener as filiere_mod
+except ImportError:
+    import mvf_valuation as mvf
+    import filiere_screener as filiere_mod
+
 try:
     from finvizfinance.screener.overview import Overview as FinvizOverview
     FINVIZ_OK = True
@@ -273,6 +281,17 @@ class Candidate:
     dcf_upside_pct: Optional[float] = None
     filiera_tag: Optional[str] = None
     earnings_acceleration: Optional[float] = None
+    # MVF v3.0 — valutazione completa
+    mvf_vote_100: Optional[float] = None
+    mvf_valuation: Optional[dict] = None
+    mvf_red_flags: Optional[dict] = None
+    confidence_score: Optional[dict] = None
+    variation_5y: Optional[dict] = None
+    # Display fields per briefing (sintesi)
+    intrinsic_value: Optional[float] = None
+    relative_value_summary: Optional[dict] = None
+    ideal_purchase_price_mos: Optional[float] = None
+    margin_of_safety_pct: Optional[float] = None
 
     @property
     def passes_hard_filters(self) -> bool:
@@ -685,16 +704,29 @@ def fetch_info_only(ticker: str) -> Optional[dict]:
 
 
 def passes_quick_filter(info: dict) -> bool:
-    """Filtro rapido su info: elimina solo i chiari rejects, non le opportunità."""
+    """Filtro rapido MVF v3.0-aware: elimina solo i chiari rejects.
+
+    Più permissivo della v2: lascia passare situazioni ambigue per analisi MVF.
+    Hard rejects: prezzo < $0.50, market cap < $300M, perdite catastrofiche,
+    debito/equity > 5 (zona Altman pericolosa), pension/healthcare obs.
+    """
     price = info.get("currentPrice") or info.get("regularMarketPrice", 0) or 0
     if price < CONFIG["min_price_usd"]:
         return False
     mc = info.get("marketCap", 0) or 0
     if mc < CONFIG["min_market_cap_million"] * 1e6:
         return False
-    # Elimina solo perdite estreme (> -50% net margin) — preserva growth companies
+    # Elimina solo perdite estreme (> -75% net margin) — preserva turnaround
     margin = info.get("profitMargins")
-    if margin is not None and margin < -0.50:
+    if margin is not None and margin < -0.75:
+        return False
+    # D/E catastrofico — elimina zombi finanziari evidenti
+    de = info.get("debtToEquity")
+    if de is not None and de > 800:  # debtToEquity yfinance è in %
+        return False
+    # Volume troppo basso → illiquido
+    avg_vol = info.get("averageVolume10days") or 0
+    if avg_vol > 0 and avg_vol < 5000:
         return False
     return True
 
@@ -1142,6 +1174,295 @@ def compute_composite_score(c):
 
 
 # =============================================================================
+# SEZIONE 7.5 — MVF v3.0 VALUATION (5 modelli + scoring + confidence)
+# =============================================================================
+
+def _series_to_list(df, row_name, n: int = 5) -> list:
+    """Estrae una serie storica da financials/cashflow come lista (ultimo→primo)."""
+    if df is None or df.empty:
+        return []
+    aliases = {
+        "Total Revenue": ["Total Revenue", "Revenue"],
+        "Net Income": ["Net Income"],
+        "Free Cash Flow": ["Free Cash Flow"],
+        "Operating Income": ["Operating Income", "EBIT"],
+        "Working Capital": ["Working Capital"],
+    }
+    for key in aliases.get(row_name, [row_name]):
+        if key in df.index:
+            vals = df.loc[key].head(n).tolist()
+            return [float(v) if pd.notna(v) else None for v in vals]
+    return []
+
+
+def apply_mvf_valuation(c, data: dict, market: str) -> None:
+    """Applica MVF v3.0 a un candidato. Modifica c in-place.
+
+    Calcola: WACC, 5 modelli di valutazione, scenari, sensitivity,
+    voto MVF /100, Confidence Score, red flags, prezzo ideale + MoS.
+    """
+    info = data["info"]
+    fin = data["financials"]
+    bs = data["balance_sheet"]
+    cf = data["cashflow"]
+    dividends = data["dividends"]
+    hist = data["history"]
+
+    notes = []
+
+    # === STEP 1: WACC via CAPM esteso ===
+    beta = info.get("beta")
+    re_, beta_used = mvf.compute_cost_of_equity(market, beta)
+    mc = info.get("marketCap") or 0
+    total_debt = safe_row(bs, "Total Debt") or 0
+    interest_exp = safe_row(fin, "Interest Expense")
+    if interest_exp is None:
+        interest_exp = abs(safe_row(fin, "Interest Expense Non Operating") or 0)
+    tax_rate = c.metrics.tax_rate
+    wacc, rd_at = mvf.compute_wacc(mc, total_debt, interest_exp, tax_rate, re_)
+    if wacc is None:
+        wacc = re_  # fallback
+
+    # === STEP 2: ROIC − WACC (Economic Spread) ===
+    economic_spread = None
+    es_neg_2y = False
+    if c.metrics.roic is not None and wacc is not None:
+        economic_spread = c.metrics.roic - wacc
+        # Proxy 2y: se ROIC corrente < WACC E earnings_acceleration negativo
+        # → assumiamo 2y negativi (proxy semplice senza riproiezione storica WACC)
+        if economic_spread < 0 and (c.earnings_acceleration or 0) < 0:
+            es_neg_2y = True
+
+    # === STEP 3: Dati per modelli di valutazione ===
+    shares = info.get("sharesOutstanding") or 1
+    cash = safe_row(bs, "Cash And Cash Equivalents") or 0
+    net_debt = total_debt - cash
+    fcf_0 = safe_row(cf, "Free Cash Flow")
+    fcf_series = _series_to_list(cf, "Free Cash Flow", 5)
+    rev_series = _series_to_list(fin, "Total Revenue", 5)
+    nm_series = []
+    if rev_series:
+        ni_series = _series_to_list(fin, "Net Income", 5)
+        for i, ni in enumerate(ni_series):
+            if i < len(rev_series) and rev_series[i] and rev_series[i] > 0 and ni is not None:
+                nm_series.append(ni / rev_series[i])
+            else:
+                nm_series.append(None)
+    eps = info.get("trailingEps")
+    eps_5y_growth = None
+    earnings_growth_info = info.get("earningsGrowth") or info.get("earningsQuarterlyGrowth")
+    if earnings_growth_info is not None:
+        eps_5y_growth = earnings_growth_info
+
+    # Operating income normalizzato per EPV (media ultimi 5 anni)
+    oi_series = _series_to_list(fin, "Operating Income", 5)
+    clean_oi = [v for v in oi_series if v is not None and v > 0]
+    oi_norm = sum(clean_oi) / len(clean_oi) if clean_oi else None
+
+    # Dividendi
+    d0 = info.get("trailingAnnualDividendRate") or 0
+    has_div = d0 > 0
+    g_div_5y = c.metrics.dividend_growth_5y
+    # g sostenibile = ROE × (1 - payout)
+    payout = c.metrics.payout_ratio
+    g_sost = None
+    if c.metrics.roe is not None and payout is not None:
+        g_sost = c.metrics.roe * (1 - payout)
+    g_div = None
+    if g_div_5y is not None and g_sost is not None:
+        g_div = min(g_div_5y, g_sost, 0.04)
+    elif g_div_5y is not None:
+        g_div = min(g_div_5y, 0.04)
+    elif g_sost is not None:
+        g_div = min(g_sost, 0.04)
+
+    # === STEP 4: 5 modelli ===
+    is_us = market == "US"
+    val = mvf.MVFValuation()
+    val.wacc = round(wacc, 4) if wacc else None
+    val.cost_of_equity = round(re_, 4)
+    val.cost_of_debt_at = round(rd_at, 4) if rd_at else None
+    val.beta_used = round(beta_used, 2)
+    val.economic_spread = round(economic_spread, 4) if economic_spread is not None else None
+    val.economic_spread_negative_2y = es_neg_2y
+
+    # Graham
+    val.graham_fv = round(mvf.graham_fair_value(eps, eps_5y_growth, market, is_us) or 0, 2) or None
+    if val.graham_fv == 0:
+        val.graham_fv = None
+
+    # DDM (solo se paga dividendi)
+    if has_div and g_div is not None:
+        val.ddm_1stage_fv = mvf.ddm_1stage(d0, g_div, re_)
+        if val.ddm_1stage_fv:
+            val.ddm_1stage_fv = round(val.ddm_1stage_fv, 2)
+        if g_div_5y is not None:
+            g1 = min(g_div_5y, 0.15)
+            g2 = min(g_sost or 0.03, 0.04) if g_sost else 0.03
+            val.ddm_2stage_fv = mvf.ddm_2stage(d0, g1, g2, re_)
+            if val.ddm_2stage_fv:
+                val.ddm_2stage_fv = round(val.ddm_2stage_fv, 2)
+
+    # DCF 2-stage 10y
+    g1_dcf = None
+    if eps_5y_growth is not None:
+        g1_dcf = min(max(eps_5y_growth, -0.05), 0.20)
+    elif c.metrics.price_cagr_5y is not None:
+        g1_dcf = min(max(c.metrics.price_cagr_5y * 0.7, -0.05), 0.15)
+    else:
+        g1_dcf = 0.05
+    g_term = min(0.02, mvf.RISK_FREE_RATE.get(market, 0.04))
+
+    if fcf_0 and fcf_0 > 0 and wacc and wacc > g_term:
+        val.dcf_2stage_fv = mvf.dcf_2stage(fcf_0, g1_dcf, g_term, wacc, shares, net_debt)
+        if val.dcf_2stage_fv:
+            val.dcf_2stage_fv = round(val.dcf_2stage_fv, 2)
+        # Sensitivity 5x5
+        val.dcf_sensitivity = mvf.dcf_sensitivity_table(
+            fcf_0, g1_dcf, wacc, g_term, shares, net_debt)
+        # Scenari
+        bull, base, bear, exp = mvf.scenario_analysis(
+            fcf_0, g1_dcf, wacc, shares, net_debt, g_term)
+        val.bull_fv = round(bull, 2) if bull else None
+        val.base_fv = round(base, 2) if base else None
+        val.bear_fv = round(bear, 2) if bear else None
+        val.expected_fv = round(exp, 2) if exp else None
+        # Reverse DCF
+        val.reverse_dcf_implied_g = mvf.reverse_dcf_implied_growth(
+            mc, net_debt, fcf_0, wacc, g_term)
+
+    # EPV
+    if oi_norm and wacc:
+        val.epv_fv = mvf.epv_fair_value(oi_norm, tax_rate, wacc, shares, net_debt)
+        if val.epv_fv:
+            val.epv_fv = round(val.epv_fv, 2)
+
+    # === STEP 5: Media ponderata + MoS + prezzo ideale ===
+    sector_class = mvf.classify_sector_for_weights(
+        c.sector, c.industry, has_div, fcf_0 is not None and fcf_0 < 0)
+    val.weights_regime = sector_class
+    model_fvs = {
+        "graham": val.graham_fv,
+        "ddm_1stage": val.ddm_1stage_fv,
+        "ddm_2stage": val.ddm_2stage_fv,
+        "dcf": val.dcf_2stage_fv,
+        "epv": val.epv_fv,
+    }
+    wfv, model_weights = mvf.weighted_fair_value(model_fvs, sector_class)
+    val.weighted_fair_value = wfv
+    val.model_weights = {k: round(v, 2) for k, v in model_weights.items()}
+
+    # check dispersione fair value
+    clean_fvs = [v for v in [val.graham_fv, val.ddm_2stage_fv or val.ddm_1stage_fv,
+                              val.dcf_2stage_fv, val.epv_fv] if v is not None and v > 0]
+    if len(clean_fvs) >= 2:
+        import statistics as st
+        med = st.median(clean_fvs)
+        if med > 0:
+            max_dev = max(abs(v - med) / med for v in clean_fvs)
+            if max_dev > 0.30:
+                notes.append(f"divergenza fair value {max_dev:.0%}")
+
+    # Upside vs current price
+    if wfv and c.price and c.price > 0:
+        val.upside_at_current_pct = round((wfv - c.price) / c.price, 4)
+
+    val.notes = notes
+
+    # === STEP 6: Variation % 5y per metriche chiave ===
+    var = mvf.VariationMetrics()
+    gp_series = _series_to_list(fin, "Gross Profit", 5)
+    gm_series = []
+    for i, gp in enumerate(gp_series):
+        if i < len(rev_series) and rev_series[i] and rev_series[i] > 0 and gp is not None:
+            gm_series.append(gp / rev_series[i])
+        else:
+            gm_series.append(None)
+    var.gross_margin_var, _ = mvf.compute_variation_pct(gm_series)
+    var.net_margin_var, var.years_used = mvf.compute_variation_pct(nm_series)
+    # FCF margin series
+    fcfm_series = []
+    for i, fcfv in enumerate(fcf_series):
+        if i < len(rev_series) and rev_series[i] and rev_series[i] > 0 and fcfv is not None:
+            fcfm_series.append(fcfv / rev_series[i])
+        else:
+            fcfm_series.append(None)
+    var.fcf_margin_var, _ = mvf.compute_variation_pct(fcfm_series)
+
+    c.variation_5y = asdict(var)
+
+    # === STEP 7: Confidence Score ===
+    completeness = sum(1 for v in [c.metrics.gross_margin, c.metrics.operating_margin,
+                                    c.metrics.net_margin, c.metrics.roic,
+                                    c.metrics.fcf_margin, c.metrics.roe, eps,
+                                    fcf_0, total_debt] if v is not None) / 9
+    cs = mvf.compute_confidence_score(
+        completeness, fcf_series, c.sector,
+        [val.graham_fv, val.ddm_2stage_fv or val.ddm_1stage_fv,
+         val.dcf_2stage_fv, val.epv_fv],
+        has_quality_audit=True)
+    c.confidence_score = asdict(cs)
+
+    # === STEP 8: Voto MVF /100 ===
+    metrics_dict = asdict(c.metrics)
+    metrics_dict["altman_z"] = c.metrics.altman_z
+    metrics_dict["earnings_quality"] = c.metrics.cash_conversion_ratio
+    metrics_dict["moat_score"] = c.moat_score
+    metrics_dict["insider_trading"] = info.get("heldPercentInsiders", 0) or 0
+    ddm_used = val.ddm_2stage_fv is not None or val.ddm_1stage_fv is not None
+    mvf_vote, breakdown = mvf.compute_mvf_score(
+        metrics_dict, has_div, ddm_used, c.metrics.altman_z, es_neg_2y)
+    c.mvf_vote_100 = mvf_vote
+
+    # === STEP 9: Red Flags ===
+    goodwill = safe_row(bs, "Goodwill")
+    equity = safe_row(bs, "Stockholders Equity")
+    is_tech = "Technology" in (c.sector or "")
+    wc_series = []
+    ca_series = _series_to_list(bs, "Current Assets", 5)
+    cl_series = _series_to_list(bs, "Current Liabilities", 5)
+    for i in range(min(len(ca_series), len(cl_series))):
+        if ca_series[i] is not None and cl_series[i] is not None:
+            wc_series.append(ca_series[i] - cl_series[i])
+        else:
+            wc_series.append(None)
+    sh_now = info.get("sharesOutstanding")
+    sh_old = info.get("floatShares")
+    share_dilution = ((sh_now - sh_old) / sh_old) if (sh_now and sh_old and sh_old > 0) else None
+    rf = mvf.detect_red_flags(
+        metrics=metrics_dict, altman_z=c.metrics.altman_z,
+        fcf_series=fcf_series, net_margin_series=nm_series,
+        economic_spread_neg_2y=es_neg_2y, goodwill=goodwill, equity=equity,
+        is_tech=is_tech, revenue_series=rev_series,
+        accruals=c.metrics.accruals_ratio, ccr=c.metrics.cash_conversion_ratio,
+        share_dilution=share_dilution, payout=payout, roe=c.metrics.roe,
+        cost_of_equity=re_, working_capital_series=wc_series)
+    c.mvf_red_flags = {
+        "critical": [k for k, v in asdict(rf).items() if v is True
+                     and k in ["altman_z_danger", "fcf_negative_3y", "de_above_3",
+                               "net_margin_negative_2y", "economic_spread_negative_2y",
+                               "goodwill_over_50pct_equity", "sbc_over_8pct_tech"]],
+        "warning": [k for k, v in asdict(rf).items() if v is True
+                    and k in ["altman_z_grey", "fcf_negative_1y", "payout_above_100",
+                              "revenue_decline_2y", "insider_selling",
+                              "roe_below_capm", "accruals_above_10pct",
+                              "ccr_below_05", "tax_rate_volatile_low",
+                              "wc_growth_above_revenue", "share_dilution_above_3pct"]],
+    }
+
+    # === STEP 10: MoS dinamica + prezzo ideale ===
+    mos = mvf.margin_of_safety_for_cs(cs.total)
+    val.margin_of_safety_pct = mos
+    if wfv and wfv > 0:
+        val.ideal_purchase_price = mvf.ideal_purchase_price(wfv, mos)
+
+    c.mvf_valuation = asdict(val)
+    c.intrinsic_value = wfv
+    c.ideal_purchase_price_mos = val.ideal_purchase_price
+    c.margin_of_safety_pct = mos
+
+
+# =============================================================================
 # SEZIONE 8 — PIPELINE
 # =============================================================================
 
@@ -1250,6 +1571,11 @@ def screen_universe(tickers, strategy="all", max_workers=30):
                 continue
             if strategy != "all" and not any(tag.startswith(strategy) for tag in c.strategy_tags):
                 continue
+            # === MVF v3.0: valutazione completa (5 modelli + scoring + CS + red flags) ===
+            try:
+                apply_mvf_valuation(c, data, market)
+            except Exception as e:
+                log.debug("MVF valuation fallita per %s: %s", c.ticker, e)
             out.append(c)
 
     return out
@@ -1853,7 +2179,8 @@ def screen_special_situations(buckets: dict[str, list[str]],
 def output_results(cands, out_dir, top_n=30,
                     speculative_cands: Optional[list] = None,
                     special_cands: Optional[list] = None,
-                    market_context: Optional[dict] = None):
+                    market_context: Optional[dict] = None,
+                    filiere_data: Optional[dict] = None):
     cands.sort(key=lambda c: c.composite_score or 0, reverse=True)
     top = cands[:top_n]
     rows = []
@@ -1922,7 +2249,9 @@ def output_results(cands, out_dir, top_n=30,
         "market_context": market_context or {},
         "candidates": [{
             "ticker": c.ticker, "name": c.name, "sector": c.sector,
-            "market": c.market, "tags": c.strategy_tags, "score": c.composite_score,
+            "industry": c.industry, "market": c.market, "currency": c.currency,
+            "price": c.price, "market_cap_M": c.market_cap_million,
+            "tags": c.strategy_tags, "score": c.composite_score,
             "metrics": {k: v for k, v in asdict(c.metrics).items() if v is not None},
             "warnings": [k for k, v in asdict(c.soft_filters).items() if v],
             "notes": c.notes,
@@ -1933,9 +2262,19 @@ def output_results(cands, out_dir, top_n=30,
             "dcf_upside_pct": c.dcf_upside_pct,
             "filiera_tag": c.filiera_tag,
             "earnings_acceleration": c.earnings_acceleration,
+            # MVF v3.0
+            "mvf_vote_100": c.mvf_vote_100,
+            "mvf_valuation": c.mvf_valuation,
+            "mvf_red_flags": c.mvf_red_flags,
+            "confidence_score": c.confidence_score,
+            "variation_5y": c.variation_5y,
+            "intrinsic_value": c.intrinsic_value,
+            "ideal_purchase_price_mos": c.ideal_purchase_price_mos,
+            "margin_of_safety_pct": c.margin_of_safety_pct,
         } for c in top],
         "speculative_candidates": spec_list,
         "special_situations": special_list,
+        "filiere_strategiche": filiere_data or {},
     }
     with open(json_path, "w") as f:
         json.dump(payload, f, indent=2, default=str)
@@ -1953,7 +2292,8 @@ def main():
                    default="GLOBAL")
     p.add_argument("--strategy", choices=["income", "post_news", "quality", "all"], default="all")
     p.add_argument("--min-mcap", type=int, default=CONFIG["min_market_cap_million"])
-    p.add_argument("--top", type=int, default=40)
+    p.add_argument("--top", type=int, default=500,
+                   help="Top N candidati con valutazione MVF v3.0 completa (default 500)")
     p.add_argument("--top-speculative", type=int, default=25)
     p.add_argument("--top-special", type=int, default=15)
     p.add_argument("--limit-per-market", type=int, default=400,
@@ -1961,6 +2301,8 @@ def main():
     p.add_argument("--no-speculative", action="store_true")
     p.add_argument("--no-special", action="store_true")
     p.add_argument("--no-market-context", action="store_true")
+    p.add_argument("--no-filiere", action="store_true",
+                   help="Disattiva screener filiere strategiche dedicato")
     p.add_argument("--sector", default=None)
     p.add_argument("--output", type=Path, default=Path("./data/screener_results"))
     args = p.parse_args()
@@ -2032,16 +2374,30 @@ def main():
         else:
             log.warning("Tier 3 universe vuoto.")
 
+    # ---- Filiere strategiche (screener dedicato) ----
+    filiere_data: dict = {}
+    if not args.no_filiere:
+        log.info("=== FILIERE STRATEGICHE: screener dedicato ===")
+        try:
+            filiere_data = filiere_mod.run_all_filiere()
+            total_fil = sum(len(v) for v in filiere_data.values())
+            log.info("Filiere screener: %d filiere, %d candidati totali",
+                     len(filiere_data), total_fil)
+        except Exception as e:
+            log.warning("Filiere screener fallito: %s", e)
+
     # ---- Output ----
     csv_path, json_path = output_results(
         cands, args.output, top_n=args.top,
         speculative_cands=spec_cands,
         special_cands=special_cands,
         market_context=market_ctx,
+        filiere_data=filiere_data,
     )
     log.info("Output: %s | %s", csv_path, json_path)
-    log.info("TOTALE — T1:%d quality | T2:%d catalyst | T3:%d special | ctx:%s",
+    log.info("TOTALE — T1:%d quality (MVF v3.0) | T2:%d catalyst | T3:%d special | filiere:%d | ctx:%s",
              min(len(cands), args.top), len(spec_cands), len(special_cands),
+             sum(len(v) for v in filiere_data.values()) if filiere_data else 0,
              "ok" if market_ctx else "skip")
 
 
