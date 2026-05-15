@@ -525,14 +525,25 @@ def deliver(output_path: Path, user: str):
 
 def main():
     p = argparse.ArgumentParser(description="Proxima Briefing Pipeline")
-    p.add_argument("--user", required=True, choices=["alex", "vale"])
+    p.add_argument("--user", default=None, choices=["alex", "vale"])
     p.add_argument("--mode",
                    choices=["auto", "daily", "weekend", "catchup", "festivo", "onboarding"],
                    default="auto")
     p.add_argument("--region", default="GLOBAL", choices=["US", "EU", "ASIA", "GLOBAL"])
     p.add_argument("--skip-screener", action="store_true")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--test-snapshot", action="store_true",
+                   help="Debug: stampa market snapshot e termina")
     args = p.parse_args()
+
+    if args.test_snapshot:
+        import json
+        snap = fetch_market_snapshot()
+        print(json.dumps(snap, indent=2))
+        return
+
+    if not args.user:
+        p.error("--user è obbligatorio (eccetto --test-snapshot)")
 
     log.info("=== Proxima Briefing Pipeline ===")
     log.info("User: %s | Mode: %s | Region: %s", args.user, args.mode, args.region)

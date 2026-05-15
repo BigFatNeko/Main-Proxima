@@ -68,7 +68,9 @@ Questa è la **sezione screener** del briefing. Lo screener MVF v3.0 ha già ana
 
 **Struttura obbligatoria della sezione**:
 
-Per OGNI filiera con candidati disponibili (semiconduttori, difesa, uranio_nucleare, energia_oilgas, rare_earth_metalli, batterie_litio_storage, gestione_rifiuti, consumer_staples, helium_gas_industriali) produci un blocco così:
+Per OGNI filiera con candidati disponibili produci un blocco così. Filiere attive (15):
+- **Classiche**: semiconduttori, difesa, uranio_nucleare, energia_oilgas, rare_earth_metalli, batterie_litio_storage, gestione_rifiuti, consumer_staples, helium_gas_industriali
+- **Nuove (poco analizzate)**: agroalimentare_upstream (fertilizzanti/sementi/macchinari), siderurgia_metalli_speciali (acciaio/alluminio), shipping_marittimo (container/bulk/tanker), infrastrutture_idriche (water scarcity), riassicurazione_specialty (re/insurance specialty), packaging_foreste (packaging sostenibile/lumber)
 
 ```markdown
 ### <Nome filiera> — <una frase sul bottleneck/scarsità>
@@ -87,7 +89,7 @@ Per OGNI filiera con candidati disponibili (semiconduttori, difesa, uranio_nucle
 
 **REGOLA INVIOLABILE**: per ogni candidato MVF mostra SOLO questi 5 campi (voto, V intrinseco, V relativo, dividendi, prezzo ideale + MoS). Tutti gli altri parametri sono stati calcolati ma NON devono apparire nel briefing (scelta esplicita dell'utente per output compatto).
 
-**Filiere silenziose**: dedica attenzione a settori che si muovono senza copertura (waste management, helium industriale, fornitori chip secondari). Sono spesso i veri colli di bottiglia.
+**Filiere silenziose**: dedica attenzione particolare alle 6 nuove filiere poco analizzate (agroalimentare upstream, siderurgia, shipping, acqua, riassicurazione, packaging). Sono spesso i veri colli di bottiglia — bassa copertura analisti = alpha potenziale. Se hanno candidati, non ometterle.
 
 **Onestà metodologica**: se una filiera non ha candidati con voto MVF > 50, segnala "filiera presente nello screener ma nessun candidato di qualità oggi". Meglio il vuoto che nomi inventati.
 

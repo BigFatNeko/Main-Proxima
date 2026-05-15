@@ -12,6 +12,14 @@ on:
         description: 'Forza riesecuzione screener (ignora cache giornaliera)'
         type: boolean
         default: false
+      debug_filiere:
+        description: 'Debug filiere: testa solo lo screener filiere e stampa risultati (non genera briefing)'
+        type: boolean
+        default: false
+      debug_snapshot:
+        description: 'Debug market snapshot: verifica prezzi indici (non genera briefing)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -53,7 +61,22 @@ jobs:
           rm -f rassegna-stampa/data/screener_results/screener_${DATE}.json
           echo "Cache screener ${DATE} rimossa — verrà rieseguito da zero."
 
+      - name: "[DEBUG] Test filiere screener"
+        if: ${{ github.event.inputs.debug_filiere == 'true' }}
+        run: |
+          cd rassegna-stampa
+          python filiere_screener.py
+          echo "--- DEBUG TERMINATO: exit 0 intenzionale ---"
+
+      - name: "[DEBUG] Test market snapshot"
+        if: ${{ github.event.inputs.debug_snapshot == 'true' }}
+        run: |
+          cd rassegna-stampa
+          python briefing_pipeline.py --test-snapshot
+          echo "--- DEBUG TERMINATO: exit 0 intenzionale ---"
+
       - name: Genera briefing Alex
+        if: ${{ github.event.inputs.debug_filiere != 'true' && github.event.inputs.debug_snapshot != 'true' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
@@ -63,6 +86,7 @@ jobs:
           python briefing_pipeline.py --user alex
 
       - name: Genera briefing Vale
+        if: ${{ github.event.inputs.debug_filiere != 'true' && github.event.inputs.debug_snapshot != 'true' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
@@ -72,6 +96,7 @@ jobs:
           python briefing_pipeline.py --user vale
 
       - name: Commit briefing in docs/
+        if: ${{ github.event.inputs.debug_filiere != 'true' && github.event.inputs.debug_snapshot != 'true' }}
         run: |
           DATE="${{ steps.date.outputs.today }}"
           git config user.name "github-actions[bot]"

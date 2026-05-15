@@ -1,12 +1,18 @@
 """
 Filiere strategiche — screener dedicato.
 
-Per ciascuna filiera (semiconduttori, difesa, uranio, energia, batterie litio,
-rare earth, gestione rifiuti, consumer staples, helium/gas industriali) lancia
-una query TradingView mirata con criteri propri:
+Per ciascuna filiera lancia una query TradingView mirata con criteri propri:
   - filtri per industry/sector specifici della filiera
   - cap market cap differenziato
   - ranking per metriche rilevanti (yield + value + momentum)
+
+Filiere coperte (15):
+  Classiche: semiconduttori, difesa, uranio_nucleare, energia_oilgas,
+             rare_earth_metalli, batterie_litio_storage, gestione_rifiuti,
+             consumer_staples, helium_gas_industriali
+  Nuove (poco analizzate): agroalimentare_upstream, siderurgia_metalli_speciali,
+             shipping_marittimo, infrastrutture_idriche,
+             riassicurazione_specialty, packaging_foreste
 
 Output: candidati per filiera, ognuno con tag filiera + bottleneck score.
 """
@@ -98,6 +104,85 @@ FILIERE_DEFINITIONS = {
         "min_mcap_m": 300,
         "max_per_filiera": 15,
         "bottleneck_keywords": ["helium", "industrial gas"],
+    },
+
+    # ── NUOVE FILIERE POCO ANALIZZATE ─────────────────────────────────────────
+
+    "agroalimentare_upstream": {
+        # Fertilizzanti, pesticidi, sementi, macchinari agricoli.
+        # Filiera upstream dell'agroalimentare: massiccia dependenza globale,
+        # pochi player dominanti (Nutrien, Mosaic, CF Industries, Yara, Corteva).
+        # Sotto-seguita dagli analisti retail — pricing power strutturale.
+        "industries": ["Agricultural Inputs",
+                       "Farm & Heavy Construction Machinery"],
+        "min_mcap_m": 200,
+        "max_per_filiera": 25,
+        "bottleneck_keywords": ["fertilizer", "potash", "nitrogen", "seed",
+                                "crop protection", "pesticide", "agro"],
+    },
+
+    "siderurgia_metalli_speciali": {
+        # Acciaio, alluminio, metalli speciali (titanio, nichel, tungsteno).
+        # Cicliche con forte pricing power in fasi di capex industriale.
+        # Spesso scambiate a multipli bassi anche in peak cycle (value trap? no).
+        # Nucor, Steel Dynamics, ArcelorMittal, Alcoa, Norsk Hydro.
+        "industries": ["Steel", "Aluminum"],
+        "min_mcap_m": 300,
+        "max_per_filiera": 25,
+        "bottleneck_keywords": ["steel", "aluminum", "stainless", "titanium",
+                                "specialty steel", "flat rolled", "long products"],
+    },
+
+    "shipping_marittimo": {
+        # Container, dry bulk, tankers. Settore massicciamente ciclico,
+        # spesso scambiato a discount enorme sul NAV durante i bust.
+        # Catalysts: rerouting Suez/Panama, domanda LNG, reshoring supply chain.
+        # ZIM, Star Bulk, Nordic American Tankers, Hafnia, TORM.
+        "industries": ["Marine Shipping"],
+        "min_mcap_m": 100,
+        "max_per_filiera": 20,
+        "bottleneck_keywords": ["container", "bulk", "tanker", "LNG carrier",
+                                "VLCC", "Panamax", "shipping", "fleet"],
+    },
+
+    "infrastrutture_idriche": {
+        # Water scarcity: una delle mega-trend più ignorata dai portafogli retail.
+        # Utilities idriche USA/EU + tech per trattamento acque (Xylem, Pentair,
+        # Watts Water, A. O. Smith). Pricing power regolato + demografica.
+        "industries": ["Utilities—Regulated Water",
+                       "Pollution & Treatment Controls"],
+        "min_mcap_m": 200,
+        "max_per_filiera": 20,
+        "bottleneck_keywords": ["water", "wastewater", "desalination",
+                                "purification", "treatment"],
+    },
+
+    "riassicurazione_specialty": {
+        # Riassicurazione e assicurazioni specialty: settore complesso,
+        # coperto pochissimo dagli analisti generalisti.
+        # Hannover Re, Munich Re, Swiss Re, Markel, W.R. Berkley.
+        # Post-hardening del mercato → pricing power su premi in aumento.
+        "industries": ["Insurance—Reinsurance",
+                       "Insurance—Specialty",
+                       "Insurance—Property & Casualty"],
+        "min_mcap_m": 500,
+        "max_per_filiera": 20,
+        "bottleneck_keywords": ["reinsurance", "specialty", "catastrophe",
+                                "underwriting", "combined ratio"],
+    },
+
+    "packaging_foreste": {
+        # Packaging sostenibile + forestry/lumber.
+        # Transizione plastica → carta/cartone: winner strutturale.
+        # Smurfit WestRock, Mondi, Sylvamo, Weyerhaeuser, Clearwater.
+        # Spesso ignorata: legame diretto con e-commerce + regolazione EU anti-plastica.
+        "industries": ["Packaging & Containers",
+                       "Paper & Paper Products",
+                       "Lumber & Wood Production"],
+        "min_mcap_m": 200,
+        "max_per_filiera": 20,
+        "bottleneck_keywords": ["packaging", "cardboard", "corrugated",
+                                "paper", "lumber", "forest", "timber"],
     },
 }
 
@@ -228,4 +313,39 @@ def run_all_filiere() -> dict:
         except Exception as e:
             log.warning("Filiera %s fallita: %s", fname, e)
             result[fname] = []
+
+    # Riepilogo finale — visibile in Actions
+    ok = [f for f, v in result.items() if v]
+    empty = [f for f, v in result.items() if not v]
+    log.info("Filiere OK (%d): %s", len(ok), ", ".join(ok))
+    if empty:
+        log.warning("Filiere vuote (%d): %s", len(empty), ", ".join(empty))
     return result
+
+
+if __name__ == "__main__":
+    import argparse, json as _json
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
+                        datefmt="%H:%M:%S")
+    ap = argparse.ArgumentParser(description="Debug filiere screener standalone")
+    ap.add_argument("--filiera", default=None, help="Testa solo questa filiera")
+    ap.add_argument("--markets", default=None, nargs="+", help="Override mercati (default: tutti)")
+    args = ap.parse_args()
+    mkts = args.markets or FILIERE_MARKETS
+    if args.filiera:
+        if args.filiera not in FILIERE_DEFINITIONS:
+            print(f"Filiera sconosciuta: {args.filiera}. Disponibili: {list(FILIERE_DEFINITIONS)}")
+            raise SystemExit(1)
+        defs = {args.filiera: FILIERE_DEFINITIONS[args.filiera]}
+    else:
+        defs = FILIERE_DEFINITIONS
+    print(f"\n{'='*60}")
+    print(f"TEST FILIERE  —  {len(defs)} filiere × {len(mkts)} mercati")
+    print(f"{'='*60}\n")
+    for fname, fdef in defs.items():
+        cands = screen_filiera_tv(fname, fdef, mkts)
+        status = "✓" if cands else "✗ VUOTA"
+        print(f"  {status}  {fname}: {len(cands)} candidati")
+        for c in cands[:3]:
+            print(f"         {c['tv_ticker']:20s} {c['name'][:35]:35s} mcap=${c['market_cap']/1e9:.1f}B")
+        print()
