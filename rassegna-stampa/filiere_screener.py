@@ -46,39 +46,39 @@ FILIERE_DEFINITIONS = {
         "bottleneck_keywords": ["missile", "radar", "satellite", "drone"],
     },
     "uranio_nucleare": {
-        # TradingView non ha "Uranium" come industria separata;
-        # i miner di uranio cadono in "Other Industrial Metals & Mining"
-        "industries": ["Other Industrial Metals & Mining",
-                       "Other Precious Metals & Mining"],
+        # TradingView non ha "Uranium" come industria; i miner cadono in Basic Materials.
+        # Usiamo sector="Basic Materials" con mcap piccola (uranium miner = small/mid cap).
+        "industries": [],
+        "sectors": ["Basic Materials"],
         "min_mcap_m": 50,
         "max_per_filiera": 25,
         "bottleneck_keywords": ["uranium", "nuclear", "fuel cycle"],
     },
     "energia_oilgas": {
-        "industries": ["Oil & Gas Integrated", "Oil & Gas E&P",
-                       "Oil & Gas Midstream", "Oil & Gas Refining & Marketing",
-                       "Oil & Gas Equipment & Services"],
+        # I nomi industry TV per oil/gas (Oil & Gas E&P, ecc.) non matchano —
+        # ma "Energy" come sector funziona su tutti i mercati.
+        "industries": [],
+        "sectors": ["Energy"],
         "min_mcap_m": 300,
         "max_per_filiera": 35,
-        "bottleneck_keywords": ["LNG", "midstream", "pipeline"],
+        "bottleneck_keywords": ["LNG", "midstream", "pipeline", "oil", "gas", "refin"],
     },
     "rare_earth_metalli": {
-        # "Industrial Metals & Mining" non esiste in TV; si usa "Other Industrial Metals & Mining"
-        "industries": ["Other Precious Metals & Mining",
-                       "Other Industrial Metals & Mining",
-                       "Specialty Chemicals", "Copper"],
+        # Basic Materials copre mining + specialty chemicals (rare earth, cobalt, lithium).
+        "industries": [],
+        "sectors": ["Basic Materials"],
         "min_mcap_m": 100,
         "max_per_filiera": 30,
         "bottleneck_keywords": ["rare earth", "neodymium", "lithium",
-                                "cobalt", "tungsten", "nickel"],
+                                "cobalt", "tungsten", "nickel", "copper", "zinc"],
     },
     "batterie_litio_storage": {
-        "industries": ["Lithium & Battery Tech", "Auto Parts",
-                       "Electrical Equipment & Parts",
-                       "Specialty Chemicals"],
+        # Battery tech copre Consumer Cyclical (EV parts) e Technology (storage systems).
+        "industries": [],
+        "sectors": ["Consumer Cyclical", "Technology"],
         "min_mcap_m": 100,
         "max_per_filiera": 25,
-        "bottleneck_keywords": ["battery", "lithium", "storage"],
+        "bottleneck_keywords": ["battery", "lithium", "storage", "EV", "electric"],
     },
     "gestione_rifiuti": {
         # "Environmental & Waste Services" non è un'industria TV standard
@@ -98,27 +98,29 @@ FILIERE_DEFINITIONS = {
         "bottleneck_keywords": ["brand", "distribution"],
     },
     "helium_gas_industriali": {
-        # Air Products, Linde, Air Liquide → Specialty Chemicals in TV
-        "industries": ["Industrial Distribution", "Specialty Industrial Machinery",
-                       "Specialty Chemicals"],
+        # Air Products, Linde, Air Liquide → Basic Materials (Specialty Chemicals in TV).
+        # Industrial Distribution per distributori (Airgas parent ecc.).
+        "industries": [],
+        "sectors": ["Basic Materials", "Industrials"],
         "min_mcap_m": 300,
         "max_per_filiera": 15,
-        "bottleneck_keywords": ["helium", "industrial gas"],
+        "bottleneck_keywords": ["helium", "industrial gas", "air", "gas", "linde",
+                                "praxair", "liquid"],
     },
 
     # ── NUOVE FILIERE POCO ANALIZZATE ─────────────────────────────────────────
 
     "agroalimentare_upstream": {
         # Fertilizzanti, pesticidi, sementi, macchinari agricoli.
-        # Filiera upstream dell'agroalimentare: massiccia dependenza globale,
-        # pochi player dominanti (Nutrien, Mosaic, CF Industries, Yara, Corteva).
-        # Sotto-seguita dagli analisti retail — pricing power strutturale.
-        "industries": ["Agricultural Inputs",
-                       "Farm & Heavy Construction Machinery"],
+        # "Agricultural Inputs" e "Farm & Heavy Construction Machinery" non matchano in TV.
+        # Fertilizzanti → Basic Materials; macchinari agri → Industrials.
+        "industries": [],
+        "sectors": ["Basic Materials", "Industrials"],
         "min_mcap_m": 200,
         "max_per_filiera": 25,
         "bottleneck_keywords": ["fertilizer", "potash", "nitrogen", "seed",
-                                "crop protection", "pesticide", "agro"],
+                                "crop protection", "pesticide", "agro", "farm",
+                                "harvest", "agricultural"],
     },
 
     "siderurgia_metalli_speciali": {
@@ -146,43 +148,38 @@ FILIERE_DEFINITIONS = {
     },
 
     "infrastrutture_idriche": {
-        # Water scarcity: una delle mega-trend più ignorata dai portafogli retail.
-        # Utilities idriche USA/EU + tech per trattamento acque (Xylem, Pentair,
-        # Watts Water, A. O. Smith). Pricing power regolato + demografica.
-        "industries": ["Utilities—Regulated Water",
-                       "Pollution & Treatment Controls"],
+        # "Utilities—Regulated Water" non matcha in TV.
+        # Sector "Utilities" copre tutte le regulated utilities (acqua, gas, elettricità).
+        "industries": [],
+        "sectors": ["Utilities"],
         "min_mcap_m": 200,
         "max_per_filiera": 20,
         "bottleneck_keywords": ["water", "wastewater", "desalination",
-                                "purification", "treatment"],
+                                "purification", "treatment", "utility", "utilities"],
     },
 
     "riassicurazione_specialty": {
-        # Riassicurazione e assicurazioni specialty: settore complesso,
-        # coperto pochissimo dagli analisti generalisti.
-        # Hannover Re, Munich Re, Swiss Re, Markel, W.R. Berkley.
-        # Post-hardening del mercato → pricing power su premi in aumento.
-        "industries": ["Insurance—Reinsurance",
-                       "Insurance—Specialty",
-                       "Insurance—Property & Casualty"],
+        # "Insurance—Reinsurance", "Insurance—Specialty" non matchano in TV.
+        # Sector "Financial Services" copre assicurazioni + banche + fintech:
+        # lo scoring per DY e PE moderato favorisce le assicuratrici tradizionali.
+        "industries": [],
+        "sectors": ["Financial Services"],
         "min_mcap_m": 500,
         "max_per_filiera": 20,
-        "bottleneck_keywords": ["reinsurance", "specialty", "catastrophe",
-                                "underwriting", "combined ratio"],
+        "bottleneck_keywords": ["reinsurance", "insurance", "casualty",
+                                "underwriting", "assurance", "life insurance"],
     },
 
     "packaging_foreste": {
-        # Packaging sostenibile + forestry/lumber.
-        # Transizione plastica → carta/cartone: winner strutturale.
-        # Smurfit WestRock, Mondi, Sylvamo, Weyerhaeuser, Clearwater.
-        # Spesso ignorata: legame diretto con e-commerce + regolazione EU anti-plastica.
-        "industries": ["Packaging & Containers",
-                       "Paper & Paper Products",
-                       "Lumber & Wood Production"],
+        # "Packaging & Containers", "Paper & Paper Products", "Lumber & Wood Production"
+        # non matchano in TV. Basic Materials copre paper/packaging; Consumer Cyclical
+        # copre packaging per e-commerce.
+        "industries": [],
+        "sectors": ["Basic Materials"],
         "min_mcap_m": 200,
         "max_per_filiera": 20,
         "bottleneck_keywords": ["packaging", "cardboard", "corrugated",
-                                "paper", "lumber", "forest", "timber"],
+                                "paper", "lumber", "forest", "timber", "pulp"],
     },
 }
 
@@ -197,17 +194,26 @@ FILIERE_MARKETS = [
 
 def screen_filiera_tv(filiera_name: str, definition: dict,
                        markets: list[str]) -> list[dict]:
-    """Lancia query TradingView per una filiera, una per (mercato, industry)."""
+    """Lancia query TradingView per una filiera.
+
+    Supporta sia filtro per industry (preciso) sia per sector (fallback robusto).
+    Il dizionario definizione può avere:
+      "industries": [...] → query per Column("industry") == val
+      "sectors":    [...] → query per Column("sector")   == val
+    Entrambe possono coesistere; i risultati vengono uniti e deduplicati.
+    """
     if not TV_OK:
         return []
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     all_rows: list[dict] = []
-    industries = definition["industries"]
-    min_mcap = definition["min_mcap_m"] * 1_000_000
+    industries = definition.get("industries", [])
+    sectors    = definition.get("sectors", [])
+    min_mcap   = definition["min_mcap_m"] * 1_000_000
 
-    def query_one(mkt: str, industry: str) -> list[dict]:
+    def query_one(mkt: str, col: str, val: str) -> list[dict]:
+        """col = 'industry' oppure 'sector'."""
         rows: list[dict] = []
         try:
             q = (Query()
@@ -219,7 +225,7 @@ def screen_filiera_tv(filiera_name: str, definition: dict,
                  .where(
                      Column("market_cap_basic") > min_mcap,
                      Column("close") > 1.0,
-                     Column("industry") == industry,
+                     Column(col) == val,
                  )
                  .order_by("market_cap_basic", ascending=False)
                  .limit(50))
@@ -241,15 +247,17 @@ def screen_filiera_tv(filiera_name: str, definition: dict,
                     "filiera": filiera_name,
                 })
         except Exception as e:
-            log.warning("filiera=%s mkt=%s industry=%s err=%s",
-                        filiera_name, mkt, industry, e)
+            log.warning("filiera=%s mkt=%s %s=%s err=%s",
+                        filiera_name, mkt, col, val, e)
         return rows
 
     with ThreadPoolExecutor(max_workers=8) as ex:
         futs = []
         for mkt in markets:
-            for industry in industries:
-                futs.append(ex.submit(query_one, mkt, industry))
+            for ind in industries:
+                futs.append(ex.submit(query_one, mkt, "industry", ind))
+            for sec in sectors:
+                futs.append(ex.submit(query_one, mkt, "sector", sec))
         for fut in as_completed(futs):
             all_rows.extend(fut.result())
 
