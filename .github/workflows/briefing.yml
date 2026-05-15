@@ -7,6 +7,11 @@ on:
     # Sabato: 3:30 UTC = 4:30 CET
     - cron: '30 3 * * 6'
   workflow_dispatch:
+    inputs:
+      force_rescreen:
+        description: 'Forza riesecuzione screener (ignora cache giornaliera)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -40,6 +45,13 @@ jobs:
         run: |
           mkdir -p briefings
           mkdir -p rassegna-stampa/data/screener_results
+
+      - name: Cancella cache screener (solo se force_rescreen)
+        if: ${{ github.event.inputs.force_rescreen == 'true' }}
+        run: |
+          DATE=$(date +'%Y-%m-%d')
+          rm -f rassegna-stampa/data/screener_results/screener_${DATE}.json
+          echo "Cache screener ${DATE} rimossa — verrà rieseguito da zero."
 
       - name: Genera briefing Alex
         env:
