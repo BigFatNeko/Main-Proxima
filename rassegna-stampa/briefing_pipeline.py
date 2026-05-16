@@ -39,9 +39,17 @@ import os
 import subprocess
 import sys
 import webbrowser
+import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
+from email.utils import parsedate_to_datetime as _parse_rfc2822
 from pathlib import Path
 from typing import Optional
+
+try:
+    import requests as _requests
+except ImportError:
+    _requests = None  # type: ignore
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s",
@@ -333,73 +341,68 @@ NEWS_FEEDS: list[dict] = [
     {"label": "FT Markets",          "url": "https://www.ft.com/markets?format=rss",                   "lang": "en"},
 ]
 
-def fetch_news_rss(max_per_feed: int = 8, max_age_hours: int = 36) -> list[dict]:
-    """Fetcha titoli e sommari dalle principali fonti finanziarie via RSS.
+_RSS_NS = {"atom": "http://www.w3.org/2005/Atom"}
+_RSS_UA = {"User-Agent": "Mozilla/5.0 (compatible; ProximaBot/1.0)"}
 
-    Nessuna API key richiesta. Usa xml.etree dalla stdlib.
-    Ritorna lista di {source, title, summary, published} ordinata per data desc.
-    """
-    import xml.etree.ElementTree as ET
-    from email.utils import parsedate_to_datetime
 
+def _txt(item, tag: str, default: str = "") -> str:
+    el = item.find(tag) or item.find(f"atom:{tag}", _RSS_NS)
+    return (el.text or "").strip() if el is not None else default
+
+
+def _parse_pub_date(raw: str) -> Optional[datetime]:
     try:
-        import requests as req
-    except ImportError:
-        log.warning("requests non disponibile, skip news RSS")
+        return _parse_rfc2822(raw).replace(tzinfo=None)
+    except Exception:
+        try:
+            return datetime.fromisoformat(raw[:19])
+        except Exception:
+            return None
+
+
+def _fetch_one_feed(feed: dict, max_per_feed: int, cutoff: datetime) -> list[dict]:
+    if _requests is None:
+        return []
+    try:
+        resp = _requests.get(feed["url"], timeout=10, headers=_RSS_UA)
+        if resp.status_code != 200:
+            log.debug("RSS %s: HTTP %s", feed["label"], resp.status_code)
+            return []
+        root = ET.fromstring(resp.content)
+        items = root.findall(".//item") or root.findall(".//atom:entry", _RSS_NS)
+        result = []
+        for item in items[:max_per_feed]:
+            title   = _txt(item, "title")
+            summary = _txt(item, "description") or _txt(item, "summary") or _txt(item, "content")
+            pub_raw = _txt(item, "pubDate") or _txt(item, "published") or _txt(item, "updated")
+            if not title:
+                continue
+            pub_dt = _parse_pub_date(pub_raw) if pub_raw else None
+            if pub_dt and pub_dt < cutoff:
+                continue
+            result.append({
+                "source":    feed["label"],
+                "lang":      feed["lang"],
+                "title":     title,
+                "summary":   " ".join(summary.split())[:200] if summary else "",
+                "published": pub_dt.isoformat() if pub_dt else "",
+            })
+        return result
+    except Exception as e:
+        log.debug("RSS %s err: %s", feed["label"], e)
         return []
 
+
+def fetch_news_rss(max_per_feed: int = 8, max_age_hours: int = 36) -> list[dict]:
+    if _requests is None:
+        log.warning("requests non disponibile, skip news RSS")
+        return []
     cutoff = datetime.now() - timedelta(hours=max_age_hours)
     all_items: list[dict] = []
-
-    for feed in NEWS_FEEDS:
-        try:
-            resp = req.get(feed["url"], timeout=10,
-                           headers={"User-Agent": "Mozilla/5.0 (compatible; ProximaBot/1.0)"})
-            if resp.status_code != 200:
-                log.debug("RSS %s: HTTP %s", feed["label"], resp.status_code)
-                continue
-            root = ET.fromstring(resp.content)
-            # Supporta sia RSS 2.0 (<item>) che Atom (<entry>)
-            ns = {"atom": "http://www.w3.org/2005/Atom"}
-            items = root.findall(".//item") or root.findall(".//atom:entry", ns)
-            count = 0
-            for item in items:
-                if count >= max_per_feed:
-                    break
-                def txt(tag, default=""):
-                    el = item.find(tag) or item.find(f"atom:{tag}", ns)
-                    return (el.text or "").strip() if el is not None else default
-                title   = txt("title")
-                summary = txt("description") or txt("summary") or txt("content")
-                pub_raw = txt("pubDate") or txt("published") or txt("updated")
-                if not title:
-                    continue
-                # Prova a parsare la data; se non riesce includi comunque
-                pub_dt = None
-                if pub_raw:
-                    try:
-                        pub_dt = parsedate_to_datetime(pub_raw).replace(tzinfo=None)
-                    except Exception:
-                        try:
-                            pub_dt = datetime.fromisoformat(pub_raw[:19])
-                        except Exception:
-                            pass
-                if pub_dt and pub_dt < cutoff:
-                    continue
-                # Tronca summary a 200 chars
-                summary_clean = " ".join(summary.split())[:200] if summary else ""
-                all_items.append({
-                    "source":    feed["label"],
-                    "lang":      feed["lang"],
-                    "title":     title,
-                    "summary":   summary_clean,
-                    "published": pub_dt.isoformat() if pub_dt else "",
-                })
-                count += 1
-        except Exception as e:
-            log.debug("RSS %s err: %s", feed["label"], e)
-
-    # Ordina per data desc (items senza data vanno in fondo)
+    with ThreadPoolExecutor(max_workers=len(NEWS_FEEDS)) as ex:
+        futs = [ex.submit(_fetch_one_feed, feed, max_per_feed, cutoff) for feed in NEWS_FEEDS]
+        for fut in as_completed(futs):
+            all_items.extend(fut.result())
     all_items.sort(key=lambda x: x["published"], reverse=True)
     log.info("News RSS: %d articoli da %d feed", len(all_items),
              len({i["source"] for i in all_items}))
@@ -655,11 +658,10 @@ def deliver(output_path: Path, user: str):
     tg_chat = os.environ.get("TELEGRAM_CHAT_ID")
     if tg_token and tg_chat:
         try:
-            import requests
             date_label = datetime.now().strftime("%d/%m/%Y")
             # Invia il file HTML vero (non solo testo) — apribile su iPad/mobile
             with open(output_path, "rb") as f:
-                requests.post(
+                _requests.post(
                     f"https://api.telegram.org/bot{tg_token}/sendDocument",
                     data={"chat_id": tg_chat,
                           "caption": f"Proxima Daily — {user.title()} {date_label}"},
