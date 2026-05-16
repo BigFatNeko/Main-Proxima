@@ -174,7 +174,7 @@ In modalità daily/catchup: long read OMESSO, solo teaser+link al weekend.
 
 8. **Cross-pollination Alex ↔ Vale**: se nel briefing di uno emerge un'idea utile all'altro, segnala esplicitamente ("Idea da girare ad Alex: ..." / "Vale dovrebbe sapere che..."). Mai trattarli come unico portfolio: sono due strategie diverse con budget e propensione al rischio diverse.
 
-9. **Verifica fonti primarie critiche** prima della consegna: SEC filing, IR ufficiali, FOMC statement, ECB. Il template HTML renderizza i link in modo distinto.
+9. **Usa le NEWS FRESCHE dal contesto** (feed RSS Reuters, MarketWatch, CNBC, Il Sole 24 Ore, ECB): sono la fonte primaria per tutte le sezioni notizie. Se una news RSS è rilevante per il portafoglio o per Proxima, citala esplicitamente con fonte. Non inventare notizie non presenti nel feed. Se il feed è vuoto o non pertinente per una sezione, usa la tua knowledge di base segnalando "fonte: knowledge base".
 
 10. **Niente inglesismi gratuiti**: spiega se l'acronimo non è universalmente noto, altrimenti scrivi in inglese tutto il termine tecnico per evitare meta-traduzioni.
 

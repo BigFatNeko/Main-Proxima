@@ -322,7 +322,91 @@ def _mvf_synthesis(c: dict) -> dict:
     }
 
 
-def build_user_prompt(user_data, screener_data, market, todo, previous, mode):
+NEWS_FEEDS: list[dict] = [
+    {"label": "Reuters Business",    "url": "https://feeds.reuters.com/reuters/businessNews",           "lang": "en"},
+    {"label": "Reuters Markets",     "url": "https://feeds.reuters.com/reuters/marketsNews",            "lang": "en"},
+    {"label": "MarketWatch",         "url": "https://feeds.marketwatch.com/marketwatch/topstories/",    "lang": "en"},
+    {"label": "CNBC Finance",        "url": "https://www.cnbc.com/id/10001147/device/rss/rss.html",     "lang": "en"},
+    {"label": "Il Sole 24 Ore",      "url": "https://www.ilsole24ore.com/rss/finanza-e-mercati.xml",   "lang": "it"},
+    {"label": "MilanoFinanza",       "url": "https://www.milanofinanza.it/rss/mf-rss-news.xml",        "lang": "it"},
+    {"label": "ECB Press Releases",  "url": "https://www.ecb.europa.eu/rss/press.html",                "lang": "en"},
+    {"label": "FT Markets",          "url": "https://www.ft.com/markets?format=rss",                   "lang": "en"},
+]
+
+def fetch_news_rss(max_per_feed: int = 8, max_age_hours: int = 36) -> list[dict]:
+    """Fetcha titoli e sommari dalle principali fonti finanziarie via RSS.
+
+    Nessuna API key richiesta. Usa xml.etree dalla stdlib.
+    Ritorna lista di {source, title, summary, published} ordinata per data desc.
+    """
+    import xml.etree.ElementTree as ET
+    from email.utils import parsedate_to_datetime
+
+    try:
+        import requests as req
+    except ImportError:
+        log.warning("requests non disponibile, skip news RSS")
+        return []
+
+    cutoff = datetime.now() - timedelta(hours=max_age_hours)
+    all_items: list[dict] = []
+
+    for feed in NEWS_FEEDS:
+        try:
+            resp = req.get(feed["url"], timeout=10,
+                           headers={"User-Agent": "Mozilla/5.0 (compatible; ProximaBot/1.0)"})
+            if resp.status_code != 200:
+                log.debug("RSS %s: HTTP %s", feed["label"], resp.status_code)
+                continue
+            root = ET.fromstring(resp.content)
+            # Supporta sia RSS 2.0 (<item>) che Atom (<entry>)
+            ns = {"atom": "http://www.w3.org/2005/Atom"}
+            items = root.findall(".//item") or root.findall(".//atom:entry", ns)
+            count = 0
+            for item in items:
+                if count >= max_per_feed:
+                    break
+                def txt(tag, default=""):
+                    el = item.find(tag) or item.find(f"atom:{tag}", ns)
+                    return (el.text or "").strip() if el is not None else default
+                title   = txt("title")
+                summary = txt("description") or txt("summary") or txt("content")
+                pub_raw = txt("pubDate") or txt("published") or txt("updated")
+                if not title:
+                    continue
+                # Prova a parsare la data; se non riesce includi comunque
+                pub_dt = None
+                if pub_raw:
+                    try:
+                        pub_dt = parsedate_to_datetime(pub_raw).replace(tzinfo=None)
+                    except Exception:
+                        try:
+                            pub_dt = datetime.fromisoformat(pub_raw[:19])
+                        except Exception:
+                            pass
+                if pub_dt and pub_dt < cutoff:
+                    continue
+                # Tronca summary a 200 chars
+                summary_clean = " ".join(summary.split())[:200] if summary else ""
+                all_items.append({
+                    "source":    feed["label"],
+                    "lang":      feed["lang"],
+                    "title":     title,
+                    "summary":   summary_clean,
+                    "published": pub_dt.isoformat() if pub_dt else "",
+                })
+                count += 1
+        except Exception as e:
+            log.debug("RSS %s err: %s", feed["label"], e)
+
+    # Ordina per data desc (items senza data vanno in fondo)
+    all_items.sort(key=lambda x: x["published"], reverse=True)
+    log.info("News RSS: %d articoli da %d feed", len(all_items),
+             len({i["source"] for i in all_items}))
+    return all_items
+
+
+def build_user_prompt(user_data, screener_data, market, todo, previous, mode, news: list[dict] | None = None):
     tier1 = screener_data.get("candidates", [])
     tier2 = screener_data.get("speculative_candidates", [])
     tier3 = screener_data.get("special_situations", [])
@@ -415,10 +499,21 @@ Inserisci 2-3 nella sezione "Filiere strategiche" se il Piotroski ≥5.
 {json.dumps(tier3[:15], indent=2, default=str)[:4000]}
 """
 
+    news_section = ""
+    if news:
+        lines = []
+        for item in news[:60]:  # cap a 60 articoli nel prompt
+            pub = f" [{item['published'][:16]}]" if item.get("published") else ""
+            summ = f" — {item['summary']}" if item.get("summary") else ""
+            lines.append(f"  [{item['source']}]{pub} {item['title']}{summ}")
+        news_section = "NEWS FRESCHE (RSS ultimi 36h, usa queste come base per le sezioni notizie):\n" + "\n".join(lines)
+
     return f"""Genera il briefing per {user_data['user'].upper()} in data {datetime.now():%Y-%m-%d}.
 
 MODE: {mode}
 {ctx_section}
+{news_section}
+
 PORTAFOGLIO:
 {json.dumps(user_data, indent=2, default=str)}
 
@@ -648,8 +743,10 @@ def main():
         valid = sum(1 for v in market.values() if v.get("value"))
         log.info("Market snapshot finale: %d/6 indici validi", valid)
 
+    news = fetch_news_rss() if not args.dry_run else []
+
     system = build_system_prompt()
-    user_prompt = build_user_prompt(user_data, screener_data, market, todo, previous, mode)
+    user_prompt = build_user_prompt(user_data, screener_data, market, todo, previous, mode, news=news)
     log.info("Prompt — system: %d chars, user: %d chars",
              len(system), len(user_prompt))
 
