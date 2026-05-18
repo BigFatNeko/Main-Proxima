@@ -46,34 +46,38 @@ FILIERE_DEFINITIONS = {
         "bottleneck_keywords": ["missile", "radar", "satellite", "drone"],
     },
     "uranio_nucleare": {
-        # TV taxonomy: uranio/carbone/gas → "Energy Minerals"; miner metalli → "Non-Energy Minerals"
-        "industries": [],
-        "sectors": ["Energy Minerals", "Non-Energy Minerals"],
+        # TV industry: uranio è "Uranium" o dentro "Other Industrial Metals & Mining"
+        "industries": ["Uranium", "Other Industrial Metals & Mining"],
+        "sectors": [],
         "min_mcap_m": 50,
         "max_per_filiera": 25,
         "bottleneck_keywords": ["uranium", "nuclear", "fuel cycle"],
     },
     "energia_oilgas": {
-        # TV taxonomy: petrolio/gas/carbone → "Energy Minerals" (non "Energy")
-        "industries": [],
-        "sectors": ["Energy Minerals"],
+        # TV industries: E&P, integrated, midstream, refining
+        "industries": ["Oil & Gas E&P", "Oil & Gas Integrated",
+                       "Oil & Gas Midstream", "Oil & Gas Refining & Marketing",
+                       "Oil & Gas Drilling", "Oil & Gas Equipment & Services"],
+        "sectors": [],
         "min_mcap_m": 300,
         "max_per_filiera": 35,
         "bottleneck_keywords": ["LNG", "midstream", "pipeline", "oil", "gas", "refin"],
     },
     "rare_earth_metalli": {
-        # TV taxonomy: minerali → "Non-Energy Minerals"; fertilizzanti/chimici → "Process Industries"
-        "industries": [],
-        "sectors": ["Non-Energy Minerals", "Process Industries"],
+        # TV: metalli critici dentro "Other Industrial Metals & Mining" + "Specialty Chemicals"
+        "industries": ["Other Industrial Metals & Mining", "Specialty Chemicals",
+                       "Industrial Metals & Mining", "Copper"],
+        "sectors": [],
         "min_mcap_m": 100,
         "max_per_filiera": 30,
         "bottleneck_keywords": ["rare earth", "neodymium", "lithium",
                                 "cobalt", "tungsten", "nickel", "copper", "zinc"],
     },
     "batterie_litio_storage": {
-        # TV taxonomy: batterie/EV → "Electronic Technology" + "Consumer Durables"
-        "industries": [],
-        "sectors": ["Electronic Technology", "Consumer Durables"],
+        # TV: batterie → "Electronic Components"; EV → "Auto Manufacturers"; storage → "Specialty Chemicals"
+        "industries": ["Electronic Components", "Specialty Chemicals",
+                       "Auto Manufacturers", "Auto Parts"],
+        "sectors": [],
         "min_mcap_m": 100,
         "max_per_filiera": 25,
         "bottleneck_keywords": ["battery", "lithium", "storage", "EV", "electric"],
@@ -96,10 +100,11 @@ FILIERE_DEFINITIONS = {
         "bottleneck_keywords": ["brand", "distribution"],
     },
     "helium_gas_industriali": {
-        # TV taxonomy: gas industriali (Air Products, Linde, Air Liquide) → "Process Industries"
-        # Distributori industriali → "Distribution Services"
-        "industries": [],
-        "sectors": ["Process Industries", "Distribution Services"],
+        # Air Products, Linde, Air Liquide, Messer → "Specialty Chemicals" in TV
+        # Distributori gas industriali → "Industrial Distribution"
+        "industries": ["Specialty Chemicals", "Industrial Distribution",
+                       "Chemicals - Specialty"],
+        "sectors": [],
         "min_mcap_m": 300,
         "max_per_filiera": 15,
         "bottleneck_keywords": ["helium", "industrial gas", "air", "gas", "linde",
@@ -109,10 +114,13 @@ FILIERE_DEFINITIONS = {
     # ── NUOVE FILIERE POCO ANALIZZATE ─────────────────────────────────────────
 
     "agroalimentare_upstream": {
-        # TV taxonomy: fertilizzanti/pesticidi → "Process Industries"
-        # Macchinari agricoli (Deere, AGCO, CNH) → "Producer Manufacturing"
-        "industries": [],
-        "sectors": ["Process Industries", "Producer Manufacturing"],
+        # Fertilizzanti/sementi/pesticidi → "Agricultural Inputs" in TV
+        # Macchinari agricoli (Deere, AGCO, CNH) → "Agricultural & Farm Machinery" o "Farm & Heavy Construction Machinery"
+        "industries": ["Agricultural Inputs",
+                       "Agricultural & Farm Machinery",
+                       "Farm & Heavy Construction Machinery",
+                       "Farm Machinery"],
+        "sectors": [],
         "min_mcap_m": 200,
         "max_per_filiera": 25,
         "bottleneck_keywords": ["fertilizer", "potash", "nitrogen", "seed",
@@ -145,10 +153,10 @@ FILIERE_DEFINITIONS = {
     },
 
     "infrastrutture_idriche": {
-        # "Utilities—Regulated Water" non matcha in TV.
-        # Sector "Utilities" copre tutte le regulated utilities (acqua, gas, elettricità).
-        "industries": [],
-        "sectors": ["Utilities"],
+        # TV industry per water utilities specifiche (non tutte le Utilities)
+        "industries": ["Water Utilities", "Utilities - Regulated Water",
+                       "Utilities—Regulated Water"],
+        "sectors": [],
         "min_mcap_m": 200,
         "max_per_filiera": 20,
         "bottleneck_keywords": ["water", "wastewater", "desalination",
@@ -156,9 +164,12 @@ FILIERE_DEFINITIONS = {
     },
 
     "riassicurazione_specialty": {
-        # TV taxonomy: assicurazioni/banche → "Finance" (non "Financial Services")
-        "industries": [],
-        "sectors": ["Finance"],
+        # TV industries per insurance, separate per tipo (non il macro-settore Finance)
+        "industries": ["Insurance—Reinsurance", "Insurance - Reinsurance",
+                       "Reinsurance", "Insurance—Property & Casualty",
+                       "Insurance - Property & Casualty",
+                       "Insurance—Specialty", "Insurance—Life"],
+        "sectors": [],
         "min_mcap_m": 500,
         "max_per_filiera": 20,
         "bottleneck_keywords": ["reinsurance", "insurance", "casualty",
@@ -166,10 +177,11 @@ FILIERE_DEFINITIONS = {
     },
 
     "packaging_foreste": {
-        # TV taxonomy: carta/packaging/legno → "Process Industries"
-        # (include chimica, gomma, vetro, carta, packaging)
-        "industries": [],
-        "sectors": ["Process Industries"],
+        # TV industries: packaging, carta, legno — più specifici del macro-settore
+        "industries": ["Packaging & Containers", "Containers & Packaging",
+                       "Paper & Paper Products", "Paper Products",
+                       "Lumber & Wood Production", "Forest Products"],
+        "sectors": [],
         "min_mcap_m": 200,
         "max_per_filiera": 20,
         "bottleneck_keywords": ["packaging", "cardboard", "corrugated",
