@@ -162,12 +162,21 @@ def load_todo() -> str:
 
 
 def load_previous_briefings(user: str, days: int = 30) -> list[dict]:
+    # docs/archivio/ persiste tra run (committato in git); briefings/ è effimero
+    archive_dir = SCRIPT_DIR.parent / "docs" / "archivio"
     out = []
     for d in range(1, days + 1):
         date = (datetime.now() - timedelta(days=d)).strftime("%Y-%m-%d")
-        md_path = DEFAULT_OUTPUT_DIR / f"{date}-{user.lower()}.md"
-        if md_path.exists():
-            out.append({"date": date, "path": str(md_path)})
+        # Controlla archivio HTML (persistente) poi output dir locale
+        candidates = [
+            archive_dir / f"{date}-{user.lower()}.html",
+            DEFAULT_OUTPUT_DIR / f"{date}-{user.lower()}.html",
+            DEFAULT_OUTPUT_DIR / f"{date}-{user.lower()}.md",
+        ]
+        for p in candidates:
+            if p.exists():
+                out.append({"date": date, "path": str(p)})
+                break
     return out
 
 
