@@ -127,12 +127,17 @@ def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
 # STEP 2 — LOAD LOCAL CONTEXT
 # =============================================================================
 
+# Users whose briefing narrative uses feminine Italian; all others default to maschile.
+_FEMININE_USERS: frozenset[str] = frozenset()
+
+
 def load_portfolio(user: str) -> dict:
     """Carica portafoglio utente da CSV locale."""
+    gender = "femminile" if user.lower() in _FEMININE_USERS else "maschile"
     csv_path = DEFAULT_PORTFOLIO_DIR / f"{user.lower()}.csv"
     if not csv_path.exists():
         log.warning("Portfolio %s non trovato in %s", user, csv_path)
-        return {"user": user, "positions": [], "cash": 0, "pac_monthly": 0}
+        return {"user": user, "positions": [], "cash": 0, "pac_monthly": 0, "gender": gender}
     import pandas as pd
     df = pd.read_csv(csv_path, comment="#")
     df = df.dropna(subset=["ticker"])
@@ -152,7 +157,49 @@ def load_portfolio(user: str) -> dict:
                 "currency": str(row.get("currency", "EUR")).strip(),
                 "notes": str(row.get("notes", "")).strip() if "notes" in row else "",
             })
-    return {"user": user, "positions": positions, "cash": cash, "pac_monthly": pac}
+    return {"user": user, "positions": positions, "cash": cash, "pac_monthly": pac, "gender": gender}
+
+
+def enrich_portfolio_prices(user_data: dict) -> dict:
+    """Aggiunge prezzi live yfinance alle posizioni del portafoglio.
+
+    Essenziale affinché Claude usi prezzi corretti invece della propria
+    knowledge base (che può essere stantia di settimane o mesi).
+    Parallelo con ThreadPoolExecutor — ~1-2s totali invece di 10-15s sequenziali.
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        log.warning("yfinance non disponibile: prezzi portafoglio non arricchiti")
+        return user_data
+    positions = user_data.get("positions", [])
+    if not positions:
+        return user_data
+
+    def _fetch_price(pos: dict) -> None:
+        tkr = pos["ticker"]
+        try:
+            t = yf.Ticker(tkr)
+            fi = getattr(t, "fast_info", None)
+            price = None
+            if fi is not None:
+                price = getattr(fi, "last_price", None) or getattr(fi, "regularMarketPrice", None)
+            if not price:
+                hist = t.history(period="3d")
+                if not hist.empty:
+                    price = float(hist["Close"].dropna().iloc[-1])
+            if price and price > 0:
+                pos["current_price"] = round(float(price), 2)
+                pos["market_value"] = round(float(price) * pos["shares"], 2)
+        except Exception as e:
+            log.debug("Prezzo %s non disponibile: %s", tkr, e)
+
+    with ThreadPoolExecutor(max_workers=min(len(positions), 8)) as ex:
+        list(ex.map(_fetch_price, positions))
+
+    enriched = sum(1 for p in positions if "current_price" in p)
+    log.info("Portfolio prices enriched: %d/%d posizioni", enriched, len(positions))
+    return user_data
 
 
 def load_todo() -> str:
@@ -520,9 +567,12 @@ Inserisci 2-3 nella sezione "Filiere strategiche" se il Piotroski ≥5.
             lines.append(f"  [{item['source']}]{pub} {item['title']}{summ}")
         news_section = "NEWS FRESCHE (RSS ultimi 36h, usa queste come base per le sezioni notizie):\n" + "\n".join(lines)
 
+    gender = user_data.get("gender", "maschile")
+    gender_note = f"GENERE NARRATIVA: {user_data['user'].upper()} è {'un uomo' if gender == 'maschile' else 'una donna'} — usa il genere {gender} in tutta la narrativa italiana.\n"
+
     return f"""Genera il briefing per {user_data['user'].upper()} in data {datetime.now():%Y-%m-%d}.
 
-MODE: {mode}
+{gender_note}MODE: {mode}
 {ctx_section}
 {news_section}
 
@@ -729,6 +779,8 @@ def main():
     log.info("Portfolio %s: %d posizioni, cash=%.0f, pac=%.0f",
              args.user, len(user_data["positions"]),
              user_data["cash"], user_data["pac_monthly"])
+    if not args.dry_run:
+        user_data = enrich_portfolio_prices(user_data)
 
     todo = load_todo()
     previous = load_previous_briefings(args.user)

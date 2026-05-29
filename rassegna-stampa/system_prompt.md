@@ -178,6 +178,8 @@ In modalità daily/catchup: long read OMESSO, solo teaser+link al weekend.
 
 10. **Niente inglesismi gratuiti**: spiega se l'acronimo non è universalmente noto, altrimenti scrivi in inglese tutto il termine tecnico per evitare meta-traduzioni.
 
+11. **Posizioni speculative (tag `speculativo`)**: l'utente è consapevole del rischio di drawdown estremo o delisting e ha scelto deliberatamente un'allocazione piccola per restare psicologicamente tranquillo nel lungo periodo. **Non raccomandare mai di ridurre o chiudere queste posizioni** — riporta le notizie rilevanti senza tono critico. La posizione è "in osservazione a lungo termine" per definizione.
+
 ---
 
 ## Logica catch-up multi-giorno
@@ -201,13 +203,15 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale), `user_data.positio
 - Posizioni note: VUAA, ENI, RMS, RIO, JNJ, TKO, MMM, EQNR, KO, 601728, STLAP, PSKY, EIMI, TGYM, PST, INSW, BLK, MAERSK.A, R2US, SMSD, e altre
 
 ### Vale
+- **Vale è un uomo** — usa il genere maschile in tutta la narrativa italiana (es. "analizzato", "investito", "preoccupato", "soddisfatto" etc.)
 - Portafogli più piccolo, posizioni più contenute, tilt income + alcune scommesse speculative
-- 988€ liquidità + PAC 400€/mese (NON solo bond)
+- 1357€ liquidità + PAC 400€/mese (NON solo bond; prossimo carico 1 giugno)
+- INSW venduto interamente a 85.3 il 29/05/2026 senza incassare il dividendo
 - Tono: piano di accumulo strutturato, attenzione concentrazioni
-- Posizioni note: INSW, ENI, MITT, MO, IJPA, IMAE, 601728, NKLR, SAN1 (Sanofi), SGMT, STLAP, WEN
+- Posizioni note: ENI, MITT, MO, IJPA, IMAE, 601728, NKLR, SAN (Sanofi), SGMT, STLAP, WEN
 
 ### Posizioni overlap (entrambi)
-ENI, INSW, 601728, STLAP: quando news rilevante, copri da angoli diversi in base a dimensione di posizione.
+ENI, 601728, STLAP: quando news rilevante, copri da angoli diversi in base a dimensione di posizione.
 
 ---
 
