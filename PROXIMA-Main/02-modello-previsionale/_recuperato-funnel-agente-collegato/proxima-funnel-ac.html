@@ -1,0 +1,1711 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Proxima — Modello Funnel (in italiano)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0C1420;
+    --card: #121E30;
+    --card-hi: #17243A;
+    --border: #1E2A3E;
+    --border-hi: #2A3952;
+    --gold: #C4A962;
+    --gold-dim: #8E7940;
+    --text: #E8ECF2;
+    --text-dim: #8B98B0;
+    --text-faint: #5C6B84;
+    --success: #4ADE80;
+    --warning: #F59E0B;
+    --danger: #F87171;
+    --info: #60A5FA;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--text); font-family: 'DM Sans', system-ui, sans-serif; font-size: 14px; line-height: 1.5; }
+  body { min-height: 100vh; overflow-x: hidden; }
+  .mono { font-family: 'DM Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .gold { color: var(--gold); }
+  .text-dim { color: var(--text-dim); }
+  .text-faint { color: var(--text-faint); }
+  .uppercase { text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; font-weight: 500; }
+
+  /* Layout */
+  .app { display: grid; grid-template-columns: 360px 1fr; min-height: 100vh; }
+  .sidebar { background: var(--card); border-right: 1px solid var(--border); padding: 20px; overflow-y: auto; max-height: 100vh; position: sticky; top: 0; }
+  .main { padding: 24px 32px; max-width: 100%; overflow-x: hidden; }
+  @media (max-width: 1100px) { .app { grid-template-columns: 1fr; } .sidebar { position: static; max-height: none; } }
+
+  /* Header */
+  .brand { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .brand h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+  .brand-tag { color: var(--gold); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+  .subtitle { color: var(--text-dim); font-size: 13px; margin-bottom: 24px; }
+
+  /* Sidebar sections */
+  .panel { background: var(--card-hi); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; cursor: pointer; user-select: none; background: var(--card-hi); }
+  .panel-header:hover { background: var(--border); }
+  .panel-header h3 { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
+  .panel-header .chev { color: var(--gold); font-size: 10px; }
+  .panel-body { padding: 8px 14px 16px; border-top: 1px solid var(--border); background: var(--card); }
+
+  /* Sliders */
+  .slider-row { margin-bottom: 14px; }
+  .slider-row:last-child { margin-bottom: 0; }
+  .slider-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; gap: 8px; }
+  .slider-label .name { font-size: 12px; color: var(--text-dim); flex: 1; }
+  .slider-label .val { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--gold); font-weight: 500; }
+  input[type=range] { width: 100%; -webkit-appearance: none; appearance: none; height: 4px; background: var(--border); border-radius: 2px; outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: var(--gold); border-radius: 50%; cursor: pointer; border: 2px solid var(--bg); }
+  input[type=range]::-moz-range-thumb { width: 14px; height: 14px; background: var(--gold); border-radius: 50%; cursor: pointer; border: 2px solid var(--bg); }
+
+  /* Main content */
+  .section { margin-bottom: 32px; }
+  .section-title { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 14px; font-weight: 500; }
+
+  /* KPI Cards */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .kpi-card.accent { border-color: var(--gold-dim); background: linear-gradient(180deg, rgba(196,169,98,0.04) 0%, var(--card) 100%); }
+  .kpi-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
+  .kpi-value { font-family: 'DM Mono', monospace; font-size: 28px; font-weight: 500; color: var(--text); letter-spacing: -0.02em; }
+  .kpi-sub { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+  .kpi-delta { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; padding: 2px 6px; border-radius: 4px; margin-top: 6px; }
+  .delta-pos { background: rgba(74,222,128,0.12); color: var(--success); }
+  .delta-neg { background: rgba(248,113,113,0.12); color: var(--danger); }
+  .delta-flat { background: rgba(139,152,176,0.1); color: var(--text-dim); }
+
+  /* Cards / panels */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .card-sub { font-size: 12px; color: var(--text-dim); margin-bottom: 16px; }
+
+  /* Table */
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
+  table.proj { width: 100%; border-collapse: collapse; font-family: 'DM Mono', monospace; font-size: 12px; }
+  table.proj thead { background: var(--card-hi); position: sticky; top: 0; z-index: 2; }
+  table.proj th { text-align: right; padding: 10px 8px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); font-weight: 500; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.proj th:first-child, table.proj td:first-child { text-align: left; position: sticky; left: 0; background: inherit; z-index: 1; }
+  table.proj td { padding: 8px; text-align: right; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+  table.proj tr:hover td { background: var(--card-hi); }
+  table.proj tr.phase-boundary td { border-top: 2px solid var(--gold-dim); }
+  table.proj tr.capacity-limited td { background: rgba(245,158,11,0.05); }
+  table.proj tr.break-even td { background: rgba(74,222,128,0.08); }
+  .pill { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; letter-spacing: 0.04em; }
+  .pill-p1 { background: #1E2A3E; color: var(--text-dim); }
+  .pill-p2 { background: #2A3952; color: var(--text); }
+  .pill-p3 { background: rgba(96,165,250,0.15); color: var(--info); }
+  .pill-p4 { background: rgba(196,169,98,0.2); color: var(--gold); }
+  .pill-p5 { background: rgba(74,222,128,0.15); color: var(--success); }
+
+  /* Buttons */
+  .btn { background: var(--gold); color: var(--bg); border: 0; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; font-family: inherit; letter-spacing: 0.02em; }
+  .btn:hover { background: #D6BC73; }
+  .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* Chart container */
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 900px) { .chart-row { grid-template-columns: 1fr; } }
+
+  /* Warnings */
+  .warn-banner { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); border-radius: 10px; padding: 12px 14px; color: var(--warning); font-size: 13px; display: flex; align-items: center; gap: 10px; }
+  .warn-banner .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); flex-shrink: 0; }
+  .info-banner { background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.2); border-radius: 10px; padding: 12px 14px; color: var(--info); font-size: 13px; }
+
+  /* Toolbar */
+  .toolbar { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 14px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--gold-dim); }
+
+  /* Phase pills P6–P7 */
+  .pill-p6 { background: rgba(74,222,128,0.1); color: #4ADE80; }
+  .pill-p7 { background: rgba(74,222,128,0.2); color: #22C55E; }
+
+  /* Scenario radio buttons */
+  .scenario-group { display: flex; gap: 8px; margin-bottom: 14px; }
+  .scenario-btn { flex: 1; padding: 8px 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text-dim); font-size: 12px; font-weight: 500; cursor: pointer; text-align: center; font-family: inherit; transition: all 0.15s; }
+  .scenario-btn:hover { border-color: var(--gold-dim); }
+  .scenario-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(196,169,98,0.08); }
+  .scenario-btn.scenario-base.active { border-color: var(--success); color: var(--success); background: rgba(74,222,128,0.08); }
+  .scenario-btn.scenario-recessione.active { border-color: var(--warning); color: var(--warning); background: rgba(245,158,11,0.08); }
+  .scenario-btn.scenario-crisi.active { border-color: var(--danger); color: var(--danger); background: rgba(248,113,113,0.08); }
+
+  /* Actual data rows */
+  table.proj tr.actual-data td { background: rgba(96,165,250,0.06); }
+  table.proj tr.actual-data:hover td { background: rgba(96,165,250,0.12); }
+
+  /* Pre-release row dimming */
+  table.proj tr.pre-release td { opacity: 0.7; }
+  table.proj tr.pre-release:hover td { opacity: 1; }
+
+  /* Negative/positive burn */
+  .burn-positive { color: var(--danger); }
+  .burn-negative { color: var(--success); }
+  .cash-critical { color: var(--danger); font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.7/babel.min.js"></script>
+
+<script type="text/babel" data-presets="env,react">
+/* ============================================================
+   Proxima Funnel Model — Bottom-Up 36 mesi (M-12 → M+23)
+   v3: assunzioni dinamiche, budget intelligente, CAC per canale
+   ============================================================ */
+window.PROXIMA = window.PROXIMA || {};
+
+window.PROXIMA.getPhase = function (m) {
+  if (m <= 3) return 1; if (m <= 6) return 2; if (m <= 9) return 3;
+  if (m <= 12) return 4; if (m <= 15) return 5; if (m <= 18) return 6; return 7;
+};
+
+window.PROXIMA.phaseNames = {
+  1: 'Fondazione e burocrazia', 2: 'Qualificazioni e compliance',
+  3: 'Pre-lancio (Infrastruttura)', 4: 'Alpha test',
+  5: 'Beta pubblica', 6: 'Early Access', 7: 'Lancio Pubblico'
+};
+
+window.PROXIMA.monthLabel = function (m) {
+  if (m <= 12) return 'M-' + (13 - m);
+  if (m === 13) return 'M0';
+  return 'M+' + (m - 13);
+};
+
+window.PROXIMA.getTarget = function (m) {
+  var pts = [[13, 0], [19, 50], [25, 200], [31, 400], [37, 700]];
+  if (m < 13) return 0;
+  for (var i = 0; i < pts.length - 1; i++) {
+    if (m <= pts[i + 1][0]) {
+      var t = (m - pts[i][0]) / (pts[i + 1][0] - pts[i][0]);
+      return Math.round(pts[i][1] + t * (pts[i + 1][1] - pts[i][1]));
+    }
+  }
+  return 700;
+};
+
+window.PROXIMA.defaultParams = function () {
+  return {
+    showRate: 0.75, checkupToClient: 0.30,
+    assetTransferLagMonths: 2, // lag tra firma mandato e primo ricavo
+    google: { cpc: 1.80, clickToCalc: 0.60, calcToBooking: 0.08,
+      budgetByPhase: { 1:0, 2:0, 3:0, 4:500, 5:2000, 6:3200, 7:4500 } },
+    meta: { cpc: 0.90, clickToCalc: 0.35, calcToBooking: 0.05,
+      budgetByPhase: { 1:0, 2:0, 3:0, 4:300, 5:1100, 6:1600, 7:2300 } },
+    linkedin: { cpc: 6.00, clickToCalc: 0.50, calcToBooking: 0.06,
+      budgetByPhase: { 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:600 }, startMonth: 22 },
+    seo: { baseVisits: 30, growthRate: 0.22, visitToCalc: 0.18, calcToBooking: 0.06 },
+    social: { baseVisits: 60, growthRate: 0.14, visitToCalc: 0.10, calcToBooking: 0.04 },
+    referral: { ratePerClient: 0.06, bookingRate: 0.80, startMonth: 15 },
+    borrowed: { bookingsByPhase: { 1:0, 2:0, 3:0, 4:2, 5:5, 6:8, 7:12 } },
+    founderHoursPerWeek: 25, hoursOnboarding: 3.5, // AC: la SIM gestisce la burocrazia del mandato
+    arpu: 374, churnMonthly: 0.006, // agente collegato: AUM-based, mandati più stabili
+    constitution: {
+      notaio: 2500, cciaa: 200, impostoRegistro: 200, bollo: 156,
+      iscrizioneOCF: 0, commercialistaIniziale: 1500, avvocato: 2500,
+      assicurazioneRC: 0, sitoWeb: 4000, branding: 3000, setupCRM: 500,
+      esamiCertificazioni: 0, simIntegration: 1500, pecFirmaDigitale: 75
+    },
+    operating: {
+      commercialista: 400, coworking: 350, software: 350,
+      assicurazioneMensile: 0, pecTelCloud: 100, quotaOCF: 0
+    },
+    personnel: {
+      founderComp: 1000, numFounders: 2, inpsRate: 0.26
+    },
+    hiring: {
+      consultantHoursPerWeek: 20,
+      consultantCost: 2500,
+      maxConsultants: 4,
+      firstConsultantMonth: 19,
+      backOfficeTrigger: 80,
+      backOfficeCost: 900,
+      backOfficeMinMonth: 21,
+      contentTrigger: 40,
+      contentCost: 800,
+      contentMinMonth: 20,
+      juniorTrigger: 150,
+      juniorCost: 1200,
+      juniorHoursPerWeek: 25,
+      juniorMinMonth: 25
+    },
+    budgetCapAdjust: true,
+    budgetCapThreshold: 0.85,
+    riskScenario: 'base',
+    startingCapital: 180000,
+    waitingList: { count: 10, conversionRate: 0.80 },
+    aum: { avgPerClient: 50000, sp500Annual: 0.07, sp500Benchmark: 0.10, feeRate: 0.012, proximaSplit: 0.50, annualContributions: 4000, qualifyRate: 0.65, marketShock: 0,
+      annualWithdrawalRate: 0.04, dist: { s_pct: 0.35, s_avg: 20000, m_pct: 0.40, m_avg: 50000, l_pct: 0.25, l_avg: 100000 } },
+    simDelayMonths: 0,
+    launchCalendarMonth: 9,
+    seasonality: [0, 1.2, 1.0, 1.1, 1.05, 0.95, 0.85, 0.50, 0.40, 1.30, 1.10, 1.0, 0.60],
+    actuals: { currentMonth: 0, totalClients: 0, cashBalance: 0 },
+    deferredFees: false,
+    mortgage: { enabled: false, principal: 180000, rate: 0.054, preAmortMonths: 18, amortMonths: 60 },
+    taxation: { enabled: false, iresRate: 0.24, irapRate: 0.039 }
+  };
+};
+
+function constitutionForMonth(m, c) {
+  if (m === 1) return c.notaio + c.cciaa + c.impostoRegistro + c.bollo + c.commercialistaIniziale;
+  if (m === 2) return c.pecFirmaDigitale + c.iscrizioneOCF;
+  if (m === 3) return c.simIntegration;
+  if (m === 4) return c.avvocato + c.sitoWeb / 2;
+  if (m === 5) return c.assicurazioneRC + c.sitoWeb / 2;
+  if (m === 6) return c.branding;
+  if (m === 7) return c.setupCRM;
+  return 0;
+}
+
+var RISK = {
+  base:       { clientMult: 1.0, costMult: 1.0, churnMult: 1.0 },
+  recessione: { clientMult: 0.7, costMult: 1.15, churnMult: 1.5 },
+  crisi:      { clientMult: 0.5, costMult: 1.15, churnMult: 2.0 }
+};
+
+var AGENTS_BY_PHASE = { 1: 10, 2: 16, 3: 25, 4: 32, 5: 35, 6: 35, 7: 35 };
+
+window.PROXIMA.simulate = function (p, months) {
+  months = months || 36;
+  var results = [], totalClients = 0, revCum = 0, costCum = 0;
+  var cohorts = [];
+  var launchM = 13 + (p.simDelayMonths || 0);
+  var risk = RISK[p.riskScenario] || RISK.base;
+  var opBase = 0;
+  var keys = Object.keys(p.operating);
+  for (var k = 0; k < keys.length; k++) opBase += p.operating[keys[k]];
+  var cash = p.startingCapital;
+  var cashMin = cash, cashMinMonth = 1;
+  var h = p.hiring;
+  var hiredConsultants = 0, hasBackOffice = false, hasContent = false, hasJunior = false;
+  var hiringPlan = [];
+  var lastConsultantHireMonth = 0;
+
+  var gCumSpend = 0, gCumClients = 0;
+  var mCumSpend = 0, mCumClients = 0;
+  var lCumSpend = 0, lCumClients = 0;
+  var sp500Monthly = Math.pow(1 + p.aum.sp500Benchmark, 1 / 12) - 1;
+  var sp500BenchmarkValue = 0;
+  var revWindow12 = [], costWindow12 = [];
+
+  for (var m = 1; m <= months; m++) {
+    var phase = window.PROXIMA.getPhase(m);
+    var phaseName = window.PROXIMA.phaseNames[phase];
+    var label = window.PROXIMA.monthLabel(m - (p.simDelayMonths || 0));
+    var isPreRelease = m < launchM;
+    var calMonth = ((m - launchM + (p.launchCalendarMonth || 9) - 1) % 12 + 12) % 12 + 1;
+    var effSeasonMult = isPreRelease ? 1 : ((p.seasonality && p.seasonality[calMonth]) ? p.seasonality[calMonth] : 1.0);
+
+    // --- Appointment capacity: no client cap, only new-client bottleneck ---
+    var fHours = p.founderHoursPerWeek * 4.33;
+    var consultantHours = hiredConsultants * h.consultantHoursPerWeek * 4.33;
+    var juniorHours = hasJunior ? h.juniorHoursPerWeek * 4.33 : 0;
+    var totHours = fHours + consultantHours + juniorHours;
+    var maxNewByHours = p.hoursOnboarding > 0 ? totHours / p.hoursOnboarding : 999;
+
+    // --- Dynamic hiring: trigger when appointment slots are >85% full ---
+    if (!hasBackOffice && m >= h.backOfficeMinMonth && totalClients >= h.backOfficeTrigger) {
+      hasBackOffice = true;
+      hiringPlan.push({ month: m, monthLabel: label, role: 'Back-office',
+        cost: h.backOfficeCost, trigger: h.backOfficeTrigger + ' clienti' });
+    }
+    if (!hasContent && m >= h.contentMinMonth && totalClients >= h.contentTrigger) {
+      hasContent = true;
+      hiringPlan.push({ month: m, monthLabel: label, role: 'Content creator',
+        cost: h.contentCost, trigger: h.contentTrigger + ' clienti' });
+    }
+    if (!hasJunior && m >= h.juniorMinMonth && totalClients >= h.juniorTrigger) {
+      hasJunior = true;
+      hiringPlan.push({ month: m, monthLabel: label, role: 'Consulente junior',
+        cost: h.juniorCost, trigger: h.juniorTrigger + ' clienti' });
+    }
+
+    // --- Demand calculation (full budget first, then adjust) ---
+    var bGFull = p.google.budgetByPhase[phase] || 0;
+    var bMFull = p.meta.budgetByPhase[phase] || 0;
+    var bLFull = (m >= p.linkedin.startMonth) ? (p.linkedin.budgetByPhase[phase] || 0) : 0;
+
+    var gClicksFull = bGFull > 0 ? bGFull / p.google.cpc : 0;
+    var gBookFull = gClicksFull * p.google.clickToCalc * p.google.calcToBooking;
+    var mClicksFull = bMFull > 0 ? bMFull / p.meta.cpc : 0;
+    var mBookFull = mClicksFull * p.meta.clickToCalc * p.meta.calcToBooking;
+    var lClicksFull = bLFull > 0 ? bLFull / p.linkedin.cpc : 0;
+    var lBookFull = lClicksFull * p.linkedin.clickToCalc * p.linkedin.calcToBooking;
+
+    var seoV = p.seo.baseVisits * Math.pow(1 + p.seo.growthRate, m - 1);
+    var seoBook = seoV * p.seo.visitToCalc * p.seo.calcToBooking;
+    var socV = p.social.baseVisits * Math.pow(1 + p.social.growthRate, m - 1);
+    var socBook = socV * p.social.visitToCalc * p.social.calcToBooking;
+
+    var refBook = (m >= p.referral.startMonth) ? totalClients * p.referral.ratePerClient * p.referral.bookingRate : 0;
+    var borBook = p.borrowed.bookingsByPhase[phase] || 0;
+
+    if (isPreRelease) {
+      gBookFull = 0; mBookFull = 0; lBookFull = 0; seoBook = 0; socBook = 0; refBook = 0;
+      bGFull = 0; bMFull = 0; bLFull = 0;
+      if (m < launchM - 3) borBook = 0;
+    }
+
+    var totBookFull = (gBookFull + mBookFull + lBookFull + seoBook + socBook + refBook) * effSeasonMult + borBook;
+    var checkupsFull = totBookFull * p.showRate;
+    var newRawFull = checkupsFull * p.checkupToClient * (p.aum.qualifyRate || 1) * risk.clientMult;
+
+    // --- Appointment utilization: demand vs slots ---
+    var appointmentUtil = maxNewByHours > 0 ? newRawFull / maxNewByHours : 0;
+
+    // --- Hire consultant when appointment demand exceeds 85% of slots ---
+    if (m >= h.firstConsultantMonth && hiredConsultants < h.maxConsultants
+        && appointmentUtil > 0.85 && (m - lastConsultantHireMonth) >= 3) {
+      hiredConsultants++;
+      lastConsultantHireMonth = m;
+      // Recalculate capacity after hire
+      consultantHours = hiredConsultants * h.consultantHoursPerWeek * 4.33;
+      totHours = fHours + consultantHours + juniorHours;
+      maxNewByHours = p.hoursOnboarding > 0 ? totHours / p.hoursOnboarding : 999;
+      appointmentUtil = maxNewByHours > 0 ? newRawFull / maxNewByHours : 0;
+      hiringPlan.push({ month: m, monthLabel: label,
+        role: 'Consulente #' + hiredConsultants,
+        cost: h.consultantCost,
+        trigger: 'appuntamenti al ' + Math.round(appointmentUtil * 100) + '% dopo assunzione' });
+    }
+
+    // --- Smart budget: reduce ads only when appointment slots are full ---
+    var budgetFactor = 1.0;
+    if (p.budgetCapAdjust && m >= 13 && appointmentUtil > p.budgetCapThreshold) {
+      budgetFactor = Math.max(0.05, 1 - (appointmentUtil - p.budgetCapThreshold) / (1 - p.budgetCapThreshold));
+    }
+
+    // --- Apply budget factor ---
+    var bG = bGFull * budgetFactor;
+    var bM = bMFull * budgetFactor;
+    var bL = bLFull * budgetFactor;
+    var gClicks = bG > 0 ? bG / p.google.cpc : 0;
+    var gBook = gClicks * p.google.clickToCalc * p.google.calcToBooking;
+    var mClicks = bM > 0 ? bM / p.meta.cpc : 0;
+    var mBook = mClicks * p.meta.clickToCalc * p.meta.calcToBooking;
+    var lClicks = bL > 0 ? bL / p.linkedin.cpc : 0;
+    var lBook = lClicks * p.linkedin.clickToCalc * p.linkedin.calcToBooking;
+    if (isPreRelease) { gBook = 0; mBook = 0; lBook = 0; bG = 0; bM = 0; bL = 0; }
+
+    var totBook = (gBook + mBook + lBook + seoBook + socBook + refBook) * effSeasonMult + borBook;
+    var checkups = totBook * p.showRate;
+    var newRaw = checkups * p.checkupToClient * (p.aum.qualifyRate || 1) * risk.clientMult;
+
+    var newCapped = (m >= 13) ? Math.min(newRaw, maxNewByHours) : newRaw;
+    var capLimited = newRaw > newCapped + 0.5;
+
+    // --- Churn: proportional across all cohorts ---
+    var churnRate = p.churnMonthly * risk.churnMult;
+    var churn = 0;
+    for (var ci = 0; ci < cohorts.length; ci++) {
+      var loss = cohorts[ci].count * churnRate;
+      churn += loss;
+      cohorts[ci].count -= loss;
+    }
+
+    // --- Add new cohort ---
+    if (newCapped > 0) cohorts.push({ count: newCapped, birthMonth: m });
+
+    // --- Waiting list injection at M0 ---
+    var waitingListBoost = 0;
+    if (m === launchM) {
+      waitingListBoost = Math.round(p.waitingList.count * p.waitingList.conversionRate);
+      if (waitingListBoost > 0) cohorts.push({ count: waitingListBoost, birthMonth: m });
+    }
+
+    // --- Total clients from cohorts ---
+    totalClients = 0;
+    for (var cj = 0; cj < cohorts.length; cj++) totalClients += cohorts[cj].count;
+
+    // --- Actuals injection: calibrate model to real data at currentMonth ---
+    var act = p.actuals || {};
+    var isActual = act.currentMonth > 0 && m <= act.currentMonth;
+    if (act.currentMonth > 0 && m === act.currentMonth) {
+      if (act.totalClients > 0 && totalClients > 0) {
+        var scale = act.totalClients / totalClients;
+        for (var cx = 0; cx < cohorts.length; cx++) cohorts[cx].count *= scale;
+        totalClients = act.totalClients;
+      }
+      if (act.cashBalance > 0) cash = act.cashBalance;
+    }
+
+    // --- Per-channel client attribution ---
+    var paidConvRate = p.showRate * p.checkupToClient * (p.aum.qualifyRate || 1) * risk.clientMult;
+    var gClients = gBook * paidConvRate;
+    var mClients = mBook * paidConvRate;
+    var lClients = lBook * paidConvRate;
+    gCumSpend += bG; gCumClients += gClients;
+    mCumSpend += bM; mCumClients += mClients;
+    lCumSpend += bL; lCumClients += lClients;
+
+    // --- Costs ---
+    var constCost = constitutionForMonth(m, p.constitution);
+    var opCost = opBase * risk.costMult;
+
+    var persCost = p.personnel.founderComp * p.personnel.numFounders * (1 + p.personnel.inpsRate * 2 / 3);
+    persCost += hiredConsultants * h.consultantCost;
+    if (hasBackOffice) persCost += h.backOfficeCost;
+    if (hasContent) persCost += h.contentCost;
+    if (hasJunior) persCost += h.juniorCost;
+
+    var mktCost = (bG + bM + bL) * risk.costMult;
+
+    // --- Mortgage: billed every 6 months from month 1 ---
+    var mortgageCost = 0;
+    if (p.mortgage.enabled && m % 6 === 0) {
+      if (m <= p.mortgage.preAmortMonths) {
+        mortgageCost = p.mortgage.principal * p.mortgage.rate / 2;
+      } else {
+        var rSemi = p.mortgage.rate / 2;
+        var nSemi = Math.ceil(p.mortgage.amortMonths / 6);
+        mortgageCost = rSemi > 0
+          ? p.mortgage.principal * rSemi / (1 - Math.pow(1 + rSemi, -nSemi))
+          : p.mortgage.principal / nSemi;
+      }
+    }
+
+    // --- Revenue: cohort-based AUM, market shock, split ratchet, withdrawal ---
+    var lag = p.assetTransferLagMonths || 0;
+    var r12 = p.aum.sp500Annual / 12;
+    var mktF = 1 + (p.aum.marketShock || 0);
+    var dd = p.aum.dist;
+    var sumPct = dd ? (dd.s_pct + dd.m_pct + dd.l_pct) : 0;
+    var effectiveAvgAUM = (sumPct > 0.01)
+      ? (dd.s_pct * dd.s_avg + dd.m_pct * dd.m_avg + dd.l_pct * dd.l_avg) / sumPct
+      : p.aum.avgPerClient;
+    var netPMT = (p.aum.annualContributions - effectiveAvgAUM * (p.aum.annualWithdrawalRate || 0)) / 12;
+    var totalAUM = 0, payingAUM = 0, payingClients = 0;
+    for (var ck = 0; ck < cohorts.length; ck++) {
+      var cAge = m - cohorts[ck].birthMonth;
+      var aumPer = effectiveAvgAUM * mktF * Math.pow(1 + r12, cAge)
+        + (cAge > 0 && Math.abs(netPMT) > 0.01 ? netPMT * (Math.pow(1 + r12, cAge) - 1) / r12 : 0);
+      totalAUM += cohorts[ck].count * aumPer;
+      var isPaying = p.deferredFees ? cAge >= 12 : cAge >= lag;
+      if (isPaying) { payingClients += cohorts[ck].count; payingAUM += cohorts[ck].count * aumPer; }
+    }
+    var proximaSplit = p.aum.proximaSplit;
+    if (totalAUM >= 30000000) proximaSplit = Math.min(proximaSplit + 0.10, 0.70);
+    else if (totalAUM >= 10000000) proximaSplit = Math.min(proximaSplit + 0.05, 0.70);
+    var mrr = payingAUM * p.aum.feeRate * proximaSplit / 12;
+    var arr = totalAUM * p.aum.feeRate * proximaSplit;
+
+    // --- Taxation: monthly IRES + IRAP provision (rolling 12-month estimate) ---
+    var totCostPreTax = constCost + opCost + persCost + mktCost + mortgageCost;
+    revWindow12.push(mrr);
+    costWindow12.push(totCostPreTax);
+    if (revWindow12.length > 12) { revWindow12.shift(); costWindow12.shift(); }
+    var trailingProfit = Math.max(0,
+      revWindow12.reduce(function(s, v) { return s + v; }, 0) -
+      costWindow12.reduce(function(s, v) { return s + v; }, 0));
+    var taxCost = 0;
+    if (p.taxation.enabled && m >= 13) {
+      taxCost = trailingProfit * p.taxation.iresRate / 12
+        + Math.max(0, mrr - opCost) * p.taxation.irapRate;
+    }
+    var totCost = totCostPreTax + taxCost;
+
+    // --- S&P 500 benchmark tracking ---
+    if (m === launchM) { sp500BenchmarkValue = totalAUM; }
+    else if (m > 13) { sp500BenchmarkValue = sp500BenchmarkValue * (1 + sp500Monthly); }
+
+    revCum += mrr;
+    costCum += totCost;
+
+    var netBurn = totCost - mrr;
+    cash -= netBurn;
+    if (cash < cashMin) { cashMin = cash; cashMinMonth = m; }
+
+    var staffCount = p.personnel.numFounders + hiredConsultants + (hasBackOffice?1:0) + (hasContent?1:0) + (hasJunior?1:0);
+
+    results.push({
+      month: m, monthLabel: label, phase: phase, phaseName: phaseName, isPreRelease: isPreRelease,
+      googleClicks: gClicks, googleBookings: gBook, googleBudget: bG,
+      metaClicks: mClicks, metaBookings: mBook, metaBudget: bM,
+      linkedinClicks: lClicks, linkedinBookings: lBook, linkedinBudget: bL,
+      seoVisits: seoV, seoBookings: seoBook, socialVisits: socV, socialBookings: socBook,
+      referralBookings: refBook, borrowedBookings: borBook,
+      totalBookings: totBook, checkups: checkups,
+      newClientsRaw: newRaw, maxNewPerMonth: maxNewByHours, newClientsCapped: newCapped,
+      churnedClients: churn, totalClients: totalClients,
+      constitutionCosts: constCost, operatingCosts: opCost,
+      personnelCosts: persCost, marketingCosts: mktCost,
+      mortgageCost: mortgageCost, taxCost: taxCost, totalCosts: totCost,
+      payingClients: payingClients, payingAUM: payingAUM, waitingListBoost: waitingListBoost,
+      mrr: mrr, arr: arr, currentSplit: proximaSplit, isActual: isActual, calMonth: calMonth, effectiveAvgAUM: effectiveAvgAUM,
+      totalAUM: totalAUM, sp500BenchmarkValue: sp500BenchmarkValue,
+      netBurn: netBurn, cashRemaining: cash,
+      revenueCumulative: revCum, costsCumulative: costCum,
+      founderHours: fHours, totalHours: totHours,
+      hoursForOnboarding: newCapped * p.hoursOnboarding,
+      maxNewThisMonth: maxNewByHours,
+      capacityLimited: capLimited,
+      appointmentUtilization: appointmentUtil, budgetFactor: budgetFactor,
+      hiredConsultants: hiredConsultants, hasBackOffice: hasBackOffice,
+      hasContent: hasContent, hasJunior: hasJunior, staffCount: staffCount,
+      activeAgents: AGENTS_BY_PHASE[phase] || 35
+    });
+  }
+
+  var beOp = null, beCum = null;
+  for (var i = 0; i < results.length; i++) {
+    if (beOp === null && results[i].mrr >= results[i].totalCosts) beOp = results[i].month;
+    if (beCum === null && results[i].revenueCumulative >= results[i].costsCumulative) beCum = results[i].month;
+  }
+
+  return {
+    results: results,
+    breakEvenOperational: beOp,
+    breakEvenCumulative: beCum,
+    cacBlended: (gCumClients+mCumClients+lCumClients) > 0
+      ? (gCumSpend+mCumSpend+lCumSpend) / (gCumClients+mCumClients+lCumClients) : 0,
+    cacByChannel: {
+      google: gCumClients > 0 ? gCumSpend / gCumClients : 0,
+      meta: mCumClients > 0 ? mCumSpend / mCumClients : 0,
+      linkedin: lCumClients > 0 ? lCumSpend / lCumClients : 0
+    },
+    cashMinimum: cashMin,
+    cashMinimumMonth: cashMinMonth,
+    hiringPlan: hiringPlan
+  };
+};
+
+</script>
+<script type="text/babel" data-presets="env,react">
+/* Controls — Slider panels for all funnel parameters (v3) */
+window.PROXIMA = window.PROXIMA || {};
+
+const pct = (v) => (v * 100).toFixed(1) + "%";
+const eur = (v) => "€" + Math.round(v).toLocaleString("it-IT");
+const num = (v) => Number(v).toFixed(2);
+const monthLabel = (v) => { const d = v - 13; return d < 0 ? "M" + d : d === 0 ? "M0" : "M+" + d; };
+
+function Slider({ label, value, min, max, step, fmt, onChange }) {
+  return (
+    <div className="slider-row">
+      <div className="slider-label">
+        <span className="name">{label}</span>
+        <span className="val">{fmt ? fmt(value) : value}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))} />
+    </div>
+  );
+}
+
+function Panel({ id, title, openState, onToggle, children }) {
+  const isOpen = !!openState[id];
+  return (
+    <div className="panel">
+      <div className="panel-header" onClick={() => onToggle(id)}>
+        <h3>{title}</h3><span className="chev">{isOpen ? "▼" : "▶"}</span>
+      </div>
+      {isOpen && <div className="panel-body">{children}</div>}
+    </div>
+  );
+}
+
+const PL = ["Fondazione","Qualificazioni","Pre-lancio","Alpha","Beta","Early Access","Lancio"];
+
+function PhaseBudgets({ channel, label, params, updateArray }) {
+  return (
+    <>
+      <div className="uppercase text-faint" style={{ marginTop: 6, marginBottom: 6 }}>
+        Budget pubblicitario {label} per fase (€/mese)
+      </div>
+      {PL.map((ph, i) => (
+        <Slider key={i} label={`Fase ${i+1} (${ph})`} value={params[channel].budgetByPhase[i+1]}
+          min={0} max={6000} step={100} fmt={eur}
+          onChange={(v) => updateArray([channel, "budgetByPhase"], i+1, v)} />
+      ))}
+    </>
+  );
+}
+
+window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
+  const [open, setOpen] = React.useState({
+    scenario:true, funnel:true, google:true, meta:true, linkedin:false,
+    seo:true, social:false, referral:true, borrowed:false, capacity:true,
+    hiring:true, budgetCap:true,
+    constitution:false, operating:false, personnel:true, business:true,
+    waitingList:true, aum:false, mortgage:false, taxation:false, capital:true,
+      stagionalita:false, attualizzazione:true
+  });
+  const toggle = React.useCallback((k) => setOpen((p) => ({ ...p, [k]: !p[k] })), []);
+
+  const update = (path, value) => {
+    const next = JSON.parse(JSON.stringify(params));
+    let ref = next;
+    for (let i = 0; i < path.length - 1; i++) ref = ref[path[i]];
+    ref[path[path.length - 1]] = value;
+    setParams(next);
+  };
+  const updateArray = (path, idx, value) => {
+    const next = JSON.parse(JSON.stringify(params));
+    let ref = next;
+    for (let i = 0; i < path.length - 1; i++) ref = ref[path[i]];
+    ref[path[path.length - 1]][idx] = value;
+    setParams(next);
+  };
+  const S = (path, label, min, max, step, fmt) => (
+    <Slider label={label} value={path.reduce((o,k)=>o[k], params)}
+      min={min} max={max} step={step} fmt={fmt} onChange={(v) => update(path, v)} />
+  );
+  const eurCpc = (v) => "€" + num(v);
+
+  return (
+    <div>
+      <div className="brand"><h1>Proxima</h1><span className="brand-tag">Modello Funnel</span></div>
+      <div className="subtitle">Calcolato dai numeri veri · 36 mesi · aggiornamento in tempo reale</div>
+      <div className="toolbar"><button className="btn-ghost btn" onClick={onReset}>↻ Reset</button></div>
+
+      <Panel id="scenario" title="Scenario di rischio" openState={open} onToggle={toggle}>
+        <div className="scenario-group">
+          {["base","recessione","crisi"].map((s) => (
+            <button key={s}
+              className={"scenario-btn scenario-"+s+(params.riskScenario===s?" active":"")}
+              onClick={() => update(["riskScenario"],s)}>{s}</button>
+          ))}
+        </div>
+      </Panel>
+
+      <Panel id="funnel" title="Dopo la prenotazione" openState={open} onToggle={toggle}>
+        {S(["showRate"],"% che si presenta all'appuntamento",0.3,1,0.01,pct)}
+        {S(["checkupToClient"],"% primo incontro → mandato firmato",0.1,0.7,0.01,pct)}
+        {S(["assetTransferLagMonths"],"Mesi di lag trasferimento asset (firma → primo ricavo)",0,4,1,(v)=>v+" mesi")}
+      </Panel>
+
+      <Panel id="google" title="Google Ads" openState={open} onToggle={toggle}>
+        {S(["google","cpc"],"Costo per click",0.5,5,0.05,eurCpc)}
+        {S(["google","clickToCalc"],"% click → calcolatore",0.1,0.9,0.01,pct)}
+        {S(["google","calcToBooking"],"% calcolatore → prenotazione",0.01,0.25,0.005,pct)}
+        <PhaseBudgets channel="google" label="Google" params={params} updateArray={updateArray} />
+      </Panel>
+
+      <Panel id="meta" title="Meta Ads" openState={open} onToggle={toggle}>
+        {S(["meta","cpc"],"Costo per click",0.2,3,0.05,eurCpc)}
+        {S(["meta","clickToCalc"],"% click → calcolatore",0.05,0.7,0.01,pct)}
+        {S(["meta","calcToBooking"],"% calcolatore → prenotazione",0.01,0.2,0.005,pct)}
+        <PhaseBudgets channel="meta" label="Meta" params={params} updateArray={updateArray} />
+      </Panel>
+
+      <Panel id="linkedin" title="LinkedIn Ads" openState={open} onToggle={toggle}>
+        {S(["linkedin","cpc"],"Costo per click",2,12,0.1,eurCpc)}
+        {S(["linkedin","clickToCalc"],"% click → calcolatore",0.1,0.9,0.01,pct)}
+        {S(["linkedin","calcToBooking"],"% calcolatore → prenotazione",0.01,0.2,0.005,pct)}
+        {S(["linkedin","startMonth"],"Mese di inizio",10,30,1,monthLabel)}
+        <PhaseBudgets channel="linkedin" label="LinkedIn" params={params} updateArray={updateArray} />
+      </Panel>
+
+      <Panel id="seo" title="SEO — traffico gratuito da Google" openState={open} onToggle={toggle}>
+        {S(["seo","baseVisits"],"Visite al sito nel primo mese",0,300,5,(v)=>v+"/mese")}
+        {S(["seo","growthRate"],"Crescita mensile",0,0.5,0.01,pct)}
+        {S(["seo","visitToCalc"],"% visitatori → calcolatore",0.02,0.5,0.01,pct)}
+        {S(["seo","calcToBooking"],"% calcolatore → prenotazione",0.01,0.2,0.005,pct)}
+      </Panel>
+
+      <Panel id="social" title="Social organici" openState={open} onToggle={toggle}>
+        {S(["social","baseVisits"],"Visite al sito nel primo mese",0,300,5,(v)=>v+"/mese")}
+        {S(["social","growthRate"],"Crescita mensile",0,0.4,0.01,pct)}
+        {S(["social","visitToCalc"],"% visitatori → calcolatore",0.02,0.4,0.01,pct)}
+        {S(["social","calcToBooking"],"% calcolatore → prenotazione",0.01,0.15,0.005,pct)}
+      </Panel>
+
+      <Panel id="referral" title="Passaparola" openState={open} onToggle={toggle}>
+        {S(["referral","ratePerClient"],"% clienti attivi che porta 1 contatto/mese",0,0.2,0.005,pct)}
+        {S(["referral","bookingRate"],"% contatti che prenota",0.3,1,0.02,pct)}
+        {S(["referral","startMonth"],"Mese di inizio",10,24,1,monthLabel)}
+      </Panel>
+
+      <Panel id="borrowed" title="PR, podcast ed eventi" openState={open} onToggle={toggle}>
+        <div className="uppercase text-faint" style={{marginBottom:6}}>Prenotazioni/mese per fase</div>
+        {PL.map((ph,i) => (
+          <Slider key={i} label={`Fase ${i+1} (${ph})`} value={params.borrowed.bookingsByPhase[i+1]}
+            min={0} max={40} step={1} fmt={(v)=>v+"/mese"}
+            onChange={(v)=>updateArray(["borrowed","bookingsByPhase"],i+1,v)} />
+        ))}
+      </Panel>
+
+      <Panel id="capacity" title="Capacita e ore di lavoro" openState={open} onToggle={toggle}>
+        {S(["simDelayMonths"],"Ritardo firma SIM (mesi extra di pre-lancio)",0,12,1,(v)=>v===0?"nessuno":v+" mesi")}
+        {S(["founderHoursPerWeek"],"Ore a settimana del founder",5,50,1,(v)=>v+"h")}
+        {S(["hoursOnboarding"],"Ore primo incontro + mandato per nuovo cliente",1,8,0.5,(v)=>v+"h una tantum")}
+      </Panel>
+
+      <Panel id="hiring" title="Assunzioni dinamiche" openState={open} onToggle={toggle}>
+        <div className="uppercase text-faint" style={{marginBottom:8}}>Consulenti aggiuntivi</div>
+        {S(["hiring","consultantHoursPerWeek"],"Ore/settimana per consulente",10,40,5,(v)=>v+"h")}
+        {S(["hiring","consultantCost"],"Costo per consulente (€/mese)",500,5000,100,eur)}
+        {S(["hiring","maxConsultants"],"Max consulenti aggiuntivi",0,6,1)}
+        {S(["hiring","firstConsultantMonth"],"Mese prima assunzione possibile",13,30,1,monthLabel)}
+
+        <div className="uppercase text-faint" style={{marginTop:14,marginBottom:8}}>Back-office</div>
+        {S(["hiring","backOfficeTrigger"],"Clienti necessari per assunzione",20,200,10)}
+        {S(["hiring","backOfficeCost"],"Costo back-office (€/mese)",300,2000,100,eur)}
+        {S(["hiring","backOfficeMinMonth"],"Mese minimo",13,30,1,monthLabel)}
+
+        <div className="uppercase text-faint" style={{marginTop:14,marginBottom:8}}>Content creator</div>
+        {S(["hiring","contentTrigger"],"Clienti necessari per assunzione",10,150,10)}
+        {S(["hiring","contentCost"],"Costo content creator (€/mese)",200,2000,100,eur)}
+        {S(["hiring","contentMinMonth"],"Mese minimo",13,30,1,monthLabel)}
+
+        <div className="uppercase text-faint" style={{marginTop:14,marginBottom:8}}>Consulente junior</div>
+        {S(["hiring","juniorTrigger"],"Clienti necessari per assunzione",50,300,10)}
+        {S(["hiring","juniorCost"],"Costo junior (€/mese)",500,2500,100,eur)}
+        {S(["hiring","juniorHoursPerWeek"],"Ore/settimana junior",10,40,5,(v)=>v+"h")}
+        {S(["hiring","juniorMinMonth"],"Mese minimo",15,36,1,monthLabel)}
+      </Panel>
+
+      <Panel id="budgetCap" title="Gestione budget automatica" openState={open} onToggle={toggle}>
+        <div style={{marginBottom:12}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
+            <input type="checkbox" checked={!!params.budgetCapAdjust}
+              onChange={() => update(["budgetCapAdjust"], !params.budgetCapAdjust)} />
+            Riduci ads quando capacita satura
+          </label>
+          <div className="text-faint" style={{fontSize:11,marginTop:4}}>
+            Scala il budget pubblicitario quando il team non puo gestire nuovi clienti.
+          </div>
+        </div>
+        {params.budgetCapAdjust && S(["budgetCapThreshold"],"Soglia di utilizzo per riduzione",0.5,0.95,0.05,pct)}
+      </Panel>
+
+      <Panel id="constitution" title="Costi di costituzione" openState={open} onToggle={toggle}>
+        {S(["constitution","notaio"],"Notaio",1000,5000,100,eur)}
+        {S(["constitution","cciaa"],"Camera di Commercio (CCIAA)",100,500,50,eur)}
+        {S(["constitution","impostoRegistro"],"Imposta di registro",100,400,50,eur)}
+        {S(["constitution","bollo"],"Bollo",100,300,10,eur)}
+        {S(["constitution","iscrizioneOCF"],"Iscrizione OCF",300,1500,100,eur)}
+        {S(["constitution","commercialistaIniziale"],"Commercialista (iniziale)",500,3000,100,eur)}
+        {S(["constitution","avvocato"],"Avvocato",1000,5000,100,eur)}
+        {S(["constitution","assicurazioneRC"],"Assicurazione RC professionale",1500,6000,100,eur)}
+        {S(["constitution","sitoWeb"],"Sito web",1000,10000,500,eur)}
+        {S(["constitution","branding"],"Branding",1000,8000,500,eur)}
+        {S(["constitution","setupCRM"],"Setup CRM",200,2000,100,eur)}
+        {S(["constitution","esamiCertificazioni"],"Esami e certificazioni",500,3000,100,eur)}
+        {S(["constitution","pecFirmaDigitale"],"PEC e firma digitale",30,200,5,eur)}
+      </Panel>
+
+      <Panel id="operating" title="Costi operativi mensili" openState={open} onToggle={toggle}>
+        {S(["operating","commercialista"],"Commercialista",200,800,50,eur)}
+        {S(["operating","coworking"],"Coworking",0,1500,50,eur)}
+        {S(["operating","software"],"Software",50,600,50,eur)}
+        {S(["operating","assicurazioneMensile"],"Assicurazione mensile",100,500,25,eur)}
+        {S(["operating","pecTelCloud"],"PEC, telefono e cloud",50,300,25,eur)}
+        {S(["operating","quotaOCF"],"Quota annuale OCF",30,200,10,eur)}
+      </Panel>
+
+      <Panel id="personnel" title="Compensi fondatori" openState={open} onToggle={toggle}>
+        {S(["personnel","founderComp"],"Compenso per fondatore (€/mese)",0,3000,100,eur)}
+        {S(["personnel","numFounders"],"Numero fondatori",1,4,1)}
+      </Panel>
+
+      <Panel id="business" title="Ricavi AUM e abbandoni" openState={open} onToggle={toggle}>
+        {S(["aum","feeRate"],"Fee annua al cliente (es. 1.2% = 0.012)",0.005,0.025,0.001,(v)=>(v*100).toFixed(1)+"%")}
+        {S(["aum","proximaSplit"],"Quota Proxima sulla fee (es. 50% = 0.5)",0.30,0.70,0.05,(v)=>(v*100).toFixed(0)+"%")}
+        {S(["aum","annualContributions"],"Versamenti annui medi per cliente (€)",0,20000,500,eur)}
+        {S(["aum","qualifyRate"],"% lead con AUM sufficiente (≥ soglia SIM)",0.30,1.0,0.05,pct)}
+        {S(["churnMonthly"],"% clienti che disdicono ogni mese",0,0.05,0.002,pct)}
+        <div style={{marginTop:12}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
+            <input type="checkbox" checked={!!params.deferredFees}
+              onChange={() => update(["deferredFees"], !params.deferredFees)} />
+            Prima fee AUM accreditata dopo 12 mesi (pagamento differito)
+          </label>
+          <div className="text-faint" style={{fontSize:11,marginTop:4}}>
+            I clienti pagano il primo anno di parcella solo al compimento del 12° mese. Ritarda significativamente il break-even.
+          </div>
+        </div>
+      </Panel>
+
+      <Panel id="waitingList" title="Lista d'attesa e pre-lancio" openState={open} onToggle={toggle}>
+        <div className="text-faint" style={{fontSize:11,marginBottom:10}}>
+          Persone acquisite durante la fase Alpha che diventano clienti al lancio (M0).
+        </div>
+        {S(["waitingList","count"],"Persone in lista d'attesa",0,100,1,(v)=>v+" persone")}
+        {S(["waitingList","conversionRate"],"% che diventa cliente a M0",0,1,0.05,pct)}
+      </Panel>
+
+      <Panel id="aum" title="Patrimonio gestito (AUM) e S&P 500" openState={open} onToggle={toggle}>
+        <div className="text-faint" style={{fontSize:11,marginBottom:10}}>
+          Usato per proiettare il patrimonio totale gestito e confrontarlo con il rendimento S&P 500.
+        </div>
+        {S(["aum","avgPerClient"],"Patrimonio medio per cliente (€)",10000,500000,5000,eur)}
+        {S(["aum","sp500Annual"],"Rendimento annuo portafoglio gestito",0.03,0.12,0.005,pct)}
+        {S(["aum","sp500Benchmark"],"Rendimento benchmark S&P 500 (confronto)",0.05,0.15,0.005,pct)}
+        {S(["aum","marketShock"],"Shock di mercato sull'AUM (0 = nessuno, -0.30 = -30%)",-0.5,0.3,0.05,(v)=>v>=0?(v===0?"nessuno":"+"+Math.round(v*100)+"%"):Math.round(v*100)+"%")}
+        <div className="text-faint" style={{fontSize:11,marginTop:6,padding:"8px 10px",background:"rgba(196,169,98,0.06)",borderRadius:6}}>
+          Split ratchet automatico: +5% a €10M AUM · +10% a €30M AUM (cap 70%)
+        </div>
+        <div className="uppercase text-faint" style={{marginTop:14,marginBottom:6}}>Prelievi e distribuzione AUM</div>
+        {S(["aum","annualWithdrawalRate"],"Prelievi annui medi (% AUM per cliente)",0,0.20,0.01,(v)=>(v*100).toFixed(0)+"%/anno")}
+        <div className="text-faint" style={{fontSize:11,marginBottom:10}}>
+          AUM medio effettivo: {eur((()=>{const d=params.aum.dist,s=d.s_pct+d.m_pct+d.l_pct;return s>0.01?(d.s_pct*d.s_avg+d.m_pct*d.m_avg+d.l_pct*d.l_avg)/s:params.aum.avgPerClient;})())}
+        </div>
+        {S(["aum","dist","s_pct"],"% clienti piccoli",0,0.80,0.05,pct)}
+        {S(["aum","dist","s_avg"],"AUM medio clienti piccoli",5000,80000,2500,eur)}
+        {S(["aum","dist","m_pct"],"% clienti medi",0,0.80,0.05,pct)}
+        {S(["aum","dist","m_avg"],"AUM medio clienti medi",20000,200000,5000,eur)}
+        {S(["aum","dist","l_pct"],"% clienti grandi",0,0.60,0.05,pct)}
+        {S(["aum","dist","l_avg"],"AUM medio clienti grandi",50000,500000,10000,eur)}
+      </Panel>
+
+      <Panel id="mortgage" title="Mutuo (finanziamento 180k)" openState={open} onToggle={toggle}>
+        <div style={{marginBottom:12}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
+            <input type="checkbox" checked={!!params.mortgage.enabled}
+              onChange={() => update(["mortgage","enabled"], !params.mortgage.enabled)} />
+            Capitale ottenuto tramite mutuo
+          </label>
+          <div className="text-faint" style={{fontSize:11,marginTop:4}}>
+            Durante il pre-ammortamento si pagano solo gli interessi. Rata mensile calcolata automaticamente.
+          </div>
+        </div>
+        {params.mortgage.enabled && <>
+          {S(["mortgage","principal"],"Capitale a mutuo",50000,300000,5000,eur)}
+          {S(["mortgage","rate"],"Tasso annuo",0.01,0.12,0.001,(v)=>(v*100).toFixed(2)+"%")}
+          {S(["mortgage","preAmortMonths"],"Mesi pre-ammortamento",6,36,6,(v)=>v+" mesi")}
+          {S(["mortgage","amortMonths"],"Durata piano rimborso (mesi)",12,120,12,(v)=>v+" mesi")}
+          <div className="text-faint" style={{fontSize:11,marginTop:8,padding:"8px",background:"rgba(196,169,98,0.08)",borderRadius:4}}>
+            Pre-ammortamento: {eur(params.mortgage.principal * params.mortgage.rate / 2)} ogni 6 mesi (solo interessi)
+            <br/>Rata piena (dopo): {eur(
+              (() => { var r = params.mortgage.rate/2, n = Math.ceil(params.mortgage.amortMonths/6);
+                return r > 0 ? params.mortgage.principal * r / (1 - Math.pow(1+r,-n)) : params.mortgage.principal/n; })()
+            )} ogni 6 mesi
+          </div>
+        </>}
+      </Panel>
+
+      <Panel id="taxation" title="Fiscalità (IRES + IRAP)" openState={open} onToggle={toggle}>
+        <div style={{marginBottom:12}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
+            <input type="checkbox" checked={!!params.taxation.enabled}
+              onChange={() => update(["taxation","enabled"], !params.taxation.enabled)} />
+            Includi stima tasse nel cash flow
+          </label>
+          <div className="text-faint" style={{fontSize:11,marginTop:4}}>
+            Provisione mensile IRES (24%) su utile stimato + IRAP (3,9%) sul margine operativo. Approssimazione per accrual.
+          </div>
+        </div>
+        {params.taxation.enabled && <>
+          {S(["taxation","iresRate"],"Aliquota IRES",0.15,0.30,0.01,pct)}
+          {S(["taxation","irapRate"],"Aliquota IRAP",0.02,0.06,0.001,pct)}
+        </>}
+      </Panel>
+
+      <Panel id="capital" title="Capitale iniziale" openState={open} onToggle={toggle}>
+        {S(["startingCapital"],"Capitale iniziale (equity + mutuo)",50000,300000,10000,eur)}
+      </Panel>
+
+      <Panel id="stagionalita" title="Stagionalità mensile" openState={open} onToggle={toggle}>
+        <div className="text-faint" style={{fontSize:11,marginBottom:10}}>
+          Scala la domanda di acquisizione per mese dell'anno. Sett/Gen picchi, Ago minimo.
+          Imposta il mese di calendario corrispondente a M0.
+        </div>
+        {S(["launchCalendarMonth"],"Mese di calendario di M0 (1=Gen ... 12=Dic)",1,12,1,
+          (v)=>["","Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"][Math.round(v)]||String(Math.round(v)))}
+        <div className="uppercase text-faint" style={{marginTop:10,marginBottom:6}}>Moltiplicatori acquisizione mensili</div>
+        {[1,2,3,4,5,6,7,8,9,10,11,12].map((mn)=>(
+          <Slider key={mn}
+            label={["","Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"][mn]}
+            value={params.seasonality[mn] || 1}
+            min={0.1} max={2.0} step={0.05}
+            fmt={(v)=>v.toFixed(2)+"x"}
+            onChange={(v)=>updateArray(["seasonality"],mn,v)} />
+        ))}
+      </Panel>
+
+      <Panel id="attualizzazione" title="Attualizzazione (dati reali)" openState={open} onToggle={toggle}>
+        <div className="info-banner" style={{marginBottom:12}}>
+          Inserisci i dati reali raggiunti a oggi. Il modello scala i cohort al punto di
+          calibrazione e proietta da lì in avanti. Le righe blu nella tabella = periodo reale.
+        </div>
+        {S(["actuals","currentMonth"],"Mese attuale (0 = tutto previsionale)",0,35,1,monthLabel)}
+        {params.actuals.currentMonth > 0 && (
+          <div>
+            {S(["actuals","totalClients"],"Clienti reali a questa data",0,500,1,(v)=>v+" clienti")}
+            {S(["actuals","cashBalance"],"Saldo banca reale",0,200000,1000,eur)}
+            <div className="text-faint" style={{fontSize:11,marginTop:8}}>
+              Il modello scala i cohort al numero reale e reimposta il cash, poi proietta normalmente.
+            </div>
+          </div>
+        )}
+      </Panel>
+    </div>
+  );
+};
+
+</script>
+<script type="text/babel" data-presets="env,react">
+/* ============================================================
+   Glossary — definizioni in italiano semplice
+   Pensato per chi non ha background marketing/finance
+   ============================================================ */
+
+window.PROXIMA = window.PROXIMA || {};
+
+window.PROXIMA.Glossary = function Glossary() {
+  const [open, setOpen] = React.useState(false);
+
+  const entries = [
+    { group: "Clienti e crescita", items: [
+      ["Clienti totali attivi", "Quante persone stanno pagando la parcella Proxima in quel mese."],
+      ["Nuovi clienti", "Persone che sono diventate clienti paganti in quel mese specifico."],
+      ["Clienti persi (churn)", "Clienti che hanno disdetto il servizio. In un servizio sano il churn mensile è tra 0,5% e 2%."],
+      ["Max nuovi/mese", "Numero massimo di nuovi clienti onboardabili in un mese, dato dagli slot appuntamento disponibili."],
+    ]},
+    { group: "Funnel (il percorso del cliente)", items: [
+      ["Click", "Persone che hanno cliccato su un annuncio pubblicitario."],
+      ["Visite al sito", "Persone arrivate al sito tramite traffico gratuito (Google organico, social, ecc.)."],
+      ["Calcolatore costi", "Tool gratuito sul sito che mostra quanto la persona paga alla banca. Principale punto di ingresso."],
+      ["Prenotazione di check-up", "Persona che ha prenotato una consulenza iniziale gratuita."],
+      ["Check-up fatto", "Consulenza iniziale effettivamente svolta (alcune persone prenotano e non si presentano)."],
+      ["Cliente pagante", "Persona che, dopo il check-up, sottoscrive e paga la parcella annuale."],
+    ]},
+    { group: "Ricavi", items: [
+      ["Parcella media (ARPU)", "Quanto paga in media un cliente all'anno. Default: €490."],
+      ["Ricavi del mese (MRR)", "Quanto si fattura in quel mese. Clienti totali × parcella annua ÷ 12."],
+      ["Ricavi annui (ARR)", "Quanto si fatturerebbe in un anno se tutti i clienti attuali continuassero."],
+      ["Ricavi accumulati", "Totale fatturato dall'inizio della strategia."],
+    ]},
+    { group: "Costi", items: [
+      ["Costi di costituzione", "Spese una tantum per aprire la società (notaio, OCF, avvocato, assicurazione, ecc.). Si concentrano nei primi 6-7 mesi."],
+      ["Costi operativi", "Spese mensili ricorrenti per far funzionare l'azienda (commercialista, ufficio, software, ecc.)."],
+      ["Costi del personale", "Compensi dei fondatori, stipendi di dipendenti e collaboratori."],
+      ["Costi di marketing", "Budget pubblicitario speso su Google, Meta, LinkedIn Ads."],
+      ["Costi totali", "Somma di tutti i costi del mese."],
+    ]},
+    { group: "Cash flow", items: [
+      ["Cash rimanente", "Quanto resta dei €180.000 iniziali dopo aver pagato tutti i costi e ricevuto i ricavi. Se arriva a zero, l'azienda non può più operare."],
+      ["Burn netto", "Quanto si \"brucia\" ogni mese. Burn = costi totali − ricavi. Se positivo, si stanno perdendo soldi. Se negativo, si sta guadagnando."],
+      ["Pareggio operativo (break-even operativo)", "Il mese in cui i ricavi mensili coprono i costi mensili. Da quel mese in poi l'azienda si autosostiene."],
+      ["Pareggio investimento (break-even cumulato)", "Il mese in cui i ricavi totali accumulati superano i costi totali accumulati. L'investimento iniziale è ripagato."],
+      ["Riserva minima", "Il punto più basso che il cash raggiunge. Se scende sotto €15.000-30.000, è critico."],
+    ]},
+    { group: "Canali di acquisizione", items: [
+      ["Google Ads / Meta Ads / LinkedIn Ads", "Pubblicità a pagamento. Porta traffico ma costa."],
+      ["CAC (Costo Acquisizione Cliente)", "Quanto spendi in pubblicità per ottenere un cliente pagante. Calcolato per ogni canale separatamente."],
+      ["SEO", "Traffico gratuito da Google. Cresce lentamente ma è composto."],
+      ["Social organici", "Post gratuiti su IG/TikTok/LinkedIn. Costruiscono audience senza budget."],
+      ["Passaparola (referral)", "Clienti esistenti che portano altri clienti."],
+      ["PR / Podcast / Eventi (Borrowed)", "Apparizioni su giornali, podcast, conferenze."],
+    ]},
+    { group: "Gestione automatica", items: [
+      ["Slot appuntamenti %", "Percentuale degli slot di onboarding occupati dalla domanda di nuovi clienti. Sopra l'85% il modello assume nuovi consulenti e riduce il budget ads."],
+      ["Budget ads %", "Quando gli slot appuntamento sono saturi (>85%), il budget pubblicitario viene ridotto automaticamente per non sprecare soldi in lead che non puoi servire."],
+      ["Assunzioni dinamiche", "Il modello assume nuovi consulenti quando gli slot appuntamento superano l'85%, e back-office, content creator e junior quando i clienti superano le soglie impostate."],
+    ]},
+    { group: "Scenari di rischio", items: [
+      ["Scenario base", "Crescita moderata dei mercati, condizioni favorevoli."],
+      ["Scenario recessione", "Mercati in calo del 15-25%, clienti più cauti ma più bisognosi di consulenza."],
+      ["Scenario crisi", "Crollo dei mercati del 30-50%, massima difficoltà ma anche massima domanda di consulenza indipendente."],
+    ]},
+    { group: "Fasi della strategia", items: [
+      ["Fase 1 — Fondazione (M-12 / M-10)", "Costituzione SRL, notaio, pratiche OCF."],
+      ["Fase 2 — Qualificazioni (M-9 / M-7)", "Esame OCF, compliance, assicurazione RC."],
+      ["Fase 3 — Pre-lancio (M-6 / M-4)", "Sito web, calcolatore, primi contenuti, setup campagne."],
+      ["Fase 4 — Alpha (M-3 / M-1)", "Test con 10-15 clienti, prime campagne, lista d'attesa."],
+      ["Fase 5 — Beta (M0 / M+2)", "Lancio pubblico, prime campagne paid."],
+      ["Fase 6 — Early Access (M+3 / M+5)", "Scaling, pubblicità a pieno regime."],
+      ["Fase 7 — Lancio Pubblico (dal M+6)", "Tutti i canali attivi, scaling aggressivo."],
+    ]},
+    { group: "Agenti di marketing", items: [
+      ["Agenti attivi", "Quanti dei 35 ruoli/workflow di marketing sono operativi in quel mese. Si attivano progressivamente: 10 in Fase 1, fino a 35 in Fase 6+."],
+    ]},
+  ];
+
+  return (
+    <div className="section">
+      <div className="panel" style={{ marginBottom: 0 }}>
+        <div className="panel-header" onClick={() => setOpen(!open)}>
+          <h3>📖 Glossario — cosa significano i termini usati</h3>
+          <span className="chev">{open ? "▼" : "▶"}</span>
+        </div>
+        {open && (
+          <div className="panel-body" style={{ padding: "16px 20px" }}>
+            <div style={{ display: "grid", gap: 20 }}>
+              {entries.map((g) => (
+                <div key={g.group}>
+                  <div className="uppercase gold" style={{ marginBottom: 8 }}>
+                    {g.group}
+                  </div>
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {g.items.map(([term, def]) => (
+                      <div key={term} style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 12, alignItems: "baseline" }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: "var(--text)" }}>
+                          {term}
+                        </div>
+                        <div className="text-dim" style={{ fontSize: 13, lineHeight: 1.5 }}>
+                          {def}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+</script>
+<script type="text/babel" data-presets="env,react">
+/* ============================================================
+   Dashboard — KPI cards + CAC per canale + Piano assunzioni + Charts
+   v3: dynamic hiring, budget factor, per-channel CAC
+   ============================================================ */
+
+window.PROXIMA = window.PROXIMA || {};
+
+window.PROXIMA.Dashboard = function Dashboard({ sim }) {
+  const {
+    ResponsiveContainer, ComposedChart, AreaChart, Bar, Line, Area,
+    XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine
+  } = window.Recharts;
+
+  const { results, breakEvenOperational, breakEvenCumulative,
+          cacBlended, cacByChannel, cashMinimum, cashMinimumMonth,
+          hiringPlan } = sim;
+
+  const eur = (v) => "\u20AC\u00A0" + Math.round(v).toLocaleString("it-IT");
+  const num = (v) => Math.round(v).toLocaleString("it-IT");
+  const ml = (v) => {
+    if (v == null) return "Mai";
+    if (typeof v === "number" && v >= 1 && v <= results.length) return results[v-1].monthLabel;
+    return "Mai";
+  };
+  const last = results[results.length - 1];
+
+  const tooltipFmt = (v) => eur(v);
+  const tooltipStyle = {
+    backgroundColor: "#121E30", border: "1px solid #2A3952",
+    borderRadius: 8, fontFamily: "DM Mono, monospace", fontSize: 12, color: "#E8ECF2"
+  };
+  const axTick = { fill: "#8B98B0", fontSize: 11 };
+  const axLine = { stroke: "#1E2A3E" };
+
+  /* ── Milestones ── */
+  const milestones = [
+    { label: "M0 — Lancio", idx: 12 },
+    { label: "M+12", idx: 24 },
+    { label: "M+23 (fine)", idx: 35 }
+  ];
+
+  const Kpi = ({ label, value, sub, accent }) => (
+    React.createElement("div", { className: "kpi-card" + (accent ? " accent" : "") },
+      React.createElement("div", { className: "kpi-label" }, label),
+      React.createElement("div", { className: "kpi-value mono" }, value),
+      sub && React.createElement("div", { className: "kpi-sub text-dim" }, sub)
+    )
+  );
+
+  /* ── Chart data ── */
+  const channelData = results.filter((r) => r.month >= 7).map((r) => ({
+    monthLabel: r.monthLabel,
+    google: r.googleBookings, meta: r.metaBookings,
+    linkedin: r.linkedinBookings, seo: r.seoBookings,
+    social: r.socialBookings, referral: r.referralBookings,
+    borrowed: r.borrowedBookings
+  }));
+
+  const chanColors = {
+    google: ["Google Ads", "#4285F4"], meta: ["Meta Ads", "#E1306C"],
+    linkedin: ["LinkedIn", "#0077B5"], seo: ["SEO", "#4ADE80"],
+    social: ["Social organico", "#A78BFA"], referral: ["Referral", "#F59E0B"],
+    borrowed: ["Borrowed", "#60A5FA"]
+  };
+
+  const costColors = {
+    constitutionCosts: ["Costituzione", "#F87171"],
+    operatingCosts: ["Operativi", "#60A5FA"],
+    personnelCosts: ["Personale", "#A78BFA"],
+    marketingCosts: ["Marketing", "#F59E0B"]
+  };
+
+  const clientsData = results.map((r) => ({
+    monthLabel: r.monthLabel, totalClients: r.totalClients
+  }));
+
+  /* ── CAC per channel (current month = last post-launch with spend) ── */
+  const cacChannels = [
+    { name: "Google Ads", cac: cacByChannel.google, color: "#4285F4" },
+    { name: "Meta Ads", cac: cacByChannel.meta, color: "#E1306C" },
+    { name: "LinkedIn Ads", cac: cacByChannel.linkedin, color: "#0077B5" }
+  ].filter((c) => c.cac > 0);
+
+  /* ── Staff data for chart ── */
+  const staffData = results.filter((r) => r.month >= 13).map((r) => ({
+    monthLabel: r.monthLabel,
+    staffCount: r.staffCount,
+    utilization: Math.round(r.appointmentUtilization * 100),
+    budgetFactor: Math.round(r.budgetFactor * 100)
+  }));
+
+  /* ── AUM + S&P 500 data ── */
+  const aumData = results.filter((r) => r.month >= 13).map((r) => ({
+    monthLabel: r.monthLabel,
+    aumGestito: Math.round(r.totalAUM / 1000),
+    sp500Benchmark: Math.round(r.sp500BenchmarkValue / 1000)
+  }));
+
+  const hasMortgage = results.some((r) => r.mortgageCost > 0);
+  const hasTax = results.some((r) => r.taxCost > 0);
+  const hasDeferredFees = results.some((r) => r.month >= 25 && r.payingClients !== r.totalClients);
+
+  return (
+    <div>
+      {/* Section 1: KPI milestone cards */}
+      <div className="section">
+        <div className="section-title">Indicatori chiave</div>
+        {milestones.map((ms) => {
+          const r = results[ms.idx];
+          if (!r) return null;
+          return (
+            <div key={ms.idx} style={{ marginBottom: 18 }}>
+              <div className="uppercase gold" style={{ marginBottom: 8 }}>{ms.label}</div>
+              <div className="kpi-grid">
+                <Kpi label="Clienti attivi" value={num(r.totalClients)} />
+                <Kpi label="Ricavi mensili (MRR)" value={eur(r.mrr)} />
+                <Kpi label="Cash rimanente" value={eur(r.cashRemaining)} />
+                <Kpi label="Team" value={num(r.staffCount) + " persone"} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Section 2: Key metrics */}
+      <div className="section">
+        <div className="section-title">Metriche di sintesi</div>
+        <div className="kpi-grid">
+          <Kpi label="Pareggio operativo" value={ml(breakEvenOperational)} accent />
+          <Kpi label="Pareggio investimento" value={ml(breakEvenCumulative)} />
+          <Kpi label="CAC medio" value={eur(cacBlended)} />
+          <Kpi label="Cash minimo" value={eur(cashMinimum)}
+               sub={"Raggiunto a " + ml(cashMinimumMonth)} />
+          <Kpi label="Agenti attivi" value={num(last.activeAgents)} />
+        </div>
+      </div>
+
+      {/* Section 3: CAC per canale */}
+      <div className="section">
+        <div className="section-title">CAC per canale (costo acquisizione cliente)</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+          {cacChannels.map((ch) => (
+            <div key={ch.name} className="card" style={{ borderLeft: "3px solid " + ch.color }}>
+              <div style={{ fontSize: 12, color: "#8B98B0", marginBottom: 4 }}>{ch.name}</div>
+              <div className="mono" style={{ fontSize: 24, fontWeight: 500 }}>{eur(ch.cac)}</div>
+              <div className="text-faint" style={{ fontSize: 11, marginTop: 4 }}>per cliente acquisito</div>
+            </div>
+          ))}
+          <div className="card" style={{ borderLeft: "3px solid #C4A962" }}>
+            <div style={{ fontSize: 12, color: "#8B98B0", marginBottom: 4 }}>Media ponderata</div>
+            <div className="mono gold" style={{ fontSize: 24, fontWeight: 500 }}>{eur(cacBlended)}</div>
+            <div className="text-faint" style={{ fontSize: 11, marginTop: 4 }}>tutti i canali paid</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 4: Piano assunzioni */}
+      <div className="section">
+        <div className="section-title">Piano assunzioni (automatico)</div>
+        {hiringPlan.length === 0 ? (
+          <div className="text-dim" style={{ fontSize: 13 }}>Nessuna assunzione prevista con i parametri attuali.</div>
+        ) : (
+          <div className="tbl-wrap">
+            <table className="proj" style={{ fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left" }}>Mese</th>
+                  <th style={{ textAlign: "left" }}>Ruolo</th>
+                  <th>Trigger</th>
+                  <th>Costo/mese</th>
+                  <th>Costo/anno</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hiringPlan.map((h, i) => (
+                  <tr key={i}>
+                    <td style={{ textAlign: "left" }}>
+                      <span className="gold mono">{h.monthLabel}</span>
+                    </td>
+                    <td style={{ textAlign: "left", fontWeight: 600 }}>{h.role}</td>
+                    <td className="text-dim">{h.trigger}</td>
+                    <td className="mono">{eur(h.cost)}</td>
+                    <td className="mono text-dim">{eur(h.cost * 12)}</td>
+                  </tr>
+                ))}
+                <tr style={{ borderTop: "2px solid #2A3952" }}>
+                  <td style={{ textAlign: "left" }} colSpan={3}>
+                    <span style={{ fontWeight: 600 }}>Totale personale aggiuntivo a fine piano</span>
+                  </td>
+                  <td className="mono gold" style={{ fontWeight: 700 }}>
+                    {eur(hiringPlan.reduce((s, h) => s + h.cost, 0))}
+                  </td>
+                  <td className="mono text-dim">
+                    {eur(hiringPlan.reduce((s, h) => s + h.cost, 0) * 12)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Section 5: AUM + S&P 500 benchmark */}
+      <div className="section">
+        <div className="section-title">Patrimonio gestito (AUM) vs S&P 500</div>
+        <div className="kpi-grid" style={{ marginBottom: 16 }}>
+          <Kpi label="AUM a M0" value={eur(results[12]?.totalAUM || 0)} sub="Lancio" />
+          <Kpi label="AUM a M+12" value={eur(results[24]?.totalAUM || 0)} />
+          <Kpi label="AUM a M+23" value={eur(last.totalAUM)} />
+          <Kpi label="S&P 500 benchmark a M+23"
+            value={eur(last.sp500BenchmarkValue || 0)}
+            sub="Partendo dall'AUM a M0" />
+        </div>
+        {hasDeferredFees && (
+          <div style={{ padding: "8px 12px", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 6, fontSize: 12, marginBottom: 14, color: "#F59E0B" }}>
+            ⚠ Pagamento differito attivo — i ricavi partono 12 mesi dopo l'acquisizione del cliente.
+          </div>
+        )}
+        <div className="card">
+          <div className="card-title">Patrimonio totale gestito (€k)</div>
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={aumData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+              <CartesianGrid stroke="#1E2A3E" vertical={false} />
+              <XAxis dataKey="monthLabel" tick={axTick} tickLine={false} axisLine={axLine} interval={2} />
+              <YAxis tick={axTick} tickLine={false} axisLine={axLine}
+                tickFormatter={(v) => "€" + v + "k"} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v) => "€" + v.toLocaleString("it-IT") + "k"} />
+              <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+              <Area type="monotone" dataKey="aumGestito" name="AUM gestito"
+                stroke="#C4A962" fill="rgba(196,169,98,0.2)" strokeWidth={2} />
+              <Line type="monotone" dataKey="sp500Benchmark" name="S&P 500 benchmark"
+                stroke="#4ADE80" strokeWidth={2} strokeDasharray="5 3" dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Section 6: Mortgage + Tax summary (conditional) */}
+      {(hasMortgage || hasTax) && (
+        <div className="section">
+          <div className="section-title">Mutuo e Fiscalità</div>
+          <div className="kpi-grid">
+            {hasMortgage && (
+              <Kpi label="Costo mutuo totale (36 mesi)"
+                value={eur(results.reduce((s, r) => s + r.mortgageCost, 0))}
+                sub="Interessi + rimborso capitale" />
+            )}
+            {hasTax && (
+              <Kpi label="Tasse totali stimate (36 mesi)"
+                value={eur(results.reduce((s, r) => s + r.taxCost, 0))}
+                sub="IRES + IRAP (provisione mensile)" />
+            )}
+            {hasMortgage && (
+              <Kpi label="Rata mensile mutuo (post pre-amm.)"
+                value={eur(results.find((r) => r.mortgageCost > 0 && r.month > (results[0]?.month || 0) + 18)?.mortgageCost || results.find((r) => r.mortgageCost > 0)?.mortgageCost || 0)} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Section 7: Charts — 2×2 grid */}
+      <div className="section">
+        <div className="section-title">Grafici a 36 mesi</div>
+
+        {/* Row 1 */}
+        <div className="chart-row">
+          {/* Chart 1: Clienti attivi + capacity line */}
+          <div className="card">
+            <div className="card-title">Clienti attivi (nessun tetto)</div>
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={clientsData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false}
+                       axisLine={axLine} interval={2} />
+                <YAxis tick={axTick} tickLine={false} axisLine={axLine} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+                <ReferenceLine x={results[12]?.monthLabel} stroke="#C4A962"
+                               strokeDasharray="4 4" label={{ value: "Lancio", fill: "#C4A962", fontSize: 11 }} />
+                <Bar dataKey="totalClients" name="Clienti attivi" fill="#C4A962" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Chart 2: Cash flow */}
+          <div className="card">
+            <div className="card-title">Cash flow ({eur(results[0]?.cashRemaining || 0)})</div>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={results} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="cashGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4ADE80" stopOpacity={0.6} />
+                    <stop offset="100%" stopColor="#F87171" stopOpacity={0.3} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false}
+                       axisLine={axLine} interval={2} />
+                <YAxis tick={axTick} tickLine={false} axisLine={axLine}
+                       tickFormatter={(v) => "\u20AC" + Math.round(v / 1000) + "k"} />
+                <Tooltip contentStyle={tooltipStyle} formatter={tooltipFmt} />
+                <ReferenceLine y={0} stroke="#F87171" strokeWidth={1.5} />
+                <ReferenceLine y={30000} stroke="#F59E0B" strokeDasharray="6 3"
+                               label={{ value: "Riserva minima", fill: "#F59E0B", fontSize: 11, position: "insideTopLeft" }} />
+                <Area type="monotone" dataKey="cashRemaining" name="Cash rimanente"
+                      stroke="#4ADE80" fill="url(#cashGrad)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Row 2 */}
+        <div className="chart-row">
+          {/* Chart 3: Costi vs Ricavi */}
+          <div className="card">
+            <div className="card-title">Costi vs Ricavi mensili</div>
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={results} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false}
+                       axisLine={axLine} interval={2} />
+                <YAxis tick={axTick} tickLine={false} axisLine={axLine}
+                       tickFormatter={(v) => "\u20AC" + Math.round(v / 1000) + "k"} />
+                <Tooltip contentStyle={tooltipStyle} formatter={tooltipFmt} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+                {Object.entries(costColors).map(([key, [name, color]]) => (
+                  <Bar key={key} dataKey={key} name={name} stackId="costs" fill={color} />
+                ))}
+                <Line type="monotone" dataKey="mrr" name="MRR" stroke="#4ADE80"
+                      strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Chart 4: Acquisizione per canale */}
+          <div className="card">
+            <div className="card-title">Acquisizione per canale</div>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={channelData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false}
+                       axisLine={axLine} interval={2} />
+                <YAxis tick={axTick} tickLine={false} axisLine={axLine} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+                {Object.entries(chanColors).map(([key, [name, color]]) => (
+                  <Area key={key} type="monotone" dataKey={key} name={name}
+                        stackId="ch" stroke={color} fill={color} fillOpacity={0.7} />
+                ))}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Row 3: Team & utilization */}
+        <div className="chart-row" style={{ marginTop: 14 }}>
+          <div className="card">
+            <div className="card-title">Team e slot appuntamenti</div>
+            <ResponsiveContainer width="100%" height={250}>
+              <ComposedChart data={staffData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false}
+                       axisLine={axLine} interval={2} />
+                <YAxis yAxisId="left" tick={axTick} tickLine={false} axisLine={axLine} />
+                <YAxis yAxisId="right" orientation="right" tick={axTick} tickLine={false}
+                       axisLine={axLine} tickFormatter={(v) => v + "%"} domain={[0, 100]} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+                <Bar yAxisId="left" dataKey="staffCount" name="Team (persone)" fill="#A78BFA" />
+                <Line yAxisId="right" type="monotone" dataKey="utilization" name="Slot appuntamenti %"
+                      stroke="#F59E0B" strokeWidth={2} dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="budgetFactor" name="Budget ads %"
+                      stroke="#4ADE80" strokeWidth={2} strokeDasharray="4 3" dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+</script>
+<script type="text/babel" data-presets="env,react">
+/* ============================================================
+   Table — 36-month projection (M-12 … M+23)
+   ============================================================ */
+window.PROXIMA = window.PROXIMA || {};
+
+window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
+  const { results, breakEvenOperational, breakEvenCumulative } = sim;
+  const [showPre, setShowPre] = React.useState(true);
+  const [msg, setMsg] = React.useState("");
+
+  const fmtE = (v) => "\u20AC" + Math.round(v).toLocaleString("it-IT");
+  const fmtN = (v) => Math.round(v).toLocaleString("it-IT");
+
+  const flash = (t) => { setMsg(t); setTimeout(() => setMsg(""), 2500); };
+
+  const cols = [
+    ["Mese",           (r) => null,                ""],
+    ["Fase",           (r) => null,                ""],
+    ["Prenotazioni",   (r) => fmtN(r.totalBookings), ""],
+    ["Primo incontro", (r) => fmtN(r.checkups),    ""],
+    ["Max nuovi/mese", (r) => fmtN(r.maxNewPerMonth), ""],
+    ["Nuovi clienti",  (r) => fmtN(r.newClientsCapped), ""],
+    ["Persi (churn)",  (r) => fmtN(r.churnedClients), ""],
+    ["Clienti attivi", (r) => fmtN(r.totalClients), "bold"],
+    ["Clienti paganti",(r) => fmtN(r.payingClients), "paying"],
+    ["AUM (€k)",       (r) => fmtN(Math.round(r.totalAUM/1000)), ""],
+    ["Costi costituz.",  (r) => fmtE(r.constitutionCosts), ""],
+    ["Costi operativi",  (r) => fmtE(r.operatingCosts), ""],
+    ["Personale",      (r) => fmtE(r.personnelCosts), ""],
+    ["Marketing",      (r) => fmtE(r.marketingCosts), ""],
+    ["Mutuo",          (r) => r.mortgageCost > 0 ? fmtE(r.mortgageCost) : "—", ""],
+    ["Tasse",          (r) => r.taxCost > 0 ? fmtE(r.taxCost) : "—", ""],
+    ["Costi totali",   (r) => fmtE(r.totalCosts),  "bold"],
+    ["MRR",            (r) => fmtE(r.mrr),         "gold"],
+    ["Burn netto",     (r) => fmtE(r.netBurn),     "burn"],
+    ["Cash",           (r) => fmtE(r.cashRemaining), "cash"],
+    ["Team",           (r) => fmtN(r.staffCount), ""],
+    ["Slot %",         (r) => Math.round(r.appointmentUtilization*100)+"%", "util"],
+    ["Ads %",          (r) => Math.round(r.budgetFactor*100)+"%", "bf"],
+  ];
+
+  const pillStyle6 = { background: "rgba(74,222,128,0.15)", color: "#4ade80", border: "1px solid rgba(74,222,128,0.25)" };
+  const pillStyle7 = { background: "rgba(34,197,94,0.25)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.4)" };
+
+  const phasePill = (p, name) => {
+    const extra = p === 6 ? pillStyle6 : p === 7 ? pillStyle7 : undefined;
+    return React.createElement("span", { className: `pill pill-p${p}`, style: extra }, name);
+  };
+
+  const download = (blob, filename) => {
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = u; a.download = filename; a.click();
+    URL.revokeObjectURL(u);
+  };
+
+  const exportCSV = () => {
+    const hdr = ["Mese","Fase","Prenotazioni","Check-up","Max nuovi/mese",
+      "Nuovi clienti","Churn","Clienti attivi","Costi costituzione",
+      "Costi operativi","Personale","Marketing","Costi totali",
+      "MRR","Burn netto","Cash","Team","Slot appuntamenti %","Budget ads %"];
+    const rows = results.map((r) => [
+      r.monthLabel, r.phaseName, Math.round(r.totalBookings), Math.round(r.checkups),
+      Math.round(r.maxNewPerMonth), Math.round(r.newClientsCapped),
+      Math.round(r.churnedClients), Math.round(r.totalClients),
+      Math.round(r.constitutionCosts), Math.round(r.operatingCosts),
+      Math.round(r.personnelCosts), Math.round(r.marketingCosts),
+      Math.round(r.totalCosts), Math.round(r.mrr), Math.round(r.netBurn),
+      Math.round(r.cashRemaining), r.staffCount,
+      Math.round(r.appointmentUtilization*100), Math.round(r.budgetFactor*100)
+    ].join(";"));
+    download(new Blob([hdr.join(";") + "\n" + rows.join("\n")], { type: "text/csv;charset=utf-8" }),
+      "proxima-proiezione-36m.csv");
+    flash("CSV scaricato");
+  };
+
+  const exportJSON = () => {
+    download(new Blob([JSON.stringify(results, null, 2)], { type: "application/json" }),
+      "proxima-proiezione-36m.json");
+    flash("JSON scaricato");
+  };
+
+  const visible = showPre ? results : results.filter((r) => !r.isPreRelease);
+
+  const tdStyle = (flag, r) => {
+    if (flag === "bold") return { fontWeight: 700 };
+    if (flag === "gold") return { color: "#D4A843", fontWeight: 700 };
+    if (flag === "burn") return { fontWeight: 700, color: r.netBurn > 0 ? "#ef4444" : "#4ade80" };
+    if (flag === "cash") return { fontWeight: 700, color: r.cashRemaining < 30000 ? "#ef4444" : undefined };
+    if (flag === "util") return { color: r.appointmentUtilization > 0.85 ? "#F59E0B" : "#8B98B0" };
+    if (flag === "bf") return { color: r.budgetFactor < 0.5 ? "#F59E0B" : "#8B98B0" };
+    if (flag === "paying") return { color: r.payingClients < r.totalClients ? "#A78BFA" : undefined };
+    return undefined;
+  };
+
+  return (
+    React.createElement("div", { className: "section" },
+      React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 } },
+        React.createElement("div", { className: "section-title", style: { margin: 0 } }, "Tabella completa 36 mesi"),
+        React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center" } },
+          msg && React.createElement("span", { className: "text-dim", style: { fontSize: 12 } }, msg),
+          React.createElement("label", { style: { fontSize: 12, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" } },
+            React.createElement("input", { type: "checkbox", checked: showPre, onChange: () => setShowPre(!showPre) }),
+            "Pre-release"
+          ),
+          React.createElement("button", { className: "btn-ghost btn", onClick: exportCSV }, "\u2193 CSV"),
+          React.createElement("button", { className: "btn-ghost btn", onClick: exportJSON }, "\u2193 JSON")
+        )
+      ),
+      React.createElement("div", { className: "tbl-wrap" },
+        React.createElement("table", { className: "proj" },
+          React.createElement("thead", null,
+            React.createElement("tr", null, cols.map(([h], i) =>
+              React.createElement("th", { key: i }, h)
+            ))
+          ),
+          React.createElement("tbody", null,
+            visible.map((r, idx) => {
+              const prev = idx > 0 ? visible[idx - 1] : null;
+              const cls = [
+                prev && r.phase !== prev.phase ? "phase-boundary" : "",
+                r.capacityLimited ? "capacity-limited" : "",
+                breakEvenOperational === r.month ? "break-even" : "",
+                breakEvenCumulative === r.month ? "break-even" : "",
+                r.isActual ? "actual-data" : "",
+                r.isPreRelease ? "pre-release" : ""
+              ].filter(Boolean).join(" ");
+              return React.createElement("tr", { key: r.month, className: cls || undefined },
+                React.createElement("td", null,
+                  React.createElement("span", { className: "gold mono" }, r.monthLabel),
+                  React.createElement("span", { className: "text-faint mono", style: { fontSize: 10, marginLeft: 4 } }, "#" + r.month)
+                ),
+                React.createElement("td", { style: { textAlign: "left" } }, phasePill(r.phase, r.phaseName)),
+                ...cols.slice(2).map(([, fn, flag], ci) =>
+                  React.createElement("td", { key: ci, style: tdStyle(flag, r) }, fn(r))
+                )
+              );
+            })
+          )
+        )
+      ),
+      React.createElement("div", { style: { marginTop: 12, display: "flex", gap: 16, flexWrap: "wrap", fontSize: 11 }, className: "text-dim" },
+        React.createElement("span", null,
+          React.createElement("span", { style: { display: "inline-block", width: 10, height: 10, background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.3)", marginRight: 6, verticalAlign: "middle" } }),
+          "Riga arancione = capacit\u00E0 satura"
+        ),
+        React.createElement("span", null,
+          React.createElement("span", { style: { display: "inline-block", width: 10, height: 10, background: "rgba(74,222,128,0.15)", marginRight: 6, verticalAlign: "middle" } }),
+          "Riga verde = mese di pareggio"
+        ),
+        React.createElement("span", null,
+          React.createElement("span", { style: { display: "inline-block", width: 10, height: 2, background: "#8E7940", marginRight: 6, verticalAlign: "middle" } }),
+          "Linea oro = cambio fase"
+        )
+      )
+    )
+  );
+};
+
+</script>
+<script type="text/babel" data-presets="env,react">
+/* ============================================================
+   App — state management + layout composition (v2 · 36 mesi)
+   ============================================================ */
+
+window.PROXIMA = window.PROXIMA || {};
+
+const STORAGE_KEY = "proxima.funnel.params.v3";
+
+function deepMerge(target, source) {
+  const out = { ...target };
+  for (const key of Object.keys(source)) {
+    if (source[key] && typeof source[key] === "object" && !Array.isArray(source[key])
+        && target[key] && typeof target[key] === "object" && !Array.isArray(target[key])) {
+      out[key] = deepMerge(target[key], source[key]);
+    } else {
+      out[key] = source[key];
+    }
+  }
+  return out;
+}
+
+function loadParams() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return window.PROXIMA.defaultParams();
+    const parsed = JSON.parse(raw);
+    const defaults = window.PROXIMA.defaultParams();
+    return deepMerge(defaults, parsed);
+  } catch (e) {
+    return window.PROXIMA.defaultParams();
+  }
+}
+
+function App() {
+  const [params, setParams] = React.useState(loadParams);
+
+  React.useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(params)); } catch (e) {}
+  }, [params]);
+
+  const sim = React.useMemo(
+    () => window.PROXIMA.simulate(params, 36),
+    [params]
+  );
+
+  const resetDefaults = () => {
+    if (confirm("Ripristinare tutti i parametri ai default?")) {
+      setParams(window.PROXIMA.defaultParams());
+    }
+  };
+
+  return (
+    <div className="app">
+      <aside className="sidebar">
+        <window.PROXIMA.Controls
+          params={params}
+          setParams={setParams}
+          onReset={resetDefaults}
+        />
+      </aside>
+      <main className="main">
+        <div className="section">
+          <div className="info-banner">
+            <strong>Come funziona questo modello.</strong> Calcola clienti, ricavi,
+            costi e cash flow su 36 mesi (da M-12 a M+23), partendo dai numeri veri
+            di ogni canale e includendo tutti i costi di costituzione, operativi e del
+            personale. Include tre scenari di rischio (base, recessione, crisi). Muovi
+            gli slider a sinistra per aggiornare tutto in tempo reale.
+          </div>
+        </div>
+        <window.PROXIMA.Glossary />
+        <window.PROXIMA.Dashboard sim={sim} />
+        <window.PROXIMA.ProjectionTable sim={sim} />
+        <div className="section" style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid #1E2A3E" }}>
+          <div className="text-faint" style={{ fontSize: 11, textAlign: "center" }}>
+            Proxima · Modello Funnel v3 · 36 mesi · assunzioni dinamiche · budget intelligente · CAC per canale
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// Wait for all PROXIMA modules to load before rendering
+function boot() {
+  if (!window.PROXIMA.simulate || !window.PROXIMA.Controls ||
+      !window.PROXIMA.Dashboard || !window.PROXIMA.ProjectionTable ||
+      !window.PROXIMA.Glossary || !window.PROXIMA.defaultParams) {
+    return setTimeout(boot, 50);
+  }
+  const root = ReactDOM.createRoot(document.getElementById("root"));
+  root.render(<App />);
+}
+
+boot();
+
+</script>
+</body>
+</html>
