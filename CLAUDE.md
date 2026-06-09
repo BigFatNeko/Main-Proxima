@@ -48,3 +48,20 @@ La pipeline di rassegna stampa / briefing è **in produzione e in uso quotidiano
   senza permesso esplicito.
 - Storia: a giugno 2026 il repo è stato ripulito da un template
   "everything-claude-code" e da un progetto "LLM Council", entrambi non pertinenti.
+
+## Tooling di sessione (`.claude/`)
+
+La cartella `.claude/` sta **alla radice** (così Claude Code la auto-carica a ogni
+sessione web) e contiene strumenti, non materiale di business:
+
+- **`skills/last30days/`** — ricerca multi-fonte (Reddit, HN, X, YouTube,
+  Polymarket…) sugli ultimi 30 giorni. Si invoca con `/last30days`. Per la
+  copertura piena servono API key in `.claude/last30days.env` (gitignorato) o nei
+  secret dell'ambiente web; modello in `.claude/last30days.env.example`.
+- **`skills/caveman/`** — modalità di risposta ultra-compatta (`lite`/`full`/`ultra`).
+  **Non** attiva di default: si accende dicendo "caveman mode" / "be brief" / `/caveman`.
+- Hook `SessionStart` in `settings.json`: a inizio sessione mostra lo stato di
+  configurazione di last30days (avvolto in `|| true`, non blocca nulla).
+
+La libreria di ~36 skill di marketing/growth sta invece sotto
+`PROXIMA-Main/03-marketing/skills/` come **riferimento** (non auto-caricata).
