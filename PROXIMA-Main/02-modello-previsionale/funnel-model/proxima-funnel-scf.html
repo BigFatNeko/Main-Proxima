@@ -155,7 +155,7 @@ window.PROXIMA.monthLabel = function (m) {
 window.PROXIMA.defaultParams = function () {
   return {
     riskScenario: 'base',
-    startingCapital: 150000,
+    startingCapital: 180000,
 
     /* --- Acquisizione: canali → lead → download app (utenti free) --- */
     google:  { cpc: 1.20, clickToLead: 0.45, budgetByPhase: { 1:0, 2:150, 3:700, 4:1100, 5:1500, 6:1800 } },
@@ -188,13 +188,18 @@ window.PROXIMA.defaultParams = function () {
     },
     assetTransferLagMonths: 1,
 
+    /* --- IVA, commissioni di incasso, fatturazione S3 (cassa ≠ competenza) --- */
+    vatRate: 0.22,                                              // scorporo dai prezzi (IVA inclusa). 0 = input già netti
+    payments: { inAppShare: 0.50, storeFeeRate: 0.15, webFeeRate: 0.025 },  // commissioni solo su S1/S2 (app)
+    s3Billing: 'annuale',                                      // 'annuale' | 'semestrale' | 'mensile' (incasso anticipato)
+
     /* --- AUM (motore cohort per lo Strato 3) --- */
     aum: { avgPerClient: 45000, portfolioReturn: 0.06, benchmark: 0.08,
       annualContributions: 3600, annualWithdrawalRate: 0.03, marketShock: 0,
       dist: { s_pct: 0.40, s_avg: 18000, m_pct: 0.40, m_avg: 45000, l_pct: 0.20, l_avg: 95000 } },
 
-    /* --- Capacità (ore): S3 in presenza + consulti remoti S2 --- */
-    founderHoursPerWeek: 25, hoursPerS3Onboarding: 4.0, hoursPerS2ConsultMonth: 0.25,
+    /* --- Capacità (ore): S3 in presenza + consulti remoti S2 + revisioni S3 ricorrenti --- */
+    founderHoursPerWeek: 25, hoursPerS3Onboarding: 4.0, hoursPerS2ConsultMonth: 0.25, hoursPerS3ReviewYear: 2.0,
 
     /* --- Assunzioni dinamiche --- */
     hiring: {
@@ -223,6 +228,7 @@ window.PROXIMA.defaultParams = function () {
 
     /* --- Altro --- */
     budgetCapAdjust: true, budgetCapThreshold: 0.85,
+    capitalInjections: [ { month: 19, amount: 0 }, { month: 31, amount: 0 } ],  // iniezioni successive (mese sim. 1-48, importo 0 = off)
     waitingList: { count: 200, toS1Rate: 0.40 },
     launchCalendarMonth: 9,
     seasonality: [0, 1.2, 1.0, 1.1, 1.05, 0.95, 0.85, 0.50, 0.40, 1.30, 1.10, 1.0, 0.60],
@@ -332,10 +338,12 @@ window.PROXIMA.simulate = function (p, months) {
     var newS3appDes = s2 * p.freemium.s2ToS3 * risk.clientMult;
     var newS3des = newS3appDes + newS3directRaw;
 
-    /* --- Capacità umana: serve prima gli S2 esistenti, poi i nuovi S2 e S3 --- */
+    /* --- Capacità umana: serve prima gli S2/S3 esistenti, poi i nuovi S2 e S3 --- */
     var s2ServiceHours = s2 * p.hoursPerS2ConsultMonth;
+    var s3ServiceHours = cohortsCount(cohortsS3) * (p.hoursPerS3ReviewYear || 0) / 12;
+    var serviceHours = s2ServiceHours + s3ServiceHours;
     var hoursNew = newS2des * p.hoursPerS2ConsultMonth + newS3des * p.hoursPerS3Onboarding;
-    var util = totHours > 0 ? (s2ServiceHours + hoursNew) / totHours : 0;
+    var util = totHours > 0 ? (serviceHours + hoursNew) / totHours : 0;
 
     /* --- Assunzioni dinamiche --- */
     var totalPaying = s1 + s2 + cohortsCount(cohortsS3);
@@ -352,13 +360,13 @@ window.PROXIMA.simulate = function (p, months) {
       hiredConsultants++; lastConsultantHireMonth = m;
       consHours = hiredConsultants * h.consultantHoursPerWeek * 4.33;
       totHours = fHours + consHours;
-      s2ServiceHours = s2 * p.hoursPerS2ConsultMonth;
-      util = totHours > 0 ? (s2ServiceHours + hoursNew) / totHours : 0;
+      serviceHours = s2 * p.hoursPerS2ConsultMonth + s3ServiceHours;
+      util = totHours > 0 ? (serviceHours + hoursNew) / totHours : 0;
       hiringPlan.push({ month: m, monthLabel: label, role: 'Consulente #' + hiredConsultants, cost: h.consultantCost, trigger: 'capacità al ' + Math.round(util * 100) + '%' });
     }
 
     /* --- Throttle dei nuovi high-touch (S2/S3) alla capacità residua (S1/free non toccati) --- */
-    var availNew = Math.max(0, totHours - s2ServiceHours);
+    var availNew = Math.max(0, totHours - serviceHours);
     var capScale = (m >= LAUNCH_M && hoursNew > availNew && hoursNew > 0) ? availNew / hoursNew : 1;
     var capLimited = capScale < 0.999;
     var newS2 = newS2des * capScale;
@@ -414,39 +422,54 @@ window.PROXIMA.simulate = function (p, months) {
 
     var s3Clients = cohortsCount(cohortsS3);
 
-    /* --- AUM Strato 3 (motore cohort, rendita) --- */
+    /* --- Strato 3: AUM + ricavi (competenza) + incassi (cassa, fatturazione anticipata) --- */
     var r12 = p.aum.portfolioReturn / 12;
     var mktF = 1 + (p.aum.marketShock || 0);
     var dd = p.aum.dist, sumPct = dd ? (dd.s_pct + dd.m_pct + dd.l_pct) : 0;
     var effAvgAUM = (sumPct > 0.01) ? (dd.s_pct * dd.s_avg + dd.m_pct * dd.m_avg + dd.l_pct * dd.l_avg) / sumPct : p.aum.avgPerClient;
     var netPMT = (p.aum.annualContributions - effAvgAUM * (p.aum.annualWithdrawalRate || 0)) / 12;
     var lag = p.assetTransferLagMonths || 0;
-    var totalAUM = 0, payingAUM = 0, payingS3 = 0;
+    var s3 = p.s3, feeAum = s3.feeRate + (s3.bonusBps || 0);
+    var billPer = p.s3Billing === 'mensile' ? 1 : (p.s3Billing === 'semestrale' ? 6 : 12);
+    var totalAUM = 0, payingAUM = 0, payingS3 = 0, grossS3comp = 0, grossS3cash = 0;
     for (var ck = 0; ck < cohortsS3.length; ck++) {
       var cAge = m - cohortsS3[ck].birthMonth;
+      var cnt = cohortsS3[ck].count;
       var aumPer = effAvgAUM * mktF * Math.pow(1 + r12, cAge)
         + (cAge > 0 && Math.abs(netPMT) > 0.01 ? netPMT * (Math.pow(1 + r12, cAge) - 1) / r12 : 0);
-      totalAUM += cohortsS3[ck].count * aumPer;
-      if (cAge >= lag) { payingS3 += cohortsS3[ck].count; payingAUM += cohortsS3[ck].count * aumPer; }
+      totalAUM += cnt * aumPer;
+      if (cAge >= lag) {
+        payingS3 += cnt; payingAUM += cnt * aumPer;
+        var annualFee = (p.s3FeeMode === 'aum') ? (cnt * aumPer) * feeAum
+                      : (p.s3FeeMode === 'fissa') ? cnt * s3.fixedAnnual
+                      : cnt * (s3.baseFare + s3.checkpointsPerYear * s3.checkpointFee);
+        grossS3comp += annualFee / 12;                                              // competenza mensile
+        if ((cAge - lag) % billPer === 0) grossS3cash += annualFee * (billPer / 12); // incasso anticipato del periodo
+      }
     }
+    var s3LoadAnnual = (p.s3FeeMode === 'aum') ? effAvgAUM * feeAum
+                     : (p.s3FeeMode === 'fissa') ? s3.fixedAnnual
+                     : (s3.baseFare + s3.checkpointsPerYear * s3.checkpointFee);
 
-    /* --- Ricavi per strato --- */
-    var revS1 = s1 * p.priceS1;
-    var revS2 = s2 * p.priceS2 + s2 * (p.s2PackagesPerClientYr / 12) * p.s2PackagePrice;
-    var s3 = p.s3, revS3 = 0, s3LoadAnnual = 0;  // s3LoadAnnual = carico annuo medio sul cliente S3
-    if (p.s3FeeMode === 'aum') {
-      revS3 = payingAUM * (s3.feeRate + (s3.bonusBps || 0)) / 12;
-      s3LoadAnnual = effAvgAUM * (s3.feeRate + (s3.bonusBps || 0));
-    } else if (p.s3FeeMode === 'fissa') {
-      revS3 = payingS3 * s3.fixedAnnual / 12;
-      s3LoadAnnual = s3.fixedAnnual;
-    } else { // modulare
-      var annual = s3.baseFare + s3.checkpointsPerYear * s3.checkpointFee;
-      revS3 = payingS3 * annual / 12;
-      s3LoadAnnual = annual;
-    }
-    var mrr = revS1 + revS2 + revS3;
+    /* --- Ricavi lordi per strato --- */
+    var grossS1 = s1 * p.priceS1;
+    var grossS2 = s2 * p.priceS2 + s2 * (p.s2PackagesPerClientYr / 12) * p.s2PackagePrice;
+    var grossMrr = grossS1 + grossS2 + grossS3comp;
+
+    /* --- IVA scorporata + commissioni di incasso → NETTO --- */
+    var vat = p.vatRate || 0, vatF = 1 / (1 + vat);
+    var pm = p.payments || { inAppShare: 0, storeFeeRate: 0, webFeeRate: 0 };
+    var effFee = pm.inAppShare * pm.storeFeeRate + (1 - pm.inAppShare) * pm.webFeeRate;
+    var appNetF = Math.max(0, vatF - effFee);   // S1/S2: IVA + commissioni di incasso
+    var revS1 = grossS1 * appNetF;
+    var revS2 = grossS2 * appNetF;
+    var revS3 = grossS3comp * vatF;             // S3: solo IVA (bonifico, niente commissioni)
+    var mrr = revS1 + revS2 + revS3;            // competenza netta
     var arr = mrr * 12;
+
+    /* --- Incassi (cassa) netti: S1/S2 mensili, S3 secondo fatturazione scelta --- */
+    var cashS3 = grossS3cash * vatF;
+    var cashInflow = revS1 + revS2 + cashS3;
 
     /* --- Costi --- */
     var constCost = constitutionForMonth(m, p.constitution);
@@ -483,9 +506,17 @@ window.PROXIMA.simulate = function (p, months) {
     paidCumSpend += (bG + bM + bT);
     paidCumS1 += paidDownloads * lifetimeFreeToS1;
 
+    /* --- Iniezioni di capitale (mese sim. 1-48) --- */
+    var injection = 0;
+    if (p.capitalInjections) for (var inj = 0; inj < p.capitalInjections.length; inj++) {
+      var cinj = p.capitalInjections[inj];
+      if (cinj && cinj.amount > 0 && Math.round(cinj.month) === m) injection += cinj.amount;
+    }
+
     revCum += mrr; costCum += totCost;
-    var netBurn = totCost - mrr;
-    cash -= netBurn;
+    var netBurn = totCost - mrr;                       // burn di competenza (operativo)
+    var cashFlow = cashInflow - totCost + injection;   // movimento di cassa reale (incassi − costi + iniezioni)
+    cash += cashFlow;
     if (cash < cashMin) { cashMin = cash; cashMinMonth = m; }
 
     var staffCount = (founderActive ? p.personnel.numFounders : p.personnel.numFounders) + hiredConsultants + (hasContent ? 1 : 0) + (hasDev ? 1 : 0) + (hasBackOffice ? 1 : 0);
@@ -498,6 +529,7 @@ window.PROXIMA.simulate = function (p, months) {
       newS1: newS1, newS2: newS2, newS3: newS3, newS3app: newS3app, newS3direct: newS3direct,
       churnFree: churnFree, churnS1: churnS1, churnS2: churnS2, churnS3: churnS3,
       revS1: revS1, revS2: revS2, revS3: revS3, mrr: mrr, arr: arr, s3LoadAnnual: s3LoadAnnual,
+      grossMrr: grossMrr, cashInflow: cashInflow, cashS3: cashS3, injection: injection, cashFlow: cashFlow,
       totalAUM: totalAUM, payingAUM: payingAUM, effAvgAUM: effAvgAUM, benchValue: benchValue,
       constitutionCosts: constCost, techCapex: capexTech, operatingCosts: opCost,
       personnelCosts: persCost, marketingCosts: mktCost, taxCost: taxCost, totalCosts: totCost,
@@ -583,9 +615,9 @@ function PhaseBudgets({ channel, label, params, updateArray }) {
 
 window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
   const [open, setOpen] = React.useState({
-    scenario: true, capital: true, funnel: true, pricing: true, s3fee: true,
+    scenario: true, capital: true, funnel: true, pricing: true, s3fee: true, revenue: true,
     google: false, meta: false, tiktok: false, organic: false, direct: false,
-    aum: false, capacity: true, hiring: false, tech: true,
+    aum: false, capacity: true, hiring: false, tech: true, injections: false,
     constitution: false, operating: false, personnel: true,
     seasonality: false, taxation: false, attualizzazione: false
   });
@@ -631,8 +663,21 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
       <Panel id="capital" title="Capitale iniziale" openState={open} onToggle={toggle}>
         {S(["startingCapital"], "Cassa disponibile per il lancio", 50000, 350000, 5000, eur)}
         <div className="text-faint" style={{ fontSize: 11, marginTop: 6 }}>
-          Lean ~€120-140K · Base ~€200-230K · Scale ~€280-330K (doc 61).
+          Lean ~€120-140K · Base ~€180-230K (default = €180K del piano) · Scale ~€280-330K.
         </div>
+      </Panel>
+
+      <Panel id="injections" title="Iniezioni di capitale" openState={open} onToggle={toggle}>
+        <div className="text-faint" style={{ fontSize: 11, marginBottom: 10 }}>
+          Fino a 2 versamenti successivi (soci o investitore). Importo 0 = disattivato. Per testare "quanto e quando" serve per non bucare la riserva.
+        </div>
+        {[0, 1].map((i) => (
+          <div key={i} style={{ marginBottom: 8 }}>
+            <div className="uppercase text-faint" style={{ marginBottom: 6 }}>Iniezione {i + 1}</div>
+            {S(["capitalInjections", i, "month"], "Mese", 7, 48, 1, mlab)}
+            {S(["capitalInjections", i, "amount"], "Importo", 0, 200000, 5000, eur)}
+          </div>
+        ))}
       </Panel>
 
       <Panel id="funnel" title="Funnel freemium (conversioni mensili)" openState={open} onToggle={toggle}>
@@ -689,6 +734,30 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
           </div>
         </>}
         {S(["assetTransferLagMonths"], "Lag mesi (firma S3 → primo ricavo)", 0, 4, 1, (v) => v + " mesi")}
+      </Panel>
+
+      <Panel id="revenue" title="IVA, commissioni e incassi" openState={open} onToggle={toggle}>
+        <div className="text-faint" style={{ fontSize: 11, marginBottom: 10 }}>
+          I prezzi sono IVA inclusa: il modello scorpora IVA e commissioni per arrivare al ricavo netto. Metti IVA a 0 per trattare i prezzi come già netti. (Imponibilità consulenza: da confermare col commercialista.)
+        </div>
+        {S(["vatRate"], "IVA da scorporare", 0, 0.30, 0.01, pct)}
+        <div className="uppercase text-faint" style={{ marginTop: 10, marginBottom: 6 }}>Commissioni di incasso (solo S1/S2)</div>
+        {S(["payments", "inAppShare"], "Quota incassi in-app (store)", 0, 1, 0.05, pct)}
+        {S(["payments", "storeFeeRate"], "Commissione store (App Store/Play)", 0, 0.30, 0.01, pct)}
+        {S(["payments", "webFeeRate"], "Commissione web (Stripe)", 0, 0.05, 0.005, pct)}
+        <div className="text-faint" style={{ fontSize: 11, marginTop: 4 }}>
+          Fee effettiva su S1/S2: {((params.payments.inAppShare * params.payments.storeFeeRate + (1 - params.payments.inAppShare) * params.payments.webFeeRate) * 100).toFixed(1)}%. S3 per bonifico → nessuna commissione.
+        </div>
+        <div className="uppercase text-faint" style={{ marginTop: 10, marginBottom: 6 }}>Fatturazione Strato 3 (cassa)</div>
+        <div className="scenario-group">
+          {[["annuale", "Annuale"], ["semestrale", "Semestr."], ["mensile", "Mensile"]].map(([k, lbl]) => (
+            <button key={k} className={"scenario-btn" + (params.s3Billing === k ? " active" : "")}
+              onClick={() => update(["s3Billing"], k)}>{lbl}</button>
+          ))}
+        </div>
+        <div className="text-faint" style={{ fontSize: 11, marginTop: 4 }}>
+          Anticipata = incasso a inizio periodo (cassa migliore, più "a scatti"). La competenza (MRR) resta mensile.
+        </div>
       </Panel>
 
       <Panel id="google" title="Google Ads" openState={open} onToggle={toggle}>
@@ -761,6 +830,7 @@ window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
         {S(["founderHoursPerWeek"], "Ore/settimana per fondatore", 5, 50, 1, (v) => v + "h")}
         {S(["hoursPerS3Onboarding"], "Ore onboarding cliente S3 (in presenza)", 1, 10, 0.5, (v) => v + "h")}
         {S(["hoursPerS2ConsultMonth"], "Ore/mese consulto remoto per cliente S2", 0, 2, 0.1, (v) => v + "h")}
+        {S(["hoursPerS3ReviewYear"], "Ore/anno revisione per cliente S3 (ricorrenti)", 0, 8, 0.5, (v) => v + "h")}
       </Panel>
 
       <Panel id="hiring" title="Assunzioni dinamiche" openState={open} onToggle={toggle}>
@@ -897,7 +967,8 @@ window.PROXIMA.Glossary = function Glossary() {
       ["Carico annuo sul cliente", "Quanto paga in un anno un cliente S3 medio, nella modalità scelta. Serve a confrontare l'impatto."],
     ]},
     { group: "Ricavi", items: [
-      ["MRR", "Ricavi ricorrenti mensili totali = S1 + S2 + S3."],
+      ["MRR netto", "Ricavi ricorrenti mensili (S1+S2+S3) già al netto di IVA e commissioni di incasso: il ricavo vero dell'azienda."],
+      ["Ricavo lordo", "Quanto pagano i clienti (prezzi IVA inclusa), prima di scorporare IVA e commissioni."],
       ["Ricavo per strato", "MRR scomposto nei tre strati, per vedere chi contribuisce davvero."],
       ["AUM", "Patrimonio totale gestito dei clienti S3. Composto e proiettato vs benchmark."],
     ]},
@@ -909,10 +980,18 @@ window.PROXIMA.Glossary = function Glossary() {
       ["Marketing", "Budget Google/Meta/TikTok per fase."],
     ]},
     { group: "Cash flow", items: [
-      ["Cash rimanente", "Quanto resta della cassa iniziale dopo costi e ricavi. A zero, l'azienda si ferma."],
-      ["Burn netto", "Costi − ricavi del mese. Positivo = si perde; negativo = si guadagna."],
-      ["Pareggio operativo", "Mese in cui i ricavi coprono i costi mensili."],
-      ["Pareggio investimento", "Mese in cui i ricavi cumulati superano i costi cumulati."],
+      ["Cash rimanente", "Quanto resta in cassa dopo incassi, costi ed eventuali iniezioni. A zero, l'azienda si ferma."],
+      ["Burn netto", "Costi − ricavi (competenza) del mese. Positivo = si perde; negativo = si guadagna."],
+      ["Margine di cassa", "Incassi reali − costi (+ iniezioni): il movimento di cassa effettivo del mese."],
+      ["Pareggio operativo", "Mese in cui i ricavi netti coprono i costi mensili."],
+      ["Pareggio investimento", "Mese in cui i ricavi netti cumulati superano i costi cumulati."],
+    ]},
+    { group: "IVA, incassi e cassa", items: [
+      ["IVA scorporata", "I prezzi sono IVA inclusa: ricavo netto = prezzo ÷ 1,22. L'IVA incassata si versa allo Stato (imponibilità della consulenza da confermare col commercialista)."],
+      ["Commissioni di incasso", "Su S1/S2: dagli store (App Store/Play) 15-30%, via web (Stripe) ~2-3%. Lo Strato 3, pagato per bonifico, non ha commissioni."],
+      ["Competenza vs cassa", "La competenza (MRR) è il ricavo maturato ogni mese; la cassa sono gli incassi reali. Differiscono perché lo Strato 3 è fatturato in anticipo."],
+      ["Fatturazione S3 anticipata", "La parcella S3 si incassa a inizio periodo (annuale/semestrale/mensile): migliora la cassa ma la rende più 'a scatti'."],
+      ["Iniezione di capitale", "Versamento successivo (soci o investitore) aggiunto alla cassa nel mese scelto, per non bucare la riserva."],
     ]},
     { group: "Gestione automatica", items: [
       ["Capacità S3 %", "Quanto è piena l'agenda di onboarding in presenza. Sopra l'85% il modello assume un consulente e riduce gli ads."],
@@ -1029,7 +1108,7 @@ window.PROXIMA.Dashboard = function Dashboard({ sim, params }) {
               <div className="uppercase gold" style={{ marginBottom: 8 }}>{ms.label}</div>
               <div className="kpi-grid">
                 <Kpi label="Paganti (S1+S2+S3)" value={num(r.totalPaying)} sub={num(r.freeUsers) + " utenti free"} />
-                <Kpi label="MRR" value={eur(r.mrr)} sub={"S1 " + eur(r.revS1) + " · S2 " + eur(r.revS2) + " · S3 " + eur(r.revS3)} />
+                <Kpi label="MRR netto" value={eur(r.mrr)} sub={"S1 " + eur(r.revS1) + " · S2 " + eur(r.revS2) + " · S3 " + eur(r.revS3)} />
                 <Kpi label="Cash" value={eur(r.cashRemaining)} />
                 <Kpi label="Clienti S3 / AUM" value={num(r.s3Clients)} sub={eur(r.totalAUM)} />
               </div>
@@ -1046,6 +1125,21 @@ window.PROXIMA.Dashboard = function Dashboard({ sim, params }) {
           <Kpi label="CAC paid → abbonato S1" value={eur(cacPaidS1)} />
           <Kpi label="Cash minimo" value={eur(cashMinimum)} sub={"a " + ml(cashMinimumMonth)} />
           <Kpi label="Team a fine piano" value={num(last.staffCount) + " persone"} />
+        </div>
+      </div>
+
+      <div className="section">
+        <div className="section-title">Dal lordo al netto · competenza vs cassa (ultimo mese)</div>
+        <div className="card">
+          <div className="card-sub">
+            I prezzi sono IVA inclusa: il modello scorpora IVA ({Math.round((params.vatRate || 0) * 100)}%) e le commissioni di incasso su S1/S2, e distingue la competenza (MRR) dagli incassi reali (lo Strato 3 è fatturato in anticipo).
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
+            <Kpi label="Ricavo lordo / mese" value={eur(last.grossMrr)} sub="prezzi IVA inclusa" />
+            <Kpi label="MRR netto" value={eur(last.mrr)} sub={"−" + (last.grossMrr > 0 ? Math.round((1 - last.mrr / last.grossMrr) * 100) : 0) + "% IVA + commissioni"} accent />
+            <Kpi label="Incassi / mese" value={eur(last.cashInflow)} sub={"di cui S3 anticipato " + eur(last.cashS3)} />
+            <Kpi label="Margine di cassa / mese" value={eur(last.cashFlow)} sub="incassi − costi (+ iniezioni)" />
+          </div>
         </div>
       </div>
 
@@ -1127,6 +1221,10 @@ window.PROXIMA.Dashboard = function Dashboard({ sim, params }) {
                 <Tooltip contentStyle={tooltipStyle} formatter={(v) => eur(v)} />
                 <ReferenceLine y={0} stroke="#F87171" strokeWidth={1.5} />
                 <ReferenceLine y={15000} stroke="#F59E0B" strokeDasharray="6 3" label={{ value: "Riserva", fill: "#F59E0B", fontSize: 11, position: "insideTopLeft" }} />
+                {results.filter((r) => r.injection > 0).map((r) => (
+                  <ReferenceLine key={r.month} x={r.monthLabel} stroke="#22D3EE" strokeDasharray="3 3"
+                    label={{ value: "+" + Math.round(r.injection / 1000) + "k", fill: "#22D3EE", fontSize: 10, position: "insideTopRight" }} />
+                ))}
                 <Area type="monotone" dataKey="cashRemaining" name="Cash" stroke="#4ADE80" fill="url(#cashGrad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
@@ -1316,7 +1414,7 @@ window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
 <script type="text/babel" data-presets="env,react">
 /* App — stato, localStorage, layout */
 window.PROXIMA = window.PROXIMA || {};
-const STORAGE_KEY = "proxima.scf.params.v1";
+const STORAGE_KEY = "proxima.scf.params.v2";
 
 function deepMerge(target, source) {
   const out = { ...target };
@@ -1352,9 +1450,10 @@ function App() {
           <div className="info-banner">
             <strong>Modello previsionale SCF a strati.</strong> Proiezione su 48 mesi (M-6 → M+41) di
             clienti, ricavi, costi e cassa per il modello a tre strati (app freemium → pacchetti remoti →
-            consulenza in presenza). Ricavo fee-only diretto dal cliente, senza split. La parcella dello
-            Strato 3 è selezionabile (%AUM, fissa, modulare) per esplorare quale pesa meno sul cliente.
-            Muovi gli slider per aggiornare tutto in tempo reale.
+            consulenza in presenza). Ricavo fee-only diretto dal cliente, senza split. I prezzi sono IVA
+            inclusa: il modello scorpora IVA e commissioni di incasso (MRR netto) e distingue la competenza
+            dagli incassi reali (Strato 3 fatturato in anticipo). La parcella S3 è selezionabile (%AUM, fissa,
+            modulare) e puoi simulare iniezioni di capitale. Muovi gli slider per aggiornare tutto in tempo reale.
           </div>
         </div>
         <window.PROXIMA.Glossary />
