@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Proxima — Modello Previsionale SCF (a strati)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0C1420; --card: #121E30; --card-hi: #17243A; --border: #1E2A3E;
+    --border-hi: #2A3952; --gold: #C4A962; --gold-dim: #8E7940; --text: #E8ECF2;
+    --text-dim: #8B98B0; --text-faint: #5C6B84; --success: #4ADE80; --warning: #F59E0B;
+    --danger: #F87171; --info: #60A5FA;
+    --s1: #60A5FA; --s2: #A78BFA; --s3: #C4A962;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--text); font-family: 'DM Sans', system-ui, sans-serif; font-size: 14px; line-height: 1.5; }
+  body { min-height: 100vh; overflow-x: hidden; }
+  .mono { font-family: 'DM Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .gold { color: var(--gold); } .text-dim { color: var(--text-dim); } .text-faint { color: var(--text-faint); }
+  .uppercase { text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; font-weight: 500; }
+
+  .app { display: grid; grid-template-columns: 360px 1fr; min-height: 100vh; }
+  .sidebar { background: var(--card); border-right: 1px solid var(--border); padding: 20px; overflow-y: auto; max-height: 100vh; position: sticky; top: 0; }
+  .main { padding: 24px 32px; max-width: 100%; overflow-x: hidden; }
+  @media (max-width: 1100px) { .app { grid-template-columns: 1fr; } .sidebar { position: static; max-height: none; } }
+
+  .brand { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .brand h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+  .brand-tag { color: var(--gold); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+  .subtitle { color: var(--text-dim); font-size: 13px; margin-bottom: 24px; }
+
+  .panel { background: var(--card-hi); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; cursor: pointer; user-select: none; background: var(--card-hi); }
+  .panel-header:hover { background: var(--border); }
+  .panel-header h3 { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
+  .panel-header .chev { color: var(--gold); font-size: 10px; }
+  .panel-body { padding: 8px 14px 16px; border-top: 1px solid var(--border); background: var(--card); }
+
+  .slider-row { margin-bottom: 14px; } .slider-row:last-child { margin-bottom: 0; }
+  .slider-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; gap: 8px; }
+  .slider-label .name { font-size: 12px; color: var(--text-dim); flex: 1; }
+  .slider-label .val { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--gold); font-weight: 500; }
+  input[type=range] { width: 100%; -webkit-appearance: none; appearance: none; height: 4px; background: var(--border); border-radius: 2px; outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: var(--gold); border-radius: 50%; cursor: pointer; border: 2px solid var(--bg); }
+  input[type=range]::-moz-range-thumb { width: 14px; height: 14px; background: var(--gold); border-radius: 50%; cursor: pointer; border: 2px solid var(--bg); }
+
+  .section { margin-bottom: 32px; }
+  .section-title { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 14px; font-weight: 500; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .kpi-card.accent { border-color: var(--gold-dim); background: linear-gradient(180deg, rgba(196,169,98,0.04) 0%, var(--card) 100%); }
+  .kpi-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
+  .kpi-value { font-family: 'DM Mono', monospace; font-size: 28px; font-weight: 500; color: var(--text); letter-spacing: -0.02em; }
+  .kpi-sub { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .card-sub { font-size: 12px; color: var(--text-dim); margin-bottom: 16px; }
+
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
+  table.proj { width: 100%; border-collapse: collapse; font-family: 'DM Mono', monospace; font-size: 12px; }
+  table.proj thead { background: var(--card-hi); position: sticky; top: 0; z-index: 2; }
+  table.proj th { text-align: right; padding: 10px 8px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); font-weight: 500; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.proj th:first-child, table.proj td:first-child { text-align: left; position: sticky; left: 0; background: inherit; z-index: 1; }
+  table.proj td { padding: 8px; text-align: right; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+  table.proj tr:hover td { background: var(--card-hi); }
+  table.proj tr.phase-boundary td { border-top: 2px solid var(--gold-dim); }
+  table.proj tr.capacity-limited td { background: rgba(245,158,11,0.05); }
+  table.proj tr.break-even td { background: rgba(74,222,128,0.08); }
+  table.proj tr.actual-data td { background: rgba(96,165,250,0.06); }
+  table.proj tr.pre-release td { opacity: 0.7; }
+  table.proj tr.pre-release:hover td { opacity: 1; }
+  .pill { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; letter-spacing: 0.04em; }
+  .pill-p1 { background: #1E2A3E; color: var(--text-dim); }
+  .pill-p2 { background: #2A3952; color: var(--text); }
+  .pill-p3 { background: rgba(96,165,250,0.15); color: var(--info); }
+  .pill-p4 { background: rgba(167,139,250,0.2); color: var(--s2); }
+  .pill-p5 { background: rgba(196,169,98,0.2); color: var(--gold); }
+  .pill-p6 { background: rgba(74,222,128,0.15); color: var(--success); }
+
+  .btn { background: var(--gold); color: var(--bg); border: 0; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; font-family: inherit; letter-spacing: 0.02em; }
+  .btn:hover { background: #D6BC73; }
+  .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
+
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 900px) { .chart-row { grid-template-columns: 1fr; } }
+
+  .warn-banner { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); border-radius: 10px; padding: 12px 14px; color: var(--warning); font-size: 13px; display: flex; align-items: center; gap: 10px; }
+  .info-banner { background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.2); border-radius: 10px; padding: 12px 14px; color: var(--info); font-size: 13px; }
+  .toolbar { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 14px; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--gold-dim); }
+
+  .scenario-group { display: flex; gap: 8px; margin-bottom: 14px; }
+  .scenario-btn { flex: 1; padding: 8px 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text-dim); font-size: 12px; font-weight: 500; cursor: pointer; text-align: center; font-family: inherit; transition: all 0.15s; }
+  .scenario-btn:hover { border-color: var(--gold-dim); }
+  .scenario-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(196,169,98,0.08); }
+  .scenario-btn.scenario-base.active { border-color: var(--success); color: var(--success); background: rgba(74,222,128,0.08); }
+  .scenario-btn.scenario-recessione.active { border-color: var(--warning); color: var(--warning); background: rgba(245,158,11,0.08); }
+  .scenario-btn.scenario-crisi.active { border-color: var(--danger); color: var(--danger); background: rgba(248,113,113,0.08); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prop-types@15.8.1/prop-types.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.7/babel.min.js"></script>
+
+<script type="text/babel" data-presets="env,react">
+/* ============================================================
+   Proxima — Modello Previsionale SCF "a strati"  (48 mesi: M-6 → M+41)
+   Ricavo fee-only diretto dal cliente, su 3 strati:
+     S1  app freemium (abbonamento base, consigli per classe di rischio)
+     S2  abbonamento + pacchetti, consulenza remota (telefono/webcam)
+     S3  consulenza in presenza — parcella selezionabile: %AUM | fissa | modulare
+   Niente split SIM. Costi allineati al doc 61 (budget modello a strati).
+   ============================================================ */
+window.PROXIMA = window.PROXIMA || {};
+
+var LAUNCH_M = 7;   // M0
+var HORIZON = 48;   // M-6 (m=1) ... M+41 (m=48)
+
+window.PROXIMA.getPhase = function (m) {
+  if (m <= 3) return 1;    // M-6..M-4  Costituzione & compliance
+  if (m <= 6) return 2;    // M-3..M-1  App MVP & pre-lancio
+  if (m <= 12) return 3;   // M0..M+5   Lancio Strato 1 (freemium)
+  if (m <= 18) return 4;   // M+6..M+11 Strato 2 (abbonamenti + pacchetti)
+  if (m <= 30) return 5;   // M+12..M+23 Strato 3 a regime + scaling
+  return 6;                // M+24..     Scala nazionale
+};
+
+window.PROXIMA.phaseNames = {
+  1: 'Costituzione & compliance', 2: 'App MVP & pre-lancio',
+  3: 'Lancio Strato 1', 4: 'Strato 2 (remoto)',
+  5: 'Strato 3 a regime', 6: 'Scala nazionale'
+};
+
+window.PROXIMA.monthLabel = function (m) {
+  if (m < LAUNCH_M) return 'M-' + (LAUNCH_M - m);
+  if (m === LAUNCH_M) return 'M0';
+  return 'M+' + (m - LAUNCH_M);
+};
+
+window.PROXIMA.defaultParams = function () {
+  return {
+    riskScenario: 'base',
+    startingCapital: 150000,
+
+    /* --- Acquisizione: canali → lead → download app (utenti free) --- */
+    google:  { cpc: 1.20, clickToLead: 0.45, budgetByPhase: { 1:0, 2:150, 3:700, 4:1100, 5:1500, 6:1800 } },
+    meta:    { cpc: 0.70, clickToLead: 0.30, budgetByPhase: { 1:0, 2:250, 3:1000, 4:1500, 5:1900, 6:2200 } },
+    tiktok:  { cpc: 0.40, clickToLead: 0.22, budgetByPhase: { 1:0, 2:150, 3:600, 4:900, 5:1100, 6:1300 } },
+    seo:     { baseVisits: 40, growthRate: 0.15, visitToLead: 0.12, maxVisits: 1000 },
+    social:  { baseVisits: 70, growthRate: 0.10, visitToLead: 0.08, maxVisits: 1500 },
+    leadToDownload: 0.45,
+    market:  { tamFree: 15000 },
+
+    /* --- Funnel freemium a strati (tassi mensili) --- */
+    freemium: { freeToS1: 0.03, s1ToS2: 0.025, s2ToS3: 0.02 },
+    churn: { free: 0.09, s1: 0.04, s2: 0.03, s3: 0.006 },
+
+    /* --- Canale diretto verso S3 (referral / PR / passaparola, bypassa l'app) --- */
+    referral: { ratePerS3Client: 0.05, bookingRate: 0.80, startMonth: 13 },
+    borrowed: { s3BookingsByPhase: { 1:0, 2:0, 3:2, 4:4, 5:6, 6:8 } },
+    directShowRate: 0.75, directToClient: 0.30,
+
+    /* --- Pricing --- */
+    priceS1: 7,
+    priceS2: 39, s2PackagesPerClientYr: 1.2, s2PackagePrice: 180,
+
+    /* Strato 3 — modalità selezionabile */
+    s3FeeMode: 'aum',  // 'aum' | 'fissa' | 'modulare'
+    s3: {
+      feeRate: 0.009, bonusBps: 0.0015,           // %AUM (+ bonus opzionale in bps su AUM)
+      fixedAnnual: 900,                            // parcella fissa annua
+      baseFare: 300, checkpointsPerYear: 2, checkpointFee: 220  // modulare
+    },
+    assetTransferLagMonths: 1,
+
+    /* --- AUM (motore cohort per lo Strato 3) --- */
+    aum: { avgPerClient: 45000, portfolioReturn: 0.06, benchmark: 0.08,
+      annualContributions: 3600, annualWithdrawalRate: 0.03, marketShock: 0,
+      dist: { s_pct: 0.40, s_avg: 18000, m_pct: 0.40, m_avg: 45000, l_pct: 0.20, l_avg: 95000 } },
+
+    /* --- Capacità (ore): S3 in presenza + consulti remoti S2 --- */
+    founderHoursPerWeek: 25, hoursPerS3Onboarding: 4.0, hoursPerS2ConsultMonth: 0.25,
+
+    /* --- Assunzioni dinamiche --- */
+    hiring: {
+      consultantCost: 2500, consultantHoursPerWeek: 20, maxConsultants: 4,
+      firstConsultantMonth: 13, utilTrigger: 0.85,
+      contentCost: 1200, contentMinMonth: 9, contentTriggerUsers: 400,
+      devCost: 1500, devMinMonth: 13, devTriggerUsers: 250,
+      backOfficeCost: 1000, backOfficeMinMonth: 19, backOfficeTriggerClients: 300
+    },
+
+    /* --- App / tech (capex ibrido + ricorrente) --- */
+    tech: { sitoLanding: 6000, appS1Build: 14000, appS2Build: 30000, appS2Month: 19,
+      infraMonthly: 250, maintPctYr: 0.18 },
+
+    /* --- Costituzione (corretta: niente capitale 50k, RC reale, AML incluso) --- */
+    constitution: { notaio: 2000, cciaa: 560, registroBollo: 356, iscrizioneOCF: 550,
+      commercialistaIniziale: 1200, avvocato: 2500, assicurazioneRC: 2500,
+      esami: 1500, amlSetup: 2000, pecFirma: 100 },
+
+    /* --- Operativi mensili (corretti: OCF ~270/mese, AML, no commercianti) --- */
+    operating: { commercialista: 400, quotaOCF: 270, assicurazioneRC: 200,
+      software: 300, aml: 80, coworking: 350, pecTelCloud: 150 },
+
+    /* --- Personale: fondatori a €0 fino a compStartMonth (default M+12) --- */
+    personnel: { founderComp: 1000, numFounders: 2, inpsRate: 0.2607, compStartMonth: 19 },
+
+    /* --- Altro --- */
+    budgetCapAdjust: true, budgetCapThreshold: 0.85,
+    waitingList: { count: 200, toS1Rate: 0.40 },
+    launchCalendarMonth: 9,
+    seasonality: [0, 1.2, 1.0, 1.1, 1.05, 0.95, 0.85, 0.50, 0.40, 1.30, 1.10, 1.0, 0.60],
+    actuals: { currentMonth: 0, freeUsers: 0, s1: 0, s2: 0, s3: 0, cashBalance: 0 },
+    taxation: { enabled: false, iresRate: 0.24, irapRate: 0.039 }
+  };
+};
+
+var RISK = {
+  base:       { clientMult: 1.0, costMult: 1.0,  churnMult: 1.0 },
+  recessione: { clientMult: 0.7, costMult: 1.15, churnMult: 1.5 },
+  crisi:      { clientMult: 0.5, costMult: 1.15, churnMult: 2.0 }
+};
+
+function constitutionForMonth(m, c) {
+  if (m === 1) return c.notaio + c.cciaa + c.registroBollo + c.commercialistaIniziale;
+  if (m === 2) return c.iscrizioneOCF + c.pecFirma + c.esami;
+  if (m === 3) return c.avvocato;
+  if (m === 4) return c.amlSetup;
+  if (m === 5) return c.assicurazioneRC;
+  return 0;
+}
+
+/* Capex tech: sito (m3-5), App S1 MVP low-code (m4-6), App S2 agenzia (appS2Month..+5) */
+function techCapexForMonth(m, t) {
+  var x = 0;
+  if (m >= 3 && m <= 5) x += t.sitoLanding / 3;
+  if (m >= 4 && m <= 6) x += t.appS1Build / 3;
+  if (m >= t.appS2Month && m < t.appS2Month + 6) x += t.appS2Build / 6;
+  return x;
+}
+/* Ricorrente tech: infra (da M0) + manutenzione (% annua del build, da quando è consegnato) */
+function techRecurringForMonth(m, t) {
+  var x = 0;
+  if (m >= LAUNCH_M) x += t.infraMonthly;
+  if (m > 6) x += t.appS1Build * t.maintPctYr / 12;
+  if (m >= t.appS2Month + 6) x += t.appS2Build * t.maintPctYr / 12;
+  return x;
+}
+
+window.PROXIMA.simulate = function (p, months) {
+  months = months || HORIZON;
+  var results = [];
+  var freeUsers = 0, s1 = 0, s2 = 0, cohortsS3 = [];
+  var revCum = 0, costCum = 0;
+  var risk = RISK[p.riskScenario] || RISK.base;
+  var cash = p.startingCapital, cashMin = cash, cashMinMonth = 1;
+  var h = p.hiring;
+  var hiredConsultants = 0, hasContent = false, hasDev = false, hasBackOffice = false;
+  var lastConsultantHireMonth = 0, hiringPlan = [];
+
+  var paidCumSpend = 0, paidCumS1 = 0;   // CAC: spesa paid / nuovi abbonati S1 attribuiti
+  var benchMonthly = Math.pow(1 + p.aum.benchmark, 1 / 12) - 1, benchValue = 0;
+  var revWindow12 = [], costWindow12 = [];
+
+  for (var m = 1; m <= months; m++) {
+    var phase = window.PROXIMA.getPhase(m);
+    var phaseName = window.PROXIMA.phaseNames[phase];
+    var label = window.PROXIMA.monthLabel(m);
+    var isPre = m < LAUNCH_M;
+    var calMonth = ((m - LAUNCH_M + (p.launchCalendarMonth || 9) - 1) % 12 + 12) % 12 + 1;
+    var season = isPre ? 1 : ((p.seasonality && p.seasonality[calMonth]) ? p.seasonality[calMonth] : 1.0);
+
+    /* --- Capacità in ore (pre-assunzioni di questo mese) --- */
+    var fHours = p.founderHoursPerWeek * 4.33;
+    var consHours = hiredConsultants * h.consultantHoursPerWeek * 4.33;
+    var totHours = fHours + consHours;
+
+    /* --- Budget pubblicitario per fase (pieno) --- */
+    var bGFull = p.google.budgetByPhase[phase] || 0;
+    var bMFull = p.meta.budgetByPhase[phase] || 0;
+    var bTFull = p.tiktok.budgetByPhase[phase] || 0;
+
+    /* --- Traffico organico: curva logistica con plateau (no esplosione esponenziale) --- */
+    var seoV = logistic(p.seo.baseVisits, p.seo.maxVisits, p.seo.growthRate, m);
+    var socV = logistic(p.social.baseVisits, p.social.maxVisits, p.social.growthRate, m);
+
+    function downloadsFrom(bG, bM, bT) {
+      var gLeads = bG > 0 ? (bG / p.google.cpc) * p.google.clickToLead : 0;
+      var mLeads = bM > 0 ? (bM / p.meta.cpc) * p.meta.clickToLead : 0;
+      var tLeads = bT > 0 ? (bT / p.tiktok.cpc) * p.tiktok.clickToLead : 0;
+      var seoLeads = seoV * p.seo.visitToLead;
+      var socLeads = socV * p.social.visitToLead;
+      var leads = (gLeads + mLeads + tLeads + seoLeads + socLeads) * season;
+      var paidLeads = (gLeads + mLeads + tLeads) * season;
+      return { total: leads * p.leadToDownload, paid: paidLeads * p.leadToDownload };
+    }
+
+    /* --- Churn (sugli stock correnti, prima delle conversioni) --- */
+    var cF = p.churn.free, cS1 = p.churn.s1 * risk.churnMult, cS2 = p.churn.s2 * risk.churnMult, cS3 = p.churn.s3 * risk.churnMult;
+    var churnFree = freeUsers * cF; freeUsers -= churnFree;
+    var churnS1 = s1 * cS1; s1 -= churnS1;
+    var churnS2 = s2 * cS2; s2 -= churnS2;
+    var churnS3 = 0;
+    for (var ci = 0; ci < cohortsS3.length; ci++) { var L = cohortsS3[ci].count * cS3; churnS3 += L; cohortsS3[ci].count -= L; }
+
+    /* --- Domanda S3 diretta (referral + PR): non passa dall'app --- */
+    var refBook = (m >= p.referral.startMonth) ? cohortsCount(cohortsS3) * p.referral.ratePerS3Client * p.referral.bookingRate : 0;
+    var borBook = p.borrowed.s3BookingsByPhase[phase] || 0;
+    if (isPre) { borBook = (m >= LAUNCH_M - 1) ? borBook : 0; refBook = 0; }
+    var directBookings = (refBook + borBook) * season;
+    var newS3directRaw = directBookings * p.directShowRate * p.directToClient * risk.clientMult;
+
+    /* --- Domanda (desiderata) di conversione dagli stock post-churn --- */
+    var newS1des = freeUsers * p.freemium.freeToS1;
+    var newS2des = s1 * p.freemium.s1ToS2;
+    var newS3appDes = s2 * p.freemium.s2ToS3 * risk.clientMult;
+    var newS3des = newS3appDes + newS3directRaw;
+
+    /* --- Capacità umana: serve prima gli S2 esistenti, poi i nuovi S2 e S3 --- */
+    var s2ServiceHours = s2 * p.hoursPerS2ConsultMonth;
+    var hoursNew = newS2des * p.hoursPerS2ConsultMonth + newS3des * p.hoursPerS3Onboarding;
+    var util = totHours > 0 ? (s2ServiceHours + hoursNew) / totHours : 0;
+
+    /* --- Assunzioni dinamiche --- */
+    var totalPaying = s1 + s2 + cohortsCount(cohortsS3);
+    if (!hasContent && m >= h.contentMinMonth && (freeUsers + s1) >= h.contentTriggerUsers) {
+      hasContent = true; hiringPlan.push({ month: m, monthLabel: label, role: 'Content/quant (consigli per classe)', cost: h.contentCost, trigger: h.contentTriggerUsers + ' utenti' });
+    }
+    if (!hasDev && m >= h.devMinMonth && (freeUsers + s1) >= h.devTriggerUsers) {
+      hasDev = true; hiringPlan.push({ month: m, monthLabel: label, role: 'Dev/manutenzione app', cost: h.devCost, trigger: h.devTriggerUsers + ' utenti' });
+    }
+    if (!hasBackOffice && m >= h.backOfficeMinMonth && totalPaying >= h.backOfficeTriggerClients) {
+      hasBackOffice = true; hiringPlan.push({ month: m, monthLabel: label, role: 'Back-office', cost: h.backOfficeCost, trigger: h.backOfficeTriggerClients + ' clienti paganti' });
+    }
+    if (m >= h.firstConsultantMonth && hiredConsultants < h.maxConsultants && util > h.utilTrigger && (m - lastConsultantHireMonth) >= 3) {
+      hiredConsultants++; lastConsultantHireMonth = m;
+      consHours = hiredConsultants * h.consultantHoursPerWeek * 4.33;
+      totHours = fHours + consHours;
+      s2ServiceHours = s2 * p.hoursPerS2ConsultMonth;
+      util = totHours > 0 ? (s2ServiceHours + hoursNew) / totHours : 0;
+      hiringPlan.push({ month: m, monthLabel: label, role: 'Consulente #' + hiredConsultants, cost: h.consultantCost, trigger: 'capacità al ' + Math.round(util * 100) + '%' });
+    }
+
+    /* --- Throttle dei nuovi high-touch (S2/S3) alla capacità residua (S1/free non toccati) --- */
+    var availNew = Math.max(0, totHours - s2ServiceHours);
+    var capScale = (m >= LAUNCH_M && hoursNew > availNew && hoursNew > 0) ? availNew / hoursNew : 1;
+    var capLimited = capScale < 0.999;
+    var newS2 = newS2des * capScale;
+    var newS3app = newS3appDes * capScale;
+    var newS3direct = newS3directRaw * capScale;
+    var newS3 = newS3app + newS3direct;
+    var maxNewS3 = p.hoursPerS3Onboarding > 0 ? availNew / p.hoursPerS3Onboarding : 999;
+    var s3Util = util;
+
+    /* --- Budget factor: ads si riducono quando il bacino free satura il TAM --- */
+    var sat = (p.market.tamFree > 0) ? freeUsers / p.market.tamFree : 0;
+    var budgetFactor = 1.0;
+    if (p.budgetCapAdjust && m >= LAUNCH_M && sat > p.budgetCapThreshold) {
+      budgetFactor = Math.max(0.1, 1 - (sat - p.budgetCapThreshold) / (1 - p.budgetCapThreshold));
+    }
+    var bG = bGFull * budgetFactor, bM = bMFull * budgetFactor, bT = bTFull * budgetFactor;
+
+    /* --- Download effettivi con saturazione TAM (app viva da M0) --- */
+    var dl = downloadsFrom(bG, bM, bT);
+    var tamFactor = (p.market.tamFree > 0) ? Math.max(0, 1 - freeUsers / p.market.tamFree) : 1;
+    var newDownloads = isPre ? 0 : dl.total * tamFactor;
+    var paidDownloads = isPre ? 0 : dl.paid * tamFactor;
+    var newS1 = newS1des;
+
+    /* --- Aggiorna stock --- */
+    freeUsers = Math.max(0, freeUsers + newDownloads - newS1);
+    s1 = Math.max(0, s1 + newS1 - newS2);
+    s2 = Math.max(0, s2 + newS2 - newS3app);
+    if (newS3 > 0) cohortsS3.push({ count: newS3, birthMonth: m });
+
+    /* --- Lista d'attesa al lancio (download + spinta diretta su S1) --- */
+    var waitingBoost = 0;
+    if (m === LAUNCH_M) {
+      freeUsers += p.waitingList.count;
+      waitingBoost = p.waitingList.count * p.waitingList.toS1Rate;
+      if (waitingBoost > 0) { s1 += waitingBoost; freeUsers = Math.max(0, freeUsers - waitingBoost); }
+    }
+
+    /* --- Attualizzazione su dati reali --- */
+    var act = p.actuals || {};
+    var isActual = act.currentMonth > 0 && m <= act.currentMonth;
+    if (act.currentMonth > 0 && m === act.currentMonth) {
+      if (act.freeUsers > 0) freeUsers = act.freeUsers;
+      if (act.s1 > 0) s1 = act.s1;
+      if (act.s2 > 0) s2 = act.s2;
+      if (act.s3 > 0) {
+        var cc = cohortsCount(cohortsS3);
+        if (cc > 0) { var sc = act.s3 / cc; for (var cs = 0; cs < cohortsS3.length; cs++) cohortsS3[cs].count *= sc; }
+        else cohortsS3.push({ count: act.s3, birthMonth: Math.max(1, m - 6) });
+      }
+      if (act.cashBalance > 0) cash = act.cashBalance;
+    }
+
+    var s3Clients = cohortsCount(cohortsS3);
+
+    /* --- AUM Strato 3 (motore cohort, rendita) --- */
+    var r12 = p.aum.portfolioReturn / 12;
+    var mktF = 1 + (p.aum.marketShock || 0);
+    var dd = p.aum.dist, sumPct = dd ? (dd.s_pct + dd.m_pct + dd.l_pct) : 0;
+    var effAvgAUM = (sumPct > 0.01) ? (dd.s_pct * dd.s_avg + dd.m_pct * dd.m_avg + dd.l_pct * dd.l_avg) / sumPct : p.aum.avgPerClient;
+    var netPMT = (p.aum.annualContributions - effAvgAUM * (p.aum.annualWithdrawalRate || 0)) / 12;
+    var lag = p.assetTransferLagMonths || 0;
+    var totalAUM = 0, payingAUM = 0, payingS3 = 0;
+    for (var ck = 0; ck < cohortsS3.length; ck++) {
+      var cAge = m - cohortsS3[ck].birthMonth;
+      var aumPer = effAvgAUM * mktF * Math.pow(1 + r12, cAge)
+        + (cAge > 0 && Math.abs(netPMT) > 0.01 ? netPMT * (Math.pow(1 + r12, cAge) - 1) / r12 : 0);
+      totalAUM += cohortsS3[ck].count * aumPer;
+      if (cAge >= lag) { payingS3 += cohortsS3[ck].count; payingAUM += cohortsS3[ck].count * aumPer; }
+    }
+
+    /* --- Ricavi per strato --- */
+    var revS1 = s1 * p.priceS1;
+    var revS2 = s2 * p.priceS2 + s2 * (p.s2PackagesPerClientYr / 12) * p.s2PackagePrice;
+    var s3 = p.s3, revS3 = 0, s3LoadAnnual = 0;  // s3LoadAnnual = carico annuo medio sul cliente S3
+    if (p.s3FeeMode === 'aum') {
+      revS3 = payingAUM * (s3.feeRate + (s3.bonusBps || 0)) / 12;
+      s3LoadAnnual = effAvgAUM * (s3.feeRate + (s3.bonusBps || 0));
+    } else if (p.s3FeeMode === 'fissa') {
+      revS3 = payingS3 * s3.fixedAnnual / 12;
+      s3LoadAnnual = s3.fixedAnnual;
+    } else { // modulare
+      var annual = s3.baseFare + s3.checkpointsPerYear * s3.checkpointFee;
+      revS3 = payingS3 * annual / 12;
+      s3LoadAnnual = annual;
+    }
+    var mrr = revS1 + revS2 + revS3;
+    var arr = mrr * 12;
+
+    /* --- Costi --- */
+    var constCost = constitutionForMonth(m, p.constitution);
+    var capexTech = techCapexForMonth(m, p.tech);
+    var opBase = 0, ok = Object.keys(p.operating);
+    for (var oi = 0; oi < ok.length; oi++) opBase += p.operating[ok[oi]];
+    var opCost = opBase * risk.costMult + techRecurringForMonth(m, p.tech);
+
+    var founderActive = m >= p.personnel.compStartMonth;
+    var persCost = (founderActive ? p.personnel.founderComp * p.personnel.numFounders * (1 + p.personnel.inpsRate * 2 / 3) : 0);
+    if (hasContent) persCost += h.contentCost;
+    if (hasDev) persCost += h.devCost;
+    if (hasBackOffice) persCost += h.backOfficeCost;
+    persCost += hiredConsultants * h.consultantCost;
+
+    var mktCost = (bG + bM + bT) * risk.costMult;
+
+    var totCostPreTax = constCost + capexTech + opCost + persCost + mktCost;
+    revWindow12.push(mrr); costWindow12.push(totCostPreTax);
+    if (revWindow12.length > 12) { revWindow12.shift(); costWindow12.shift(); }
+    var trailingProfit = Math.max(0, sum(revWindow12) - sum(costWindow12));
+    var taxCost = 0;
+    if (p.taxation.enabled && m >= LAUNCH_M) {
+      taxCost = trailingProfit * p.taxation.iresRate / 12 + Math.max(0, mrr - opCost) * p.taxation.irapRate;
+    }
+    var totCost = totCostPreTax + taxCost;
+
+    /* --- Benchmark S&P (per confronto AUM) --- */
+    if (m === LAUNCH_M) benchValue = totalAUM;
+    else if (m > LAUNCH_M) benchValue = benchValue * (1 + benchMonthly);
+
+    /* --- CAC paid → S1: attribuisce al paid la frazione di download che diventerà S1 nel ciclo di vita --- */
+    var lifetimeFreeToS1 = (p.freemium.freeToS1 + p.churn.free) > 0 ? p.freemium.freeToS1 / (p.freemium.freeToS1 + p.churn.free) : 0;
+    paidCumSpend += (bG + bM + bT);
+    paidCumS1 += paidDownloads * lifetimeFreeToS1;
+
+    revCum += mrr; costCum += totCost;
+    var netBurn = totCost - mrr;
+    cash -= netBurn;
+    if (cash < cashMin) { cashMin = cash; cashMinMonth = m; }
+
+    var staffCount = (founderActive ? p.personnel.numFounders : p.personnel.numFounders) + hiredConsultants + (hasContent ? 1 : 0) + (hasDev ? 1 : 0) + (hasBackOffice ? 1 : 0);
+
+    results.push({
+      month: m, monthLabel: label, phase: phase, phaseName: phaseName, isPreRelease: isPre, isActual: isActual, calMonth: calMonth,
+      googleBudget: bG, metaBudget: bM, tiktokBudget: bT, newDownloads: newDownloads,
+      freeUsers: freeUsers, s1Clients: s1, s2Clients: s2, s3Clients: s3Clients, payingS3: payingS3,
+      totalPaying: s1 + s2 + s3Clients,
+      newS1: newS1, newS2: newS2, newS3: newS3, newS3app: newS3app, newS3direct: newS3direct,
+      churnFree: churnFree, churnS1: churnS1, churnS2: churnS2, churnS3: churnS3,
+      revS1: revS1, revS2: revS2, revS3: revS3, mrr: mrr, arr: arr, s3LoadAnnual: s3LoadAnnual,
+      totalAUM: totalAUM, payingAUM: payingAUM, effAvgAUM: effAvgAUM, benchValue: benchValue,
+      constitutionCosts: constCost, techCapex: capexTech, operatingCosts: opCost,
+      personnelCosts: persCost, marketingCosts: mktCost, taxCost: taxCost, totalCosts: totCost,
+      netBurn: netBurn, cashRemaining: cash, revenueCumulative: revCum, costsCumulative: costCum,
+      maxNewS3: maxNewS3, s3Utilization: s3Util, budgetFactor: budgetFactor, capacityLimited: capLimited,
+      hiredConsultants: hiredConsultants, hasContent: hasContent, hasDev: hasDev, hasBackOffice: hasBackOffice,
+      staffCount: staffCount, waitingBoost: waitingBoost
+    });
+  }
+
+  var beOp = null, beCum = null;
+  for (var i = 0; i < results.length; i++) {
+    if (beOp === null && results[i].mrr >= results[i].totalCosts && results[i].month >= LAUNCH_M) beOp = results[i].month;
+    if (beCum === null && results[i].revenueCumulative >= results[i].costsCumulative) beCum = results[i].month;
+  }
+
+  return {
+    results: results, breakEvenOperational: beOp, breakEvenCumulative: beCum,
+    cacPaidS1: paidCumS1 > 0 ? paidCumSpend / paidCumS1 : 0,
+    cashMinimum: cashMin, cashMinimumMonth: cashMinMonth, hiringPlan: hiringPlan
+  };
+};
+
+function cohortsCount(cohorts) { var t = 0; for (var i = 0; i < cohorts.length; i++) t += cohorts[i].count; return t; }
+function sum(arr) { var t = 0; for (var i = 0; i < arr.length; i++) t += arr[i]; return t; }
+function logistic(base, K, g, m) {
+  if (!K || K <= base) return base;
+  return K / (1 + ((K - base) / base) * Math.exp(-g * (m - 1)));
+}
+
+</script>
+
+<script type="text/babel" data-presets="env,react">
+/* Controls — pannelli slider per tutti i parametri del modello a strati */
+window.PROXIMA = window.PROXIMA || {};
+
+const pct = (v) => (v * 100).toFixed(1) + "%";
+const eur = (v) => "€" + Math.round(v).toLocaleString("it-IT");
+const num2 = (v) => Number(v).toFixed(2);
+const mlab = (v) => window.PROXIMA.monthLabel(Math.round(v));
+
+function Slider({ label, value, min, max, step, fmt, onChange }) {
+  return (
+    <div className="slider-row">
+      <div className="slider-label">
+        <span className="name">{label}</span>
+        <span className="val">{fmt ? fmt(value) : value}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))} />
+    </div>
+  );
+}
+
+function Panel({ id, title, openState, onToggle, children }) {
+  const isOpen = !!openState[id];
+  return (
+    <div className="panel">
+      <div className="panel-header" onClick={() => onToggle(id)}>
+        <h3>{title}</h3><span className="chev">{isOpen ? "▼" : "▶"}</span>
+      </div>
+      {isOpen && <div className="panel-body">{children}</div>}
+    </div>
+  );
+}
+
+const PL = ["Costituzione", "App MVP", "Lancio S1", "Strato 2", "Strato 3", "Scala naz."];
+
+function PhaseBudgets({ channel, label, params, updateArray }) {
+  return (
+    <>
+      <div className="uppercase text-faint" style={{ marginTop: 6, marginBottom: 6 }}>
+        Budget {label} per fase (€/mese)
+      </div>
+      {PL.map((ph, i) => (
+        <Slider key={i} label={`Fase ${i + 1} (${ph})`} value={params[channel].budgetByPhase[i + 1]}
+          min={0} max={8000} step={100} fmt={eur}
+          onChange={(v) => updateArray([channel, "budgetByPhase"], i + 1, v)} />
+      ))}
+    </>
+  );
+}
+
+window.PROXIMA.Controls = function Controls({ params, setParams, onReset }) {
+  const [open, setOpen] = React.useState({
+    scenario: true, capital: true, funnel: true, pricing: true, s3fee: true,
+    google: false, meta: false, tiktok: false, organic: false, direct: false,
+    aum: false, capacity: true, hiring: false, tech: true,
+    constitution: false, operating: false, personnel: true,
+    seasonality: false, taxation: false, attualizzazione: false
+  });
+  const toggle = React.useCallback((k) => setOpen((p) => ({ ...p, [k]: !p[k] })), []);
+
+  const update = (path, value) => {
+    const next = JSON.parse(JSON.stringify(params));
+    let ref = next;
+    for (let i = 0; i < path.length - 1; i++) ref = ref[path[i]];
+    ref[path[path.length - 1]] = value;
+    setParams(next);
+  };
+  const updateArray = (path, idx, value) => {
+    const next = JSON.parse(JSON.stringify(params));
+    let ref = next;
+    for (let i = 0; i < path.length - 1; i++) ref = ref[path[i]];
+    ref[path[path.length - 1]][idx] = value;
+    setParams(next);
+  };
+  const S = (path, label, min, max, step, fmt) => (
+    <Slider label={label} value={path.reduce((o, k) => o[k], params)}
+      min={min} max={max} step={step} fmt={fmt} onChange={(v) => update(path, v)} />
+  );
+  const eurCpc = (v) => "€" + num2(v);
+  const pct0 = (v) => (v * 100).toFixed(0) + "%";
+  const bps = (v) => (v * 100).toFixed(2) + "%";
+
+  return (
+    <div>
+      <div className="brand"><h1>Proxima</h1><span className="brand-tag">Modello SCF · a strati</span></div>
+      <div className="subtitle">Fee-only · 48 mesi (M-6 → M+41) · 3 strati · aggiornamento in tempo reale</div>
+      <div className="toolbar"><button className="btn-ghost btn" onClick={onReset}>↻ Reset</button></div>
+
+      <Panel id="scenario" title="Scenario di rischio" openState={open} onToggle={toggle}>
+        <div className="scenario-group">
+          {["base", "recessione", "crisi"].map((s) => (
+            <button key={s} className={"scenario-btn scenario-" + s + (params.riskScenario === s ? " active" : "")}
+              onClick={() => update(["riskScenario"], s)}>{s}</button>
+          ))}
+        </div>
+      </Panel>
+
+      <Panel id="capital" title="Capitale iniziale" openState={open} onToggle={toggle}>
+        {S(["startingCapital"], "Cassa disponibile per il lancio", 50000, 350000, 5000, eur)}
+        <div className="text-faint" style={{ fontSize: 11, marginTop: 6 }}>
+          Lean ~€120-140K · Base ~€200-230K · Scale ~€280-330K (doc 61).
+        </div>
+      </Panel>
+
+      <Panel id="funnel" title="Funnel freemium (conversioni mensili)" openState={open} onToggle={toggle}>
+        {S(["leadToDownload"], "% lead → download app gratis", 0.2, 0.9, 0.01, pct)}
+        {S(["market", "tamFree"], "Mercato indirizzabile (max utenti free)", 2000, 80000, 1000, (v) => Math.round(v).toLocaleString("it-IT"))}
+        {S(["freemium", "freeToS1"], "% utenti free → S1 (abbonati base)", 0.01, 0.20, 0.005, pct)}
+        {S(["freemium", "s1ToS2"], "% S1 → S2 (upgrade pacchetti)", 0.01, 0.15, 0.005, pct)}
+        {S(["freemium", "s2ToS3"], "% S2 → S3 (consulenza in presenza)", 0.005, 0.10, 0.005, pct)}
+        <div className="uppercase text-faint" style={{ marginTop: 10, marginBottom: 6 }}>Abbandono mensile per strato</div>
+        {S(["churn", "free"], "Churn utenti free", 0.02, 0.20, 0.005, pct)}
+        {S(["churn", "s1"], "Churn S1", 0.005, 0.10, 0.005, pct)}
+        {S(["churn", "s2"], "Churn S2", 0.005, 0.08, 0.005, pct)}
+        {S(["churn", "s3"], "Churn S3", 0.002, 0.03, 0.001, pct)}
+        <div className="uppercase text-faint" style={{ marginTop: 10, marginBottom: 6 }}>Lista d'attesa al lancio (M0)</div>
+        {S(["waitingList", "count"], "Download al lancio", 0, 1000, 25, (v) => v + " download")}
+        {S(["waitingList", "toS1Rate"], "% che si abbona subito (S1)", 0, 1, 0.05, pct)}
+      </Panel>
+
+      <Panel id="pricing" title="Pricing Strato 1 e 2" openState={open} onToggle={toggle}>
+        <div className="uppercase text-faint" style={{ marginBottom: 6 }}>Strato 1 — abbonamento base</div>
+        {S(["priceS1"], "Prezzo S1 (€/mese)", 0, 25, 1, (v) => "€" + v + "/mese")}
+        <div className="uppercase text-faint" style={{ marginTop: 10, marginBottom: 6 }}>Strato 2 — abbonamento + pacchetti</div>
+        {S(["priceS2"], "Abbonamento S2 (€/mese)", 9, 120, 1, (v) => "€" + v + "/mese")}
+        {S(["s2PackagesPerClientYr"], "Pacchetti per cliente / anno", 0, 4, 0.1, (v) => v.toFixed(1) + "/anno")}
+        {S(["s2PackagePrice"], "Prezzo medio pacchetto (€)", 50, 600, 10, eur)}
+      </Panel>
+
+      <Panel id="s3fee" title="Parcella Strato 3 — modalità" openState={open} onToggle={toggle}>
+        <div className="text-faint" style={{ fontSize: 11, marginBottom: 10 }}>
+          Lo stesso cliente, tre modi di fatturare. Confronta il "carico annuo sul cliente" nella dashboard.
+        </div>
+        <div className="scenario-group">
+          {[["aum", "%AUM"], ["fissa", "Fissa"], ["modulare", "Modulare"]].map(([k, lbl]) => (
+            <button key={k} className={"scenario-btn" + (params.s3FeeMode === k ? " active" : "")}
+              onClick={() => update(["s3FeeMode"], k)}>{lbl}</button>
+          ))}
+        </div>
+        {params.s3FeeMode === "aum" && <>
+          {S(["s3", "feeRate"], "Fee annua su AUM", 0.004, 0.020, 0.0005, bps)}
+          {S(["s3", "bonusBps"], "Bonus performance (addon su AUM)", 0, 0.005, 0.0005, bps)}
+          <div className="text-faint" style={{ fontSize: 11, marginTop: 4 }}>
+            Il bonus va addebitato al cliente e trasparente (MiFID II), mai retrocesso da terzi.
+          </div>
+        </>}
+        {params.s3FeeMode === "fissa" && <>
+          {S(["s3", "fixedAnnual"], "Parcella fissa annua (€)", 300, 3000, 50, eur)}
+        </>}
+        {params.s3FeeMode === "modulare" && <>
+          {S(["s3", "baseFare"], "Base fare annua (€)", 0, 1500, 50, eur)}
+          {S(["s3", "checkpointsPerYear"], "Checkpoint / anno", 0, 6, 1, (v) => v + "/anno")}
+          {S(["s3", "checkpointFee"], "Fee per checkpoint (€)", 50, 600, 10, eur)}
+          <div className="text-faint" style={{ fontSize: 11, marginTop: 4 }}>
+            Carico annuo = base fare + (checkpoint × fee). Modello "pesa meno": paghi a tappe.
+          </div>
+        </>}
+        {S(["assetTransferLagMonths"], "Lag mesi (firma S3 → primo ricavo)", 0, 4, 1, (v) => v + " mesi")}
+      </Panel>
+
+      <Panel id="google" title="Google Ads" openState={open} onToggle={toggle}>
+        {S(["google", "cpc"], "Costo per click", 0.4, 4, 0.05, eurCpc)}
+        {S(["google", "clickToLead"], "% click → lead", 0.1, 0.9, 0.01, pct)}
+        <PhaseBudgets channel="google" label="Google" params={params} updateArray={updateArray} />
+      </Panel>
+
+      <Panel id="meta" title="Meta Ads (IG/FB)" openState={open} onToggle={toggle}>
+        {S(["meta", "cpc"], "Costo per click", 0.2, 3, 0.05, eurCpc)}
+        {S(["meta", "clickToLead"], "% click → lead", 0.05, 0.7, 0.01, pct)}
+        <PhaseBudgets channel="meta" label="Meta" params={params} updateArray={updateArray} />
+      </Panel>
+
+      <Panel id="tiktok" title="TikTok Ads" openState={open} onToggle={toggle}>
+        {S(["tiktok", "cpc"], "Costo per click", 0.1, 2, 0.05, eurCpc)}
+        {S(["tiktok", "clickToLead"], "% click → lead", 0.05, 0.6, 0.01, pct)}
+        <PhaseBudgets channel="tiktok" label="TikTok" params={params} updateArray={updateArray} />
+      </Panel>
+
+      <Panel id="organic" title="Organico (SEO + social)" openState={open} onToggle={toggle}>
+        <div className="uppercase text-faint" style={{ marginBottom: 6 }}>SEO</div>
+        {S(["seo", "baseVisits"], "Visite primo mese", 0, 400, 5, (v) => v + "/mese")}
+        {S(["seo", "growthRate"], "Velocità di crescita (logistica)", 0, 0.4, 0.01, pct)}
+        {S(["seo", "maxVisits"], "Plateau visite/mese (saturazione)", 100, 6000, 50, (v) => v + "/mese")}
+        {S(["seo", "visitToLead"], "% visite → lead", 0.02, 0.4, 0.01, pct)}
+        <div className="uppercase text-faint" style={{ marginTop: 10, marginBottom: 6 }}>Social organici</div>
+        {S(["social", "baseVisits"], "Visite primo mese", 0, 400, 5, (v) => v + "/mese")}
+        {S(["social", "growthRate"], "Velocità di crescita (logistica)", 0, 0.35, 0.01, pct)}
+        {S(["social", "maxVisits"], "Plateau visite/mese (saturazione)", 100, 8000, 50, (v) => v + "/mese")}
+        {S(["social", "visitToLead"], "% visite → lead", 0.02, 0.3, 0.01, pct)}
+      </Panel>
+
+      <Panel id="direct" title="Canale diretto → S3 (referral, PR)" openState={open} onToggle={toggle}>
+        <div className="text-faint" style={{ fontSize: 11, marginBottom: 10 }}>
+          Clienti S3 che arrivano per passaparola/eventi senza passare dall'app.
+        </div>
+        {S(["referral", "ratePerS3Client"], "Contatti/mese per cliente S3", 0, 0.2, 0.005, pct)}
+        {S(["referral", "bookingRate"], "% contatti che prenota", 0.3, 1, 0.05, pct)}
+        {S(["referral", "startMonth"], "Mese inizio referral", 7, 24, 1, mlab)}
+        {S(["directShowRate"], "% che si presenta", 0.3, 1, 0.05, pct)}
+        {S(["directToClient"], "% primo incontro → cliente S3", 0.1, 0.7, 0.01, pct)}
+        <div className="uppercase text-faint" style={{ marginTop: 10, marginBottom: 6 }}>Prenotazioni S3 dirette (PR/eventi) per fase</div>
+        {PL.map((ph, i) => (
+          <Slider key={i} label={`Fase ${i + 1} (${ph})`} value={params.borrowed.s3BookingsByPhase[i + 1]}
+            min={0} max={30} step={1} fmt={(v) => v + "/mese"}
+            onChange={(v) => updateArray(["borrowed", "s3BookingsByPhase"], i + 1, v)} />
+        ))}
+      </Panel>
+
+      <Panel id="aum" title="Patrimonio gestito (AUM) — Strato 3" openState={open} onToggle={toggle}>
+        <div className="text-faint" style={{ fontSize: 11, marginBottom: 10 }}>
+          AUM medio effettivo: {eur((() => { const d = params.aum.dist, s = d.s_pct + d.m_pct + d.l_pct; return s > 0.01 ? (d.s_pct * d.s_avg + d.m_pct * d.m_avg + d.l_pct * d.l_avg) / s : params.aum.avgPerClient; })())}
+        </div>
+        {S(["aum", "portfolioReturn"], "Rendimento annuo portafoglio", 0.0, 0.12, 0.005, pct)}
+        {S(["aum", "benchmark"], "Benchmark di confronto (S&P)", 0.04, 0.14, 0.005, pct)}
+        {S(["aum", "annualContributions"], "Versamenti annui medi (€)", 0, 15000, 250, eur)}
+        {S(["aum", "annualWithdrawalRate"], "Prelievi annui (% AUM)", 0, 0.15, 0.01, pct0)}
+        {S(["aum", "marketShock"], "Shock di mercato sull'AUM", -0.5, 0.3, 0.05, (v) => v === 0 ? "nessuno" : (v > 0 ? "+" : "") + Math.round(v * 100) + "%")}
+        <div className="uppercase text-faint" style={{ marginTop: 10, marginBottom: 6 }}>Distribuzione patrimoni S3</div>
+        {S(["aum", "dist", "s_pct"], "% clienti piccoli", 0, 0.8, 0.05, pct)}
+        {S(["aum", "dist", "s_avg"], "AUM medio piccoli", 5000, 80000, 2500, eur)}
+        {S(["aum", "dist", "m_pct"], "% clienti medi", 0, 0.8, 0.05, pct)}
+        {S(["aum", "dist", "m_avg"], "AUM medio medi", 20000, 200000, 5000, eur)}
+        {S(["aum", "dist", "l_pct"], "% clienti grandi", 0, 0.6, 0.05, pct)}
+        {S(["aum", "dist", "l_avg"], "AUM medio grandi", 50000, 500000, 10000, eur)}
+      </Panel>
+
+      <Panel id="capacity" title="Capacità e ore" openState={open} onToggle={toggle}>
+        {S(["founderHoursPerWeek"], "Ore/settimana per fondatore", 5, 50, 1, (v) => v + "h")}
+        {S(["hoursPerS3Onboarding"], "Ore onboarding cliente S3 (in presenza)", 1, 10, 0.5, (v) => v + "h")}
+        {S(["hoursPerS2ConsultMonth"], "Ore/mese consulto remoto per cliente S2", 0, 2, 0.1, (v) => v + "h")}
+      </Panel>
+
+      <Panel id="hiring" title="Assunzioni dinamiche" openState={open} onToggle={toggle}>
+        <div className="uppercase text-faint" style={{ marginBottom: 8 }}>Consulenti (capacità S3)</div>
+        {S(["hiring", "consultantCost"], "Costo consulente (€/mese)", 500, 5000, 100, eur)}
+        {S(["hiring", "consultantHoursPerWeek"], "Ore/settimana consulente", 10, 40, 5, (v) => v + "h")}
+        {S(["hiring", "maxConsultants"], "Max consulenti", 0, 6, 1)}
+        {S(["hiring", "firstConsultantMonth"], "Mese prima assunzione", 7, 36, 1, mlab)}
+        <div className="uppercase text-faint" style={{ marginTop: 12, marginBottom: 8 }}>Content/quant (consigli per classe)</div>
+        {S(["hiring", "contentCost"], "Costo (€/mese)", 400, 2500, 100, eur)}
+        {S(["hiring", "contentTriggerUsers"], "Utenti per assunzione", 50, 1000, 50)}
+        {S(["hiring", "contentMinMonth"], "Mese minimo", 4, 36, 1, mlab)}
+        <div className="uppercase text-faint" style={{ marginTop: 12, marginBottom: 8 }}>Dev / manutenzione app</div>
+        {S(["hiring", "devCost"], "Costo (€/mese)", 500, 3000, 100, eur)}
+        {S(["hiring", "devTriggerUsers"], "Utenti per assunzione", 50, 800, 50)}
+        {S(["hiring", "devMinMonth"], "Mese minimo", 4, 36, 1, mlab)}
+        <div className="uppercase text-faint" style={{ marginTop: 12, marginBottom: 8 }}>Back-office</div>
+        {S(["hiring", "backOfficeCost"], "Costo (€/mese)", 400, 2000, 100, eur)}
+        {S(["hiring", "backOfficeTriggerClients"], "Clienti paganti per assunzione", 100, 800, 50)}
+        {S(["hiring", "backOfficeMinMonth"], "Mese minimo", 13, 40, 1, mlab)}
+      </Panel>
+
+      <Panel id="tech" title="App e tecnologia (capex ibrido)" openState={open} onToggle={toggle}>
+        {S(["tech", "sitoLanding"], "Sito + landing", 2000, 12000, 500, eur)}
+        {S(["tech", "appS1Build"], "App Strato 1 — MVP (low-code)", 5000, 50000, 1000, eur)}
+        {S(["tech", "appS2Build"], "App Strato 2 — agenzia", 10000, 80000, 2000, eur)}
+        {S(["tech", "appS2Month"], "Mese build App S2", 7, 36, 1, mlab)}
+        {S(["tech", "infraMonthly"], "Infra/hosting (€/mese)", 50, 1000, 50, eur)}
+        {S(["tech", "maintPctYr"], "Manutenzione annua (% del build)", 0.05, 0.35, 0.01, pct0)}
+        <div className="text-faint" style={{ fontSize: 11, marginTop: 6 }}>
+          MVP low-code a M-3/M-1; App S2 in agenzia solo dopo la traction.
+        </div>
+      </Panel>
+
+      <Panel id="constitution" title="Costi di costituzione" openState={open} onToggle={toggle}>
+        {S(["constitution", "notaio"], "Notaio", 1000, 4000, 100, eur)}
+        {S(["constitution", "cciaa"], "CCIAA", 200, 1000, 20, eur)}
+        {S(["constitution", "registroBollo"], "Registro + bollo", 200, 800, 20, eur)}
+        {S(["constitution", "iscrizioneOCF"], "Iscrizione OCF (tassa+contributo)", 200, 1500, 50, eur)}
+        {S(["constitution", "commercialistaIniziale"], "Commercialista iniziale", 500, 3000, 100, eur)}
+        {S(["constitution", "avvocato"], "Avvocato (statuto, MiFID)", 1000, 5000, 100, eur)}
+        {S(["constitution", "assicurazioneRC"], "RC professionale (anno 1)", 1000, 6000, 100, eur)}
+        {S(["constitution", "esami"], "Esami OCF (×2) + prep.", 0, 4000, 100, eur)}
+        {S(["constitution", "amlSetup"], "Setup AML/KYC + compliance", 500, 4000, 100, eur)}
+        {S(["constitution", "pecFirma"], "PEC + firma digitale", 30, 300, 10, eur)}
+      </Panel>
+
+      <Panel id="operating" title="Costi operativi mensili" openState={open} onToggle={toggle}>
+        {S(["operating", "commercialista"], "Commercialista", 200, 800, 25, eur)}
+        {S(["operating", "quotaOCF"], "Quota OCF (€/mese, ~3.240/anno)", 100, 500, 10, eur)}
+        {S(["operating", "assicurazioneRC"], "RC professionale (ammortizz./mese)", 100, 500, 25, eur)}
+        {S(["operating", "software"], "Software (CRM, analisi, compliance)", 100, 800, 25, eur)}
+        {S(["operating", "aml"], "AML (tool + formazione/mese)", 0, 300, 10, eur)}
+        {S(["operating", "coworking"], "Sede / coworking", 0, 1500, 50, eur)}
+        {S(["operating", "pecTelCloud"], "PEC, telefonia, cloud", 50, 400, 25, eur)}
+      </Panel>
+
+      <Panel id="personnel" title="Compensi fondatori" openState={open} onToggle={toggle}>
+        {S(["personnel", "founderComp"], "Compenso per fondatore (€/mese)", 0, 4000, 100, eur)}
+        {S(["personnel", "numFounders"], "Numero fondatori", 1, 4, 1)}
+        {S(["personnel", "compStartMonth"], "Da quando prelevano compenso", 7, 40, 1, mlab)}
+        <div className="text-faint" style={{ fontSize: 11, marginTop: 6 }}>
+          €0 fino al mese scelto (bootstrap). INPS Gestione Separata sul compenso (no minimale commercianti).
+        </div>
+      </Panel>
+
+      <Panel id="seasonality" title="Stagionalità mensile" openState={open} onToggle={toggle}>
+        {S(["launchCalendarMonth"], "Mese di calendario di M0", 1, 12, 1,
+          (v) => ["", "Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"][Math.round(v)] || String(Math.round(v)))}
+        <div className="uppercase text-faint" style={{ marginTop: 10, marginBottom: 6 }}>Moltiplicatori acquisizione</div>
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((mn) => (
+          <Slider key={mn} label={["", "Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"][mn]}
+            value={params.seasonality[mn] || 1} min={0.1} max={2.0} step={0.05} fmt={(v) => v.toFixed(2) + "x"}
+            onChange={(v) => updateArray(["seasonality"], mn, v)} />
+        ))}
+      </Panel>
+
+      <Panel id="taxation" title="Fiscalità (IRES + IRAP)" openState={open} onToggle={toggle}>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
+            <input type="checkbox" checked={!!params.taxation.enabled}
+              onChange={() => update(["taxation", "enabled"], !params.taxation.enabled)} />
+            Includi stima tasse nel cash flow
+          </label>
+        </div>
+        {params.taxation.enabled && <>
+          {S(["taxation", "iresRate"], "Aliquota IRES", 0.15, 0.30, 0.01, pct)}
+          {S(["taxation", "irapRate"], "Aliquota IRAP", 0.02, 0.06, 0.001, pct)}
+        </>}
+      </Panel>
+
+      <Panel id="attualizzazione" title="Attualizzazione (dati reali)" openState={open} onToggle={toggle}>
+        <div className="info-banner" style={{ marginBottom: 12 }}>
+          Inserisci i numeri reali a oggi: il modello li usa come punto di calibrazione e proietta da lì.
+        </div>
+        {S(["actuals", "currentMonth"], "Mese attuale (0 = previsionale)", 0, 47, 1, mlab)}
+        {params.actuals.currentMonth > 0 && <>
+          {S(["actuals", "freeUsers"], "Utenti free reali", 0, 5000, 50, (v) => v)}
+          {S(["actuals", "s1"], "Abbonati S1 reali", 0, 2000, 10, (v) => v)}
+          {S(["actuals", "s2"], "Clienti S2 reali", 0, 1000, 5, (v) => v)}
+          {S(["actuals", "s3"], "Clienti S3 reali", 0, 500, 1, (v) => v)}
+          {S(["actuals", "cashBalance"], "Saldo banca reale", 0, 350000, 1000, eur)}
+        </>}
+      </Panel>
+    </div>
+  );
+};
+
+</script>
+
+<script type="text/babel" data-presets="env,react">
+/* Glossary — termini in italiano semplice per il modello a strati */
+window.PROXIMA = window.PROXIMA || {};
+
+window.PROXIMA.Glossary = function Glossary() {
+  const [open, setOpen] = React.useState(false);
+  const entries = [
+    { group: "I tre strati", items: [
+      ["Strato 1 (S1)", "App freemium: l'utente scarica gratis e si abbona (base) per i consigli generici divisi per classe di rischio. Volume alto, prezzo basso."],
+      ["Strato 2 (S2)", "Abbonamento + pacchetti di consulenza mirata, anche via telefono/webcam. Prezzo medio."],
+      ["Strato 3 (S3)", "Consulenza in presenza, analisi profonda di profilo e patrimonio. Parcella alta, volume basso. Il cliente esegue da sé gli ordini (vincolo SCF)."],
+      ["Utenti free", "Hanno scaricato l'app ma non pagano. Sono il bacino da cui si convertono gli abbonati S1."],
+    ]},
+    { group: "Funnel e conversioni", items: [
+      ["Lead → Download", "Persone raggiunte dal marketing che installano l'app gratuita."],
+      ["free → S1 / S1 → S2 / S2 → S3", "Tassi mensili con cui gli utenti salgono di strato."],
+      ["Canale diretto S3", "Clienti S3 da referral/PR/passaparola che non passano dall'app."],
+      ["Churn", "% che disdice ogni mese, calcolata per ciascuno strato separatamente."],
+    ]},
+    { group: "Parcella Strato 3 (selezionabile)", items: [
+      ["%AUM", "Percentuale annua sul patrimonio gestito (+ eventuale bonus performance addebitato al cliente)."],
+      ["Fissa", "Parcella fissa annua, indipendente dal patrimonio."],
+      ["Modulare", "Base fare annua + una fee a ogni checkpoint raggiunto. Pensata per pesare meno sul cliente."],
+      ["Carico annuo sul cliente", "Quanto paga in un anno un cliente S3 medio, nella modalità scelta. Serve a confrontare l'impatto."],
+    ]},
+    { group: "Ricavi", items: [
+      ["MRR", "Ricavi ricorrenti mensili totali = S1 + S2 + S3."],
+      ["Ricavo per strato", "MRR scomposto nei tre strati, per vedere chi contribuisce davvero."],
+      ["AUM", "Patrimonio totale gestito dei clienti S3. Composto e proiettato vs benchmark."],
+    ]},
+    { group: "Costi", items: [
+      ["Costituzione", "Spese una-tantum per nascere come SCF (notaio, OCF, RC, AML, esami...). Niente capitale minimo da €50K."],
+      ["Operativi", "Ricorrenti: commercialista, quota OCF (~€3.240/anno), RC, software, AML, sede."],
+      ["App / tech (capex)", "Sito + App S1 (MVP low-code) + App S2 (agenzia, dopo traction) + infra/manutenzione."],
+      ["Personale", "Fondatori (a €0 fino al mese scelto) + collaboratori assunti automaticamente sui trigger."],
+      ["Marketing", "Budget Google/Meta/TikTok per fase."],
+    ]},
+    { group: "Cash flow", items: [
+      ["Cash rimanente", "Quanto resta della cassa iniziale dopo costi e ricavi. A zero, l'azienda si ferma."],
+      ["Burn netto", "Costi − ricavi del mese. Positivo = si perde; negativo = si guadagna."],
+      ["Pareggio operativo", "Mese in cui i ricavi coprono i costi mensili."],
+      ["Pareggio investimento", "Mese in cui i ricavi cumulati superano i costi cumulati."],
+    ]},
+    { group: "Gestione automatica", items: [
+      ["Capacità S3 %", "Quanto è piena l'agenda di onboarding in presenza. Sopra l'85% il modello assume un consulente e riduce gli ads."],
+      ["Budget ads %", "Si riduce automaticamente quando la capacità S3 è satura, per non sprecare lead non servibili."],
+    ]},
+  ];
+
+  return (
+    <div className="section">
+      <div className="panel" style={{ marginBottom: 0 }}>
+        <div className="panel-header" onClick={() => setOpen(!open)}>
+          <h3>📖 Glossario — cosa significano i termini</h3>
+          <span className="chev">{open ? "▼" : "▶"}</span>
+        </div>
+        {open && (
+          <div className="panel-body" style={{ padding: "16px 20px" }}>
+            <div style={{ display: "grid", gap: 20 }}>
+              {entries.map((g) => (
+                <div key={g.group}>
+                  <div className="uppercase gold" style={{ marginBottom: 8 }}>{g.group}</div>
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {g.items.map(([term, def]) => (
+                      <div key={term} style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 12, alignItems: "baseline" }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: "var(--text)" }}>{term}</div>
+                        <div className="text-dim" style={{ fontSize: 13, lineHeight: 1.5 }}>{def}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+</script>
+
+<script type="text/babel" data-presets="env,react">
+/* Dashboard — KPI + ricavi per strato + carico S3 + AUM + grafici */
+window.PROXIMA = window.PROXIMA || {};
+
+window.PROXIMA.Dashboard = function Dashboard({ sim, params }) {
+  const {
+    ResponsiveContainer, ComposedChart, AreaChart, Bar, Line, Area,
+    XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine
+  } = window.Recharts;
+
+  const { results, breakEvenOperational, breakEvenCumulative, cacPaidS1, cashMinimum, cashMinimumMonth, hiringPlan } = sim;
+
+  const eur = (v) => "€ " + Math.round(v).toLocaleString("it-IT");
+  const num = (v) => Math.round(v).toLocaleString("it-IT");
+  const ml = (v) => (v == null || v < 1 || v > results.length) ? "Mai" : results[v - 1].monthLabel;
+  const last = results[results.length - 1];
+  const launchIdx = results.findIndex((r) => r.monthLabel === "M0");
+
+  const tooltipStyle = { backgroundColor: "#121E30", border: "1px solid #2A3952", borderRadius: 8, fontFamily: "DM Mono, monospace", fontSize: 12, color: "#E8ECF2" };
+  const axTick = { fill: "#8B98B0", fontSize: 11 };
+  const axLine = { stroke: "#1E2A3E" };
+
+  const Kpi = ({ label, value, sub, accent }) =>
+    React.createElement("div", { className: "kpi-card" + (accent ? " accent" : "") },
+      React.createElement("div", { className: "kpi-label" }, label),
+      React.createElement("div", { className: "kpi-value mono" }, value),
+      sub && React.createElement("div", { className: "kpi-sub text-dim" }, sub));
+
+  const idxOf = (lbl) => { const i = results.findIndex((r) => r.monthLabel === lbl); return i < 0 ? null : i; };
+  const milestones = [
+    { label: "M0 — Lancio", idx: idxOf("M0") },
+    { label: "M+12", idx: idxOf("M+12") },
+    { label: "M+24", idx: idxOf("M+24") },
+    { label: "M+41 (fine)", idx: results.length - 1 }
+  ].filter((x) => x.idx != null);
+
+  /* Ricavi per strato */
+  const revData = results.map((r) => ({ monthLabel: r.monthLabel, S1: Math.round(r.revS1), S2: Math.round(r.revS2), S3: Math.round(r.revS3) }));
+  /* Clienti per strato */
+  const tierData = results.filter((r) => r.month >= launchIdx + 1).map((r) => ({
+    monthLabel: r.monthLabel, "Free": Math.round(r.freeUsers), S1: Math.round(r.s1Clients), S2: Math.round(r.s2Clients), S3: Math.round(r.s3Clients)
+  }));
+  /* AUM vs benchmark */
+  const aumData = results.filter((r) => r.month >= launchIdx + 1).map((r) => ({
+    monthLabel: r.monthLabel, aumGestito: Math.round(r.totalAUM / 1000), benchmark: Math.round(r.benchValue / 1000)
+  }));
+  /* Carico annuo sul cliente S3 nelle 3 modalità (a parametri correnti) */
+  const d = params.aum.dist, sP = d.s_pct + d.m_pct + d.l_pct;
+  const effAvg = sP > 0.01 ? (d.s_pct * d.s_avg + d.m_pct * d.m_avg + d.l_pct * d.l_avg) / sP : params.aum.avgPerClient;
+  const s3 = params.s3;
+  const loadModes = [
+    { name: "%AUM", val: effAvg * (s3.feeRate + (s3.bonusBps || 0)), color: "#C4A962" },
+    { name: "Fissa", val: s3.fixedAnnual, color: "#60A5FA" },
+    { name: "Modulare", val: s3.baseFare + s3.checkpointsPerYear * s3.checkpointFee, color: "#A78BFA" }
+  ];
+  const activeMode = params.s3FeeMode === "aum" ? "%AUM" : params.s3FeeMode === "fissa" ? "Fissa" : "Modulare";
+
+  const staffData = results.filter((r) => r.month >= launchIdx + 1).map((r) => ({
+    monthLabel: r.monthLabel, staffCount: r.staffCount,
+    capacity: Math.round(r.s3Utilization * 100), ads: Math.round(r.budgetFactor * 100)
+  }));
+
+  const revColors = { S1: ["Strato 1", "#60A5FA"], S2: ["Strato 2", "#A78BFA"], S3: ["Strato 3", "#C4A962"] };
+  const costColors = { constitutionCosts: ["Costituzione", "#F87171"], techCapex: ["App/tech", "#22D3EE"], operatingCosts: ["Operativi", "#60A5FA"], personnelCosts: ["Personale", "#A78BFA"], marketingCosts: ["Marketing", "#F59E0B"] };
+
+  return (
+    <div>
+      <div className="section">
+        <div className="section-title">Indicatori chiave</div>
+        {milestones.map((ms) => {
+          const r = results[ms.idx]; if (!r) return null;
+          return (
+            <div key={ms.label} style={{ marginBottom: 18 }}>
+              <div className="uppercase gold" style={{ marginBottom: 8 }}>{ms.label}</div>
+              <div className="kpi-grid">
+                <Kpi label="Paganti (S1+S2+S3)" value={num(r.totalPaying)} sub={num(r.freeUsers) + " utenti free"} />
+                <Kpi label="MRR" value={eur(r.mrr)} sub={"S1 " + eur(r.revS1) + " · S2 " + eur(r.revS2) + " · S3 " + eur(r.revS3)} />
+                <Kpi label="Cash" value={eur(r.cashRemaining)} />
+                <Kpi label="Clienti S3 / AUM" value={num(r.s3Clients)} sub={eur(r.totalAUM)} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="section">
+        <div className="section-title">Metriche di sintesi</div>
+        <div className="kpi-grid">
+          <Kpi label="Pareggio operativo" value={ml(breakEvenOperational)} accent />
+          <Kpi label="Pareggio investimento" value={ml(breakEvenCumulative)} />
+          <Kpi label="CAC paid → abbonato S1" value={eur(cacPaidS1)} />
+          <Kpi label="Cash minimo" value={eur(cashMinimum)} sub={"a " + ml(cashMinimumMonth)} />
+          <Kpi label="Team a fine piano" value={num(last.staffCount) + " persone"} />
+        </div>
+      </div>
+
+      <div className="section">
+        <div className="section-title">Carico annuo sul cliente S3 — confronto modalità</div>
+        <div className="card">
+          <div className="card-sub">Quanto paga in un anno un cliente S3 medio (AUM {eur(effAvg)}). Modalità attiva: <span className="gold">{activeMode}</span>. Cambiala dalla sidebar per esplorare quale pesa meno.</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+            {loadModes.map((lm) => (
+              <div key={lm.name} className="card" style={{ borderLeft: "3px solid " + lm.color, opacity: lm.name === activeMode ? 1 : 0.6 }}>
+                <div style={{ fontSize: 12, color: "#8B98B0", marginBottom: 4 }}>{lm.name}{lm.name === activeMode ? " ✓" : ""}</div>
+                <div className="mono" style={{ fontSize: 24, fontWeight: 500 }}>{eur(lm.val)}</div>
+                <div className="text-faint" style={{ fontSize: 11, marginTop: 4 }}>{(effAvg > 0 ? (lm.val / effAvg * 100).toFixed(2) : "0") + "% dell'AUM/anno"}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="section">
+        <div className="section-title">Piano assunzioni (automatico)</div>
+        {hiringPlan.length === 0 ? (
+          <div className="text-dim" style={{ fontSize: 13 }}>Nessuna assunzione prevista con i parametri attuali.</div>
+        ) : (
+          <div className="tbl-wrap">
+            <table className="proj" style={{ fontSize: 13 }}>
+              <thead><tr>
+                <th style={{ textAlign: "left" }}>Mese</th><th style={{ textAlign: "left" }}>Ruolo</th>
+                <th>Trigger</th><th>Costo/mese</th><th>Costo/anno</th>
+              </tr></thead>
+              <tbody>
+                {hiringPlan.map((hp, i) => (
+                  <tr key={i}>
+                    <td style={{ textAlign: "left" }}><span className="gold mono">{hp.monthLabel}</span></td>
+                    <td style={{ textAlign: "left", fontWeight: 600 }}>{hp.role}</td>
+                    <td className="text-dim">{hp.trigger}</td>
+                    <td className="mono">{eur(hp.cost)}</td>
+                    <td className="mono text-dim">{eur(hp.cost * 12)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="section">
+        <div className="section-title">Grafici</div>
+        <div className="chart-row">
+          <div className="card">
+            <div className="card-title">Ricavi mensili per strato</div>
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={revData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false} axisLine={axLine} interval={3} />
+                <YAxis tick={axTick} tickLine={false} axisLine={axLine} tickFormatter={(v) => "€" + Math.round(v / 1000) + "k"} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v) => eur(v)} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+                {Object.entries(revColors).map(([k, [name, color]]) => (
+                  <Bar key={k} dataKey={k} name={name} stackId="rev" fill={color} />
+                ))}
+                <ReferenceLine x="M0" stroke="#C4A962" strokeDasharray="4 4" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="card">
+            <div className="card-title">Cash flow ({eur(results[0]?.cashRemaining || 0)} iniziali)</div>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={results} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="cashGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4ADE80" stopOpacity={0.6} />
+                    <stop offset="100%" stopColor="#F87171" stopOpacity={0.3} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false} axisLine={axLine} interval={3} />
+                <YAxis tick={axTick} tickLine={false} axisLine={axLine} tickFormatter={(v) => "€" + Math.round(v / 1000) + "k"} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v) => eur(v)} />
+                <ReferenceLine y={0} stroke="#F87171" strokeWidth={1.5} />
+                <ReferenceLine y={15000} stroke="#F59E0B" strokeDasharray="6 3" label={{ value: "Riserva", fill: "#F59E0B", fontSize: 11, position: "insideTopLeft" }} />
+                <Area type="monotone" dataKey="cashRemaining" name="Cash" stroke="#4ADE80" fill="url(#cashGrad)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="chart-row" style={{ marginTop: 14 }}>
+          <div className="card">
+            <div className="card-title">Costi vs Ricavi mensili</div>
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={results} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false} axisLine={axLine} interval={3} />
+                <YAxis tick={axTick} tickLine={false} axisLine={axLine} tickFormatter={(v) => "€" + Math.round(v / 1000) + "k"} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v) => eur(v)} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+                {Object.entries(costColors).map(([k, [name, color]]) => (
+                  <Bar key={k} dataKey={k} name={name} stackId="costs" fill={color} />
+                ))}
+                <Line type="monotone" dataKey="mrr" name="MRR" stroke="#4ADE80" strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="card">
+            <div className="card-title">Clienti per strato (post-lancio)</div>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={tierData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false} axisLine={axLine} interval={3} />
+                <YAxis tick={axTick} tickLine={false} axisLine={axLine} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+                <Area type="monotone" dataKey="S1" stackId="t" stroke="#60A5FA" fill="#60A5FA" fillOpacity={0.7} />
+                <Area type="monotone" dataKey="S2" stackId="t" stroke="#A78BFA" fill="#A78BFA" fillOpacity={0.7} />
+                <Area type="monotone" dataKey="S3" stackId="t" stroke="#C4A962" fill="#C4A962" fillOpacity={0.8} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="chart-row" style={{ marginTop: 14 }}>
+          <div className="card">
+            <div className="card-title">AUM Strato 3 (€k) vs benchmark</div>
+            <ResponsiveContainer width="100%" height={280}>
+              <ComposedChart data={aumData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false} axisLine={axLine} interval={3} />
+                <YAxis tick={axTick} tickLine={false} axisLine={axLine} tickFormatter={(v) => "€" + v + "k"} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v) => "€" + v.toLocaleString("it-IT") + "k"} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+                <Area type="monotone" dataKey="aumGestito" name="AUM gestito" stroke="#C4A962" fill="rgba(196,169,98,0.2)" strokeWidth={2} />
+                <Line type="monotone" dataKey="benchmark" name="Benchmark" stroke="#4ADE80" strokeWidth={2} strokeDasharray="5 3" dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="card">
+            <div className="card-title">Team · capacità S3 · budget ads</div>
+            <ResponsiveContainer width="100%" height={280}>
+              <ComposedChart data={staffData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#1E2A3E" vertical={false} />
+                <XAxis dataKey="monthLabel" tick={axTick} tickLine={false} axisLine={axLine} interval={3} />
+                <YAxis yAxisId="left" tick={axTick} tickLine={false} axisLine={axLine} />
+                <YAxis yAxisId="right" orientation="right" tick={axTick} tickLine={false} axisLine={axLine} tickFormatter={(v) => v + "%"} domain={[0, 100]} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#8B98B0" }} />
+                <Bar yAxisId="left" dataKey="staffCount" name="Team" fill="#A78BFA" />
+                <Line yAxisId="right" type="monotone" dataKey="capacity" name="Capacità S3 %" stroke="#F59E0B" strokeWidth={2} dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="ads" name="Budget ads %" stroke="#4ADE80" strokeWidth={2} strokeDasharray="4 3" dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+</script>
+
+<script type="text/babel" data-presets="env,react">
+/* Table — proiezione 48 mesi + export CSV/JSON */
+window.PROXIMA = window.PROXIMA || {};
+
+window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
+  const { results, breakEvenOperational, breakEvenCumulative } = sim;
+  const [showPre, setShowPre] = React.useState(true);
+  const [msg, setMsg] = React.useState("");
+
+  const fmtE = (v) => "€" + Math.round(v).toLocaleString("it-IT");
+  const fmtN = (v) => Math.round(v).toLocaleString("it-IT");
+  const flash = (t) => { setMsg(t); setTimeout(() => setMsg(""), 2500); };
+
+  const cols = [
+    ["Mese", null, ""], ["Fase", null, ""],
+    ["Free", (r) => fmtN(r.freeUsers), ""],
+    ["S1", (r) => fmtN(r.s1Clients), "s1"],
+    ["S2", (r) => fmtN(r.s2Clients), "s2"],
+    ["S3", (r) => fmtN(r.s3Clients), "s3"],
+    ["AUM €k", (r) => fmtN(Math.round(r.totalAUM / 1000)), ""],
+    ["Ric. S1", (r) => fmtE(r.revS1), ""],
+    ["Ric. S2", (r) => fmtE(r.revS2), ""],
+    ["Ric. S3", (r) => fmtE(r.revS3), ""],
+    ["MRR", (r) => fmtE(r.mrr), "gold"],
+    ["Costituz.", (r) => r.constitutionCosts > 0 ? fmtE(r.constitutionCosts) : "—", ""],
+    ["App/tech", (r) => (r.techCapex > 0 ? fmtE(r.techCapex) : "—"), ""],
+    ["Operativi", (r) => fmtE(r.operatingCosts), ""],
+    ["Personale", (r) => fmtE(r.personnelCosts), ""],
+    ["Marketing", (r) => fmtE(r.marketingCosts), ""],
+    ["Costi tot.", (r) => fmtE(r.totalCosts), "bold"],
+    ["Burn", (r) => fmtE(r.netBurn), "burn"],
+    ["Cash", (r) => fmtE(r.cashRemaining), "cash"],
+    ["Team", (r) => fmtN(r.staffCount), ""],
+    ["Cap. S3 %", (r) => Math.round(r.s3Utilization * 100) + "%", "util"]
+  ];
+
+  const phasePill = (p, name) => React.createElement("span", { className: `pill pill-p${p}` }, name);
+
+  const download = (blob, filename) => {
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = u; a.download = filename; a.click();
+    URL.revokeObjectURL(u);
+  };
+  const exportCSV = () => {
+    const hdr = ["Mese", "Fase", "Free", "S1", "S2", "S3", "AUM", "RicS1", "RicS2", "RicS3", "MRR", "Costituzione", "AppTech", "Operativi", "Personale", "Marketing", "CostiTot", "Burn", "Cash", "Team", "CapacitaS3%"];
+    const rows = results.map((r) => [
+      r.monthLabel, r.phaseName, Math.round(r.freeUsers), Math.round(r.s1Clients), Math.round(r.s2Clients), Math.round(r.s3Clients),
+      Math.round(r.totalAUM), Math.round(r.revS1), Math.round(r.revS2), Math.round(r.revS3), Math.round(r.mrr),
+      Math.round(r.constitutionCosts), Math.round(r.techCapex), Math.round(r.operatingCosts), Math.round(r.personnelCosts),
+      Math.round(r.marketingCosts), Math.round(r.totalCosts), Math.round(r.netBurn), Math.round(r.cashRemaining), r.staffCount,
+      Math.round(r.s3Utilization * 100)
+    ].join(";"));
+    download(new Blob([hdr.join(";") + "\n" + rows.join("\n")], { type: "text/csv;charset=utf-8" }), "proxima-scf-48m.csv");
+    flash("CSV scaricato");
+  };
+  const exportJSON = () => {
+    download(new Blob([JSON.stringify(results, null, 2)], { type: "application/json" }), "proxima-scf-48m.json");
+    flash("JSON scaricato");
+  };
+
+  const visible = showPre ? results : results.filter((r) => !r.isPreRelease);
+  const tdStyle = (flag, r) => {
+    if (flag === "bold") return { fontWeight: 700 };
+    if (flag === "gold") return { color: "#D4A843", fontWeight: 700 };
+    if (flag === "s1") return { color: "#60A5FA" };
+    if (flag === "s2") return { color: "#A78BFA" };
+    if (flag === "s3") return { color: "#C4A962", fontWeight: 600 };
+    if (flag === "burn") return { fontWeight: 700, color: r.netBurn > 0 ? "#ef4444" : "#4ade80" };
+    if (flag === "cash") return { fontWeight: 700, color: r.cashRemaining < 15000 ? "#ef4444" : undefined };
+    if (flag === "util") return { color: r.s3Utilization > 0.85 ? "#F59E0B" : "#8B98B0" };
+    return undefined;
+  };
+
+  return React.createElement("div", { className: "section" },
+    React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 } },
+      React.createElement("div", { className: "section-title", style: { margin: 0 } }, "Tabella completa 48 mesi"),
+      React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center" } },
+        msg && React.createElement("span", { className: "text-dim", style: { fontSize: 12 } }, msg),
+        React.createElement("label", { style: { fontSize: 12, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" } },
+          React.createElement("input", { type: "checkbox", checked: showPre, onChange: () => setShowPre(!showPre) }), "Pre-lancio"),
+        React.createElement("button", { className: "btn-ghost btn", onClick: exportCSV }, "↓ CSV"),
+        React.createElement("button", { className: "btn-ghost btn", onClick: exportJSON }, "↓ JSON"))),
+    React.createElement("div", { className: "tbl-wrap" },
+      React.createElement("table", { className: "proj" },
+        React.createElement("thead", null, React.createElement("tr", null, cols.map(([h], i) => React.createElement("th", { key: i }, h)))),
+        React.createElement("tbody", null,
+          visible.map((r, idx) => {
+            const prev = idx > 0 ? visible[idx - 1] : null;
+            const cls = [
+              prev && r.phase !== prev.phase ? "phase-boundary" : "",
+              r.capacityLimited ? "capacity-limited" : "",
+              breakEvenOperational === r.month ? "break-even" : "",
+              r.isActual ? "actual-data" : "",
+              r.isPreRelease ? "pre-release" : ""
+            ].filter(Boolean).join(" ");
+            return React.createElement("tr", { key: r.month, className: cls || undefined },
+              React.createElement("td", null,
+                React.createElement("span", { className: "gold mono" }, r.monthLabel),
+                React.createElement("span", { className: "text-faint mono", style: { fontSize: 10, marginLeft: 4 } }, "#" + r.month)),
+              React.createElement("td", { style: { textAlign: "left" } }, phasePill(r.phase, r.phaseName)),
+              ...cols.slice(2).map(([, fn, flag], ci) => React.createElement("td", { key: ci, style: tdStyle(flag, r) }, fn(r))));
+          }))))
+  );
+};
+
+</script>
+
+<script type="text/babel" data-presets="env,react">
+/* App — stato, localStorage, layout */
+window.PROXIMA = window.PROXIMA || {};
+const STORAGE_KEY = "proxima.scf.params.v1";
+
+function deepMerge(target, source) {
+  const out = { ...target };
+  for (const key of Object.keys(source)) {
+    if (source[key] && typeof source[key] === "object" && !Array.isArray(source[key])
+        && target[key] && typeof target[key] === "object" && !Array.isArray(target[key])) {
+      out[key] = deepMerge(target[key], source[key]);
+    } else { out[key] = source[key]; }
+  }
+  return out;
+}
+function loadParams() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return window.PROXIMA.defaultParams();
+    return deepMerge(window.PROXIMA.defaultParams(), JSON.parse(raw));
+  } catch (e) { return window.PROXIMA.defaultParams(); }
+}
+
+function App() {
+  const [params, setParams] = React.useState(loadParams);
+  React.useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(params)); } catch (e) {} }, [params]);
+  const sim = React.useMemo(() => window.PROXIMA.simulate(params, 48), [params]);
+  const resetDefaults = () => { if (confirm("Ripristinare tutti i parametri ai default?")) setParams(window.PROXIMA.defaultParams()); };
+
+  return (
+    <div className="app">
+      <aside className="sidebar">
+        <window.PROXIMA.Controls params={params} setParams={setParams} onReset={resetDefaults} />
+      </aside>
+      <main className="main">
+        <div className="section">
+          <div className="info-banner">
+            <strong>Modello previsionale SCF a strati.</strong> Proiezione su 48 mesi (M-6 → M+41) di
+            clienti, ricavi, costi e cassa per il modello a tre strati (app freemium → pacchetti remoti →
+            consulenza in presenza). Ricavo fee-only diretto dal cliente, senza split. La parcella dello
+            Strato 3 è selezionabile (%AUM, fissa, modulare) per esplorare quale pesa meno sul cliente.
+            Muovi gli slider per aggiornare tutto in tempo reale.
+          </div>
+        </div>
+        <window.PROXIMA.Glossary />
+        <window.PROXIMA.Dashboard sim={sim} params={params} />
+        <window.PROXIMA.ProjectionTable sim={sim} />
+        <div className="section" style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid #1E2A3E" }}>
+          <div className="text-faint" style={{ fontSize: 11, textAlign: "center" }}>
+            Proxima · Modello SCF a strati · 48 mesi · fee-only · S1 freemium / S2 remoto / S3 in presenza
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function boot() {
+  if (!window.PROXIMA.simulate || !window.PROXIMA.Controls || !window.PROXIMA.Dashboard ||
+      !window.PROXIMA.ProjectionTable || !window.PROXIMA.Glossary || !window.PROXIMA.defaultParams) {
+    return setTimeout(boot, 50);
+  }
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+}
+boot();
+
+</script>
+</body>
+</html>
