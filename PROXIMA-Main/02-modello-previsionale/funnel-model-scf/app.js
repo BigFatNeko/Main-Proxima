@@ -1,10 +1,10 @@
 /* ============================================================
-   App — state management + layout composition (v2 · 36 mesi)
+   App SCF — state management + layout composition (v1 · 36 mesi)
    ============================================================ */
 
 window.PROXIMA = window.PROXIMA || {};
 
-const STORAGE_KEY = "proxima.funnel.params.v3";
+const STORAGE_KEY = "proxima.funnel.scf.params.v1";
 
 function deepMerge(target, source) {
   const out = { ...target };
@@ -61,19 +61,22 @@ function App() {
       <main className="main">
         <div className="section">
           <div className="info-banner">
-            <strong>Come funziona questo modello.</strong> Calcola clienti, ricavi,
-            costi e cash flow su 36 mesi (da M-12 a M+23), partendo dai numeri veri
-            di ogni canale e includendo tutti i costi di costituzione, operativi e del
-            personale. Include tre scenari di rischio (base, recessione, crisi). Muovi
-            gli slider a sinistra per aggiornare tutto in tempo reale.
+            <strong>Modello SCF — offerta a fasce in abbonamento.</strong> Calcola
+            utenti gratuiti, abbonati, ricavi, costi e cash flow su 36 mesi (da M-12
+            a M+23) per il funnel SCF: Check-up IA gratuito → App (€1-5) → Monitor
+            (€5-20) → Live (€50-150). Prezzi e conversioni sono le decisioni del
+            10/06/2026 con <strong>assunzioni di conversione da validare sul
+            campo</strong>. Muovi gli slider a sinistra per aggiornare tutto in
+            tempo reale.
           </div>
         </div>
         <window.PROXIMA.Glossary />
         <window.PROXIMA.Dashboard sim={sim} />
         <window.PROXIMA.ProjectionTable sim={sim} />
+        <window.PROXIMA.Roadmap />
         <div className="section" style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid #1E2A3E" }}>
           <div className="text-faint" style={{ fontSize: 11, textAlign: "center" }}>
-            Proxima · Modello Funnel v3 · 36 mesi · assunzioni dinamiche · budget intelligente · CAC per canale
+            Proxima · Modello Funnel SCF v1 · 36 mesi · fasce in abbonamento · assunzioni dinamiche · CAC per canale
           </div>
         </div>
       </main>
@@ -85,7 +88,8 @@ function App() {
 function boot() {
   if (!window.PROXIMA.simulate || !window.PROXIMA.Controls ||
       !window.PROXIMA.Dashboard || !window.PROXIMA.ProjectionTable ||
-      !window.PROXIMA.Glossary || !window.PROXIMA.defaultParams) {
+      !window.PROXIMA.Glossary || !window.PROXIMA.Roadmap ||
+      !window.PROXIMA.defaultParams) {
     return setTimeout(boot, 50);
   }
   const root = ReactDOM.createRoot(document.getElementById("root"));

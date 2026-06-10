@@ -1,14 +1,19 @@
 # Ricalibrazione del modello previsionale per la SCF (fee-only)
 
-Il modello funnel esiste in due versioni in questa cartella:
+> **STATO (10/06/2026): v1 FATTA.** La versione SCF vive in **`funnel-model-scf/`**
+> (modulare, stessa struttura del modello base). La decisione sul modello di
+> parcella è stata presa: **abbonamento fisso su 3 fasce** — App €1–5/mese,
+> Monitor €5–20/mese, Live €50–150/mese, con Check-up IA gratuito come ingresso.
+> Restano da **validare sul campo le assunzioni di conversione** (vedi README
+> della cartella). Il resto di questo documento è il razionale originale.
+
+Il modello funnel esiste ora in tre versioni:
 
 | Versione | File | Note |
 |---|---|---|
-| Base | `funnel-model/` (`proxima-funnel.html`, `model.js`) | Versione più pulita, senza split SIM. **Punto di partenza.** |
-| Agente collegato ("-ac") | `../99-archivio/modello-sim-agente-collegato/funnel-agente-collegato/` | Motore più evoluto (cohort AUM, stagionalità, prelievi, shock di mercato) ma con logica **provvigionale verso la SIM** → da non usare così com'è. |
-
-L'obiettivo è produrre **un'unica versione SCF fee-only** (`proxima-funnel-scf.html`)
-che unisca il motore migliore con la logica di ricavo corretta per una SCF.
+| **SCF (attuale)** | `funnel-model-scf/` | **La versione da usare.** Fasce in abbonamento, funnel a due stadi (gratuito→pagante), capacità solo su Live, costi app/IA, box "Stato lavori". |
+| Base (storica) | `funnel-model/` (`proxima-funnel.html`, `model.js`) | Modello a parcella €490/anno, pre-decisione fasce. Riferimento. |
+| Agente collegato ("-ac") | `../99-archivio/modello-sim-agente-collegato/funnel-agente-collegato/` | Motore con logica **provvigionale verso la SIM** → non usare. |
 
 ## Differenza chiave: niente `proximaSplit`
 
@@ -29,9 +34,13 @@ mrr = payingClients * curAUM * feeRate / 12          # se fee % su AUM
 mrr = payingClients * parcellaAnnua / 12             # se fee fissa
 ```
 
-> Decisione da prendere: modello di parcella **% su AUM** (es. 0,7–1,0%/anno),
-> **fissa annua**, o **ibrido**. La scelta cambia revenue forecast e pricing
-> (vedi `03-marketing/skills/pricing-strategy`).
+> ~~Decisione da prendere: modello di parcella **% su AUM** (es. 0,7–1,0%/anno),
+> **fissa annua**, o **ibrido**.~~ → **DECISO (10/06/2026): abbonamento fisso a
+> 3 fasce** (App €1–5 / Monitor €5–20 / Live €50–150 al mese, indicativi).
+> Implementato in `funnel-model-scf/`. Nota: la % su AUM è esclusa → le
+> migliorie "cohort AUM" del motore -ac non servono più per i ricavi (l'AUM
+> resta solo come KPI di credibilità). Razionale di brand in
+> `05-branding/40-brand-strategy-scf.md`, sez. 2.
 
 ## Cosa portare dalla versione "-ac" (migliorie motore)
 

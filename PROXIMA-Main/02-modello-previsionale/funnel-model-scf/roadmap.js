@@ -72,7 +72,7 @@ window.PROXIMA = window.PROXIMA || {};
         { id: "amm-banca", label: "Conto corrente societario", done: false },
         { id: "amm-ruoli", label: "Organigramma e ruoli interni (chi fa cosa)", done: false },
         { id: "amm-strumenti", label: "Strumenti interni: CRM, fatturazione, archivio documenti", done: false },
-        { id: "amm-modello", label: "Ricalibrazione del modello previsionale alle fasce SCF", done: false },
+        { id: "amm-modello", label: "Ricalibrazione del modello previsionale alle fasce SCF (v1 — assunzioni da validare)", done: true },
       ],
     },
   ];

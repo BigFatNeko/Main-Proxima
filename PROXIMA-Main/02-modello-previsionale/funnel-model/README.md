@@ -66,10 +66,6 @@ Quando hai finito, torna al terminale e premi `Ctrl+C`.
 3. **Pareggio e costi di acquisizione** clienti
 4. **Grafici**: crescita vs obiettivo, composizione per canale, ricavi vs €180K
 5. **Tabella completa 24 mesi** — esportabile in CSV o JSON
-6. **Stato lavori** (in fondo) — recap costante delle cose fatte e da fare su
-   tutti i fronti: iter regolatorio, app, landing page, marketing, branding,
-   amministrazione interna. Clicca una voce per segnarla fatta/da fare (si
-   salva nel browser); l'elenco di partenza si aggiorna in `roadmap.js`.
 
 Ogni modifica a uno slider **aggiorna tutto in tempo reale**. I valori si salvano automaticamente nel browser (resistono al reload della pagina).
 
@@ -83,7 +79,6 @@ Ogni modifica a uno slider **aggiorna tutto in tempo reale**. I valori si salvan
 | `glossary.js` | Pannello glossario con definizioni dei termini |
 | `dashboard.js` | KPI card e grafici (Recharts) |
 | `table.js` | Tabella completa 24 mesi con export CSV/JSON |
-| `roadmap.js` | Box "Stato lavori": recap fatto/da fare per area (regolatorio, app, landing, marketing, branding, amministrazione) |
 | `app.js` | Componente root, gestione stato, salvataggio nel browser |
 
 ## Palette

@@ -78,10 +78,11 @@ nell'identità visiva (stella, punto di luce), non nei nomi commerciali.
   Approfondire con `03-marketing/skills/pricing-strategy`.
 
 **⚠ Impatto fuori dal brand:** queste fasce cambiano l'ARPU rispetto al piano
-(€250–490/anno/cliente → da €12 a €1.800/anno a seconda della fascia). Il
-modello previsionale va ricalibrato di conseguenza
-(`02-modello-previsionale/RICALIBRAZIONE-SCF.md`: la decisione "modello di
-parcella" ora è presa — fissa ad abbonamento, multi-fascia).
+(€250–490/anno/cliente → da €12 a €1.800/anno a seconda della fascia; blended
+~€170–190/anno con mix 60/30/10). Il modello previsionale è stato ricalibrato
+in `02-modello-previsionale/funnel-model-scf/`: con le assunzioni di default
+servono **molti più clienti** dello scenario a parcella e il break-even slitta
+— le conversioni del funnel gratuito→pagante vanno validate sul campo.
 
 ---
 
@@ -177,7 +178,9 @@ nel repertorio di campagna.
 
 ## 6. Cosa aggiornare a valle (fuori da questa cartella)
 
-1. `02-modello-previsionale/` — ricalibrare ARPU e funnel sulle 3 fasce (D1).
+1. ~~`02-modello-previsionale/` — ricalibrare ARPU e funnel sulle 3 fasce (D1).~~
+   ✅ Fatto: `02-modello-previsionale/funnel-model-scf/` (v1, assunzioni di
+   conversione da validare sul campo).
 2. `03-marketing/strategia/proxima-marketing-strategy.md` — marcare come v1
    pre-SCF; le sezioni 5 (brand) e 14 (pricing) sono superate da questo
    documento.
