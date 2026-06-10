@@ -142,6 +142,13 @@ comunicazione.
 
 ## 6. Decisioni aperte (bloccanti per le fasi 3–4)
 
+> **Aggiornamento 10/06/2026 — decisioni prese.** D1: parcella fissa ad
+> abbonamento su 3 fasce (€1–5 / €5–20 / €50–150 al mese). D2: app al centro
+> (report IA gratuito → abbonamento → premium con call); landing = waitlist.
+> D3: brand aziendale, nessun volto-guru. D4: tagline da evolvere e testare.
+> Dettaglio e conseguenze in `40-brand-strategy-scf.md`. La tabella sotto resta
+> come riferimento storico delle opzioni valutate.
+
 | # | Decisione | Opzioni | Impatto sul brand |
 |---|---|---|---|
 | **D1** | Modello di parcella | Fissa annua / % su AUM advisory (0,7–1,0%) / ibrida | Determina il messaggio-pilastro "Sai sempre quanto paghi". La parcella fissa è la più differenziante e la più facile da comunicare; la % su AUM rende di più su patrimoni alti ma assomiglia al pricing dei gestori. |
