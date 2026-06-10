@@ -9,27 +9,18 @@ Consolidato a giugno 2026 recuperando il lavoro che era sparso su più branch.
 - **`piano-di-lancio/`** — strategia di rilancio €180K su 18 mesi (doc numerati
   00→70: executive summary, budget, fasi di lancio, canali, revenue forecast,
   organigramma, architettura agenti, traction, scenari, azioni immediate).
+  Include struttura societaria SRL, iter OCF, costi di costituzione e timeline.
   *Già scritta per la SCF.*
-- **`costituzione-e-regolatorio/`** — `10-struttura-societaria` (SRL ordinaria,
-  capitale €50.000), `11-iter-regolatorio` (Albo OCF Sez. III, RC professionale),
-  `12-costi-costituzione`, `13-timeline`. Più `_recuperato-16-srl-qualifiche-OCF`
-  (recuperato dal modello SIM: utile per meccanica SRL + percorso OCF/esame).
 - **`tassazione/`** — `italian-taxation.md`.
 - **`competitor/`** — `40-analisi-competitor-scf.md`.
-- **`_archivio-modello-sim/`** — materiale del modello **agente collegato/SIM**,
-  ora abbandonato. Tenuto solo come riferimento storico (vedi `NOTA.md`).
 
 ### `02-modello-previsionale/`
 - **`funnel-model/`** — modello costi/ricavi: app React single-file
   (`proxima-funnel.html` + `model.js`, `controls.js`, `dashboard.js`…). Si apre
   in browser, slider per scenari su clienti, AUM, costi, cash flow.
-- **`_recuperato-funnel-agente-collegato/`** — variante "-ac" con migliorie al
-  motore (cohort AUM, stagionalità, prelievi). Da saccheggiare per la
-  ricalibrazione, **senza** la logica di split provvigionale verso la SIM.
 - **`RICALIBRAZIONE-SCF.md`** — piano per portare il modello in versione SCF
-  fee-only (prossimo lavoro tecnico).
-- **`_recuperato-17-code-review-funnel.md`** — code review del motore (bug +
-  formula ricavi), base tecnica per la ricalibrazione.
+  fee-only (prossimo lavoro tecnico). Attinge alle migliorie motore archiviate in
+  `../99-archivio/modello-sim-agente-collegato/` (variante "-ac" + code review).
 
 ### `03-marketing/`
 - **`strategia/proxima-marketing-strategy.md`** — strategia marketing completa.
@@ -50,11 +41,17 @@ Consolidato a giugno 2026 recuperando il lavoro che era sparso su più branch.
 ### `05-branding/`
 - Asset di brand + landing page (`contenuto-zip/index.html`) e zip originale.
 
+### `99-archivio/`
+- **`modello-sim-agente-collegato/`** — materiale del percorso **SIM / agente
+  collegato** (art. 31-ter TUF), **abbandonato** a giugno 2026. Consolidato qui,
+  ordinato, come riferimento storico. Alcune parti (costituzione SRL/OCF, migliorie
+  al motore del funnel) restano riusabili per la SCF — vedi `99-archivio/README.md`.
+
 ## Stato e prossimi passi
 
-1. ✅ Repo ripulito, materiale consolidato qui sotto.
-2. ▶ **Ricalibrare il modello previsionale** per la SCF fee-only
+1. ✅ Repo ripulito; materiale superato spostato in `99-archivio/`
+   (i branch git obsoleti sono **tenuti**, non cancellati).
+2. ✅ `main` impostato come branch di default pulito.
+3. ▶ **Ricalibrare il modello previsionale** per la SCF fee-only
    (`02-modello-previsionale/RICALIBRAZIONE-SCF.md`).
-3. ▶ Eliminare i branch obsoleti su GitHub (modello SIM/agente, branch già merged)
-   — da fare con conferma.
 4. ▶ Centralizzare in sicurezza la pipeline briefing (senza interrompere il cron).

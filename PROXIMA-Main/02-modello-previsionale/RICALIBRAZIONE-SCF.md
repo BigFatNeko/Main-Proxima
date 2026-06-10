@@ -5,7 +5,7 @@ Il modello funnel esiste in due versioni in questa cartella:
 | Versione | File | Note |
 |---|---|---|
 | Base | `funnel-model/` (`proxima-funnel.html`, `model.js`) | Versione più pulita, senza split SIM. **Punto di partenza.** |
-| Agente collegato ("-ac") | `_recuperato-funnel-agente-collegato/` | Motore più evoluto (cohort AUM, stagionalità, prelievi, shock di mercato) ma con logica **provvigionale verso la SIM** → da non usare così com'è. |
+| Agente collegato ("-ac") | `../99-archivio/modello-sim-agente-collegato/funnel-agente-collegato/` | Motore più evoluto (cohort AUM, stagionalità, prelievi, shock di mercato) ma con logica **provvigionale verso la SIM** → da non usare così com'è. |
 
 L'obiettivo è produrre **un'unica versione SCF fee-only** (`proxima-funnel-scf.html`)
 che unisca il motore migliore con la logica di ricavo corretta per una SCF.
@@ -35,7 +35,7 @@ mrr = payingClients * parcellaAnnua / 12             # se fee fissa
 
 ## Cosa portare dalla versione "-ac" (migliorie motore)
 
-Dal code review (`_recuperato-17-code-review-funnel.md`), sono utili e
+Dal code review (`../99-archivio/modello-sim-agente-collegato/17-code-review-funnel.md`), sono utili e
 indipendenti dal tipo di società:
 
 1. **Cohort AUM** — i clienti non sono tutti entrati a M0: usare età media del

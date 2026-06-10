@@ -22,11 +22,12 @@ passato — **SIM** e **agente collegato di SIM** (art. 31-ter TUF) — sono
 
 | Cartella | Contenuto |
 |---|---|
-| `01-strategia/` | Piano di lancio €180K, struttura societaria SCF, iter OCF, costi, tassazione, competitor, scenari macro. `_archivio-modello-sim/` = materiale SIM/agente obsoleto (solo riferimento). |
+| `01-strategia/` | Piano di lancio €180K, struttura societaria SCF, iter OCF, costi, tassazione, competitor, scenari macro. |
 | `02-modello-previsionale/` | Modello funnel costi/ricavi (React single-file). **Da ricalibrare per SCF fee-only**: vedi `02-modello-previsionale/RICALIBRAZIONE-SCF.md`. |
 | `03-marketing/` | Strategia marketing + libreria di ~36 skill (growth, SEO, CRO, copywriting, paid ads, launch strategy…), tenute anche per uso futuro. |
 | `04-briefing/` | **COPIA** della pipeline di briefing finanziario. ⚠ Vedi avviso sotto. |
 | `05-branding/` | Asset di brand + landing page. |
+| `99-archivio/` | Materiale **superato** (percorso SIM/agente collegato), consolidato e ordinato come riferimento storico. Vedi `99-archivio/README.md`. |
 
 ## ⚠ Briefing pipeline — NON ROMPERE
 
