@@ -71,6 +71,7 @@ function App() {
         <window.PROXIMA.Glossary />
         <window.PROXIMA.Dashboard sim={sim} />
         <window.PROXIMA.ProjectionTable sim={sim} />
+        <window.PROXIMA.Roadmap />
         <div className="section" style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid #1E2A3E" }}>
           <div className="text-faint" style={{ fontSize: 11, textAlign: "center" }}>
             Proxima · Modello Funnel v3 · 36 mesi · assunzioni dinamiche · budget intelligente · CAC per canale
@@ -85,7 +86,8 @@ function App() {
 function boot() {
   if (!window.PROXIMA.simulate || !window.PROXIMA.Controls ||
       !window.PROXIMA.Dashboard || !window.PROXIMA.ProjectionTable ||
-      !window.PROXIMA.Glossary || !window.PROXIMA.defaultParams) {
+      !window.PROXIMA.Glossary || !window.PROXIMA.Roadmap ||
+      !window.PROXIMA.defaultParams) {
     return setTimeout(boot, 50);
   }
   const root = ReactDOM.createRoot(document.getElementById("root"));

@@ -10,19 +10,49 @@ brand **aziendale** (niente volto-guru), offerta a fasce con **app al centro**
 
 ## 1. L'idea visiva
 
-**"La stella più vicina."** Proxima (Centauri) è la stella più vicina al
-sistema solare: vicinanza + orientamento (le stelle si usano per navigare).
-Tradotto in estetica: **cielo notturno sobrio** (navy, petrolio) **con un solo
-punto di luce** (gold) su carta calda (avorio). Non spazio/fantascienza, non
-fintech al neon: un osservatorio, calmo e preciso.
+### Il punto di partenza: la torre e i domino
 
-La ricerca competitor (fase 2) mostra due estetiche dominanti — istituzionale
-fredda (Consultique) e social aggressiva (IoInvesto) — e uno spazio libero:
-**caldo, sobrio, premium accessibile**. Questo sistema occupa quello spazio.
+Il concetto originario del marchio è **una torre (ispirata alla torre degli
+scacchi) con due tessere di domino appoggiate che non la fanno cadere**: la
+torre è il simbolo della **solidità**. È un'immagine forte e racconta bene due
+cose vere di Proxima: la struttura organizzata che regge (decisione D3, brand
+aziendale) e l'idea di **fermare la reazione a catena** — i domino che cadono
+sono le cattive decisioni finanziarie in serie (commissioni che si accumulano,
+vendite nel panico, inerzia), e contro Proxima la catena si ferma.
+
+### La tensione (reale) col nome
+
+"Proxima" — la stella più vicina — suona dinamico, futuristico, in movimento;
+la torre è ferma per definizione. La tensione esiste, ma è **risolvibile senza
+buttare la torre**, per tre vie:
+
+1. **La torre degli scacchi non è immobile.** È il pezzo con la portata più
+   lunga della scacchiera: attraversa tutto il campo in linea retta, e
+   nell'arrocco è l'unico pezzo che si muove *insieme* al re per proteggerlo.
+   Tradotto: *solidità con portata* — esattamente la promessa (struttura solida
+   che ti porta lontano). È una questione di disegno: una torre con slancio
+   verticale, non un fortino.
+2. **I domino sono il movimento congelato.** Le tessere inclinate introducono
+   la diagonale (dinamismo) nella composizione; la torre la verticale
+   (stabilità). Il contrasto statico/dinamico può essere il carattere del
+   marchio invece che il suo difetto.
+3. **La torre è anche il punto da cui si guarda lontano.** Osservatorio, faro:
+   aggiungendo sopra la torre il **punto di luce gold** (la stella di Proxima),
+   i due registri si saldano — *la solidità sotto, la stella oltre*. Si lega
+   da sola alla tagline: la stella sta letteralmente **oltre** il profilo della
+   torre.
+
+**Sintesi consigliata:** tenere la torre come simbolo (è la cosa più coerente
+col posizionamento "struttura, non guru"), risolverne la staticità col disegno
+(slancio verticale, diagonali dei domino) e col **punto di luce gold sopra la
+torre** che porta dentro il registro del nome. Atmosfera generale invariata:
+cielo sobrio (navy/petrolio), un solo punto di luce (gold), carta calda
+(avorio) — lo spazio "caldo-sobrio premium" che la ricerca (fase 2) ha
+mostrato libero.
 
 Tre aggettivi-guida per ogni scelta visiva: **ordinato** (siamo una struttura
-organizzata, decisione D3), **caldo** (carta avoriata, foto vere), **preciso**
-(numeri tabellari, niente decorazione gratuita).
+organizzata), **caldo** (carta avoriata, foto vere), **preciso** (numeri
+tabellari, niente decorazione gratuita).
 
 ---
 
@@ -32,13 +62,22 @@ organizzata, decisione D3), **caldo** (carta avoriata, foto vere), **preciso**
 
 | | Direzione | Descrizione | Pro | Contro |
 |---|---|---|---|---|
-| **A** | **Stella** ⭐ *consigliata* | Wordmark "proxima" minuscolo in navy + segno: stella a 4 punte gold (la scintilla/stella di navigazione). Il segno vive anche da solo (favicon, app icon, watermark report). | Racconta il nome, funziona a ogni scala, sobria | La stella a 4 punte è diffusa (va disegnata con carattere: punte asimmetriche, una più lunga verso l'alto-destra = "oltre") |
-| B | **Orbita** | Monogramma "P" navy attraversato da un'ellisse orbitale sottile con un punto gold sull'orbita (il cliente che avanza). | Distintivo, ottimo per app icon | Più "tech", rischia di sembrare un logo da startup SaaS |
-| C | Tipografica pura | Solo wordmark con dettaglio sul glifo "x" (incrocio = stella implicita) | Massima sobrietà istituzionale | Debole a scala piccola, poco riconoscibile sui social |
+| **C** | **Torre + domino** (concetto di partenza) | Torre scacchistica navy con due tessere di domino inclinate che vi si appoggiano senza farla cadere. | Racconta la solidità e il "fermare la catena"; perfetta per il brand corporate (D3) | Scena a 3 oggetti: illustrativa, difficile a scala piccola (favicon); da sola non lega col registro del nome |
+| **D** | **Torre-faro** 🗼✦ *consigliata* | La stessa torre, sintetizzata in forma geometrica con slancio verticale, e **la stella a 4 punte gold sospesa sopra i merli**: la solidità sotto, la stella oltre. I domino restano nel linguaggio illustrativo di supporto (vedi nota). | Risolve la tensione torre-statica/nome-dinamico; un solo segno che dice solidità *e* direzione; lega con "Oltre i limiti comuni" | La torre va disegnata bene per non sembrare araldica/castello; richiede un esecutivo curato |
+| A | **Stella** | Wordmark "proxima" minuscolo navy + stella a 4 punte gold da sola. | Racconta il nome, funziona a ogni scala | Perde del tutto la torre/solidità; stella a 4 punte diffusa |
+| B | **Orbita** | Monogramma "P" navy con ellisse orbitale e punto gold. | Distintivo, ottimo per app icon | Più "tech", da startup SaaS; perde la torre |
 
-Bozze geometriche in `assets/` (`marchio-A-stella.svg`, `marchio-B-orbita.svg`):
-sono **schizzi per decidere la direzione**, non esecutivi — il wordmark
-definitivo va fatto disegnare (vedi sez. 8).
+**Nota sui domino (direzione D):** nel marchio sintetico i domino escono (tre
+oggetti sono troppi a scala piccola), ma **non si buttano**: diventano il
+soggetto dell'**illustrazione-chiave del brand** — la scena completa
+torre+domino vive nell'hero della landing, nelle copertine dei report, nelle
+slide — dove c'è spazio per raccontarla. Marchio = sintesi; illustrazione =
+racconto.
+
+Bozze geometriche in `assets/` (`marchio-C-torre-domino.svg`,
+`marchio-D-torre-faro.svg`, più le precedenti A/B): sono **schizzi per
+decidere la direzione**, non esecutivi — il disegno definitivo va affidato a
+un designer (vedi sez. 8).
 
 ### Lockup con descrittore (obbligatorio)
 
@@ -143,16 +182,19 @@ spaziato (+8% tracking) sono ammesse.
 
 ## 7. Asset in questa cartella
 
-- `assets/marchio-A-stella.svg` — bozza direzione A (consigliata)
-- `assets/marchio-B-orbita.svg` — bozza direzione B
+- `assets/marchio-C-torre-domino.svg` — bozza del concetto di partenza (torre + domino)
+- `assets/marchio-D-torre-faro.svg` — bozza della sintesi consigliata (torre + stella gold)
+- `assets/marchio-A-stella.svg` — bozza alternativa (solo stella)
+- `assets/marchio-B-orbita.svg` — bozza alternativa (monogramma orbitale)
 
 ---
 
 ## 8. Prossimi passi
 
-1. **Scegliere la direzione del logo** (A/B/C) → poi brief a un designer per
-   l'esecutivo del wordmark (budget tipico €1,5–4K per identità completa;
-   rientra nella voce brand del piano €180K).
+1. **Scegliere la direzione del logo** (D consigliata; C/A/B alternative) →
+   poi brief a un designer per l'esecutivo di segno e wordmark (budget tipico
+   €1,5–4K per identità completa; rientra nella voce brand del piano €180K).
+   Nel brief includere anche l'**illustrazione-chiave torre+domino**.
 2. Verifica formale **marchio** UIBM/EUIPO classe 36 prima dell'esecutivo
    (vedi fase 2, sez. 2.5).
 3. Costruire i template: card social, report IA, slide consulenza — dopo il
