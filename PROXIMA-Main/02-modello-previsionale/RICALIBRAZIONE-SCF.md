@@ -1,18 +1,21 @@
 # Ricalibrazione del modello previsionale per la SCF (fee-only)
 
-> **STATO (10/06/2026): v1 FATTA.** La versione SCF vive in **`funnel-model-scf/`**
-> (modulare, stessa struttura del modello base). La decisione sul modello di
-> parcella è stata presa: **abbonamento fisso su 3 fasce** — App €1–5/mese,
-> Monitor €5–20/mese, Live €50–150/mese, con Check-up IA gratuito come ingresso.
-> Restano da **validare sul campo le assunzioni di conversione** (vedi README
-> della cartella). Il resto di questo documento è il razionale originale.
+> **STATO (11/06/2026): FATTA.** La versione SCF canonica è
+> **`proxima-funnel-scf.html`** (single-file): modello **"a strati"** su 48 mesi
+> (M-6 → M+41) — S1 app freemium → S2 pacchetti remoti → S3 consulenza in
+> presenza, con parcella S3 selezionabile (%AUM / fissa / modulare). Ricavo
+> fee-only diretto dal cliente, senza split. Include in fondo il box **"Stato
+> lavori"** (recap fatto/da fare cliccabile, salvato nel browser). Restano da
+> **validare sul campo le assunzioni di conversione**. Il resto di questo
+> documento è il razionale originale.
 
-Il modello funnel esiste ora in tre versioni:
+Il modello funnel esiste ora in queste versioni:
 
 | Versione | File | Note |
 |---|---|---|
-| **SCF (attuale)** | `funnel-model-scf/` | **La versione da usare.** Fasce in abbonamento, funnel a due stadi (gratuito→pagante), capacità solo su Live, costi app/IA, box "Stato lavori". |
-| Base (storica) | `funnel-model/` (`proxima-funnel.html`, `model.js`) | Modello a parcella €490/anno, pre-decisione fasce. Riferimento. |
+| **SCF a strati (attuale)** | `proxima-funnel-scf.html` | **La versione da usare.** 48 mesi, 3 strati, parcella S3 esplorabile, box "Stato lavori". |
+| Base (storica) | `funnel-model/` (`proxima-funnel.html`, `model.js`) | Modello a parcella €490/anno, pre-decisione strati. Riferimento. |
+| Fasce v1 (rimossa) | `funnel-model-scf/` — solo in storia git (commit `1910deb`) | Prototipo a fasce fatto in sessione, superato dal modello a strati. |
 | Agente collegato ("-ac") | `../99-archivio/modello-sim-agente-collegato/funnel-agente-collegato/` | Motore con logica **provvigionale verso la SIM** → non usare. |
 
 ## Differenza chiave: niente `proximaSplit`
@@ -36,10 +39,9 @@ mrr = payingClients * parcellaAnnua / 12             # se fee fissa
 
 > ~~Decisione da prendere: modello di parcella **% su AUM** (es. 0,7–1,0%/anno),
 > **fissa annua**, o **ibrido**.~~ → **DECISO (10/06/2026): abbonamento fisso a
-> 3 fasce** (App €1–5 / Monitor €5–20 / Live €50–150 al mese, indicativi).
-> Implementato in `funnel-model-scf/`. Nota: la % su AUM è esclusa → le
-> migliorie "cohort AUM" del motore -ac non servono più per i ricavi (l'AUM
-> resta solo come KPI di credibilità). Razionale di brand in
+> strati** (S1 app €1–5 / S2 remoto €5–20 / S3 in presenza €50–150 al mese,
+> indicativi; per S3 il modello permette di esplorare anche %AUM e modulare).
+> Implementato in `proxima-funnel-scf.html`. Razionale di brand in
 > `05-branding/40-brand-strategy-scf.md`, sez. 2.
 
 ## Cosa portare dalla versione "-ac" (migliorie motore)
