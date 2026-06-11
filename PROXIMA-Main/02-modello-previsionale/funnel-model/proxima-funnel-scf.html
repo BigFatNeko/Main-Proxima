@@ -106,6 +106,19 @@
   .scenario-btn.scenario-base.active { border-color: var(--success); color: var(--success); background: rgba(74,222,128,0.08); }
   .scenario-btn.scenario-recessione.active { border-color: var(--warning); color: var(--warning); background: rgba(245,158,11,0.08); }
   .scenario-btn.scenario-crisi.active { border-color: var(--danger); color: var(--danger); background: rgba(248,113,113,0.08); }
+
+  @media print {
+    .sidebar, .toolbar { display: none !important; }
+    .app { display: block !important; }
+    .main { padding: 8px 0 !important; max-width: 100% !important; }
+    html, body { background: #fff !important; color: #111 !important; }
+    .card, .kpi-card { background: #fff !important; border: 1px solid #bbb !important; break-inside: avoid; }
+    .kpi-value, .card-title, .section-title, .gold, .mono, td, th { color: #111 !important; }
+    .kpi-label, .text-dim, .text-faint, .card-sub { color: #555 !important; }
+    table.proj thead { background: #eee !important; }
+    .section { break-inside: avoid; }
+    .info-banner, .warn-banner { border: 1px solid #bbb !important; }
+  }
 </style>
 </head>
 <body>
@@ -228,6 +241,7 @@ window.PROXIMA.defaultParams = function () {
 
     /* --- Altro --- */
     budgetCapAdjust: true, budgetCapThreshold: 0.85,
+    reserveTarget: 15000,                                                       // riserva minima di cassa (alert/funding)
     capitalInjections: [ { month: 19, amount: 0 }, { month: 31, amount: 0 } ],  // iniezioni successive (mese sim. 1-48, importo 0 = off)
     waitingList: { count: 200, toS1Rate: 0.40 },
     launchCalendarMonth: 9,
@@ -281,6 +295,9 @@ window.PROXIMA.simulate = function (p, months) {
   var lastConsultantHireMonth = 0, hiringPlan = [];
 
   var paidCumSpend = 0, paidCumS1 = 0;   // CAC: spesa paid / nuovi abbonati S1 attribuiti
+  var mktCumSpend = 0, newPayingCum = 0; // CAC blended: spesa marketing / nuovi paganti acquisiti
+  var cashZeroMonth = null, reserveBreachMonth = null;
+  var reserveTarget = p.reserveTarget || 15000;
   var benchMonthly = Math.pow(1 + p.aum.benchmark, 1 / 12) - 1, benchValue = 0;
   var revWindow12 = [], costWindow12 = [];
 
@@ -373,7 +390,6 @@ window.PROXIMA.simulate = function (p, months) {
     var newS3app = newS3appDes * capScale;
     var newS3direct = newS3directRaw * capScale;
     var newS3 = newS3app + newS3direct;
-    var maxNewS3 = p.hoursPerS3Onboarding > 0 ? availNew / p.hoursPerS3Onboarding : 999;
     var s3Util = util;
 
     /* --- Budget factor: ads si riducono quando il bacino free satura il TAM --- */
@@ -465,7 +481,6 @@ window.PROXIMA.simulate = function (p, months) {
     var revS2 = grossS2 * appNetF;
     var revS3 = grossS3comp * vatF;             // S3: solo IVA (bonifico, niente commissioni)
     var mrr = revS1 + revS2 + revS3;            // competenza netta
-    var arr = mrr * 12;
 
     /* --- Incassi (cassa) netti: S1/S2 mensili, S3 secondo fatturazione scelta --- */
     var cashS3 = grossS3cash * vatF;
@@ -505,6 +520,8 @@ window.PROXIMA.simulate = function (p, months) {
     var lifetimeFreeToS1 = (p.freemium.freeToS1 + p.churn.free) > 0 ? p.freemium.freeToS1 / (p.freemium.freeToS1 + p.churn.free) : 0;
     paidCumSpend += (bG + bM + bT);
     paidCumS1 += paidDownloads * lifetimeFreeToS1;
+    mktCumSpend += mktCost;
+    newPayingCum += newS1 + newS3direct;   // nuovi paganti acquisiti (S1 d'ingresso + S3 diretti); S2/S3-app = upgrade
 
     /* --- Iniezioni di capitale (mese sim. 1-48) --- */
     var injection = 0;
@@ -518,8 +535,10 @@ window.PROXIMA.simulate = function (p, months) {
     var cashFlow = cashInflow - totCost + injection;   // movimento di cassa reale (incassi − costi + iniezioni)
     cash += cashFlow;
     if (cash < cashMin) { cashMin = cash; cashMinMonth = m; }
+    if (cashZeroMonth === null && cash < 0) cashZeroMonth = m;
+    if (reserveBreachMonth === null && cash < reserveTarget) reserveBreachMonth = m;
 
-    var staffCount = (founderActive ? p.personnel.numFounders : p.personnel.numFounders) + hiredConsultants + (hasContent ? 1 : 0) + (hasDev ? 1 : 0) + (hasBackOffice ? 1 : 0);
+    var staffCount = p.personnel.numFounders + hiredConsultants + (hasContent ? 1 : 0) + (hasDev ? 1 : 0) + (hasBackOffice ? 1 : 0);
 
     results.push({
       month: m, monthLabel: label, phase: phase, phaseName: phaseName, isPreRelease: isPre, isActual: isActual, calMonth: calMonth,
@@ -528,28 +547,34 @@ window.PROXIMA.simulate = function (p, months) {
       totalPaying: s1 + s2 + s3Clients,
       newS1: newS1, newS2: newS2, newS3: newS3, newS3app: newS3app, newS3direct: newS3direct,
       churnFree: churnFree, churnS1: churnS1, churnS2: churnS2, churnS3: churnS3,
-      revS1: revS1, revS2: revS2, revS3: revS3, mrr: mrr, arr: arr, s3LoadAnnual: s3LoadAnnual,
+      revS1: revS1, revS2: revS2, revS3: revS3, mrr: mrr, s3LoadAnnual: s3LoadAnnual,
       grossMrr: grossMrr, cashInflow: cashInflow, cashS3: cashS3, injection: injection, cashFlow: cashFlow,
-      totalAUM: totalAUM, payingAUM: payingAUM, effAvgAUM: effAvgAUM, benchValue: benchValue,
+      totalAUM: totalAUM, effAvgAUM: effAvgAUM, benchValue: benchValue,
       constitutionCosts: constCost, techCapex: capexTech, operatingCosts: opCost,
       personnelCosts: persCost, marketingCosts: mktCost, taxCost: taxCost, totalCosts: totCost,
       netBurn: netBurn, cashRemaining: cash, revenueCumulative: revCum, costsCumulative: costCum,
-      maxNewS3: maxNewS3, s3Utilization: s3Util, budgetFactor: budgetFactor, capacityLimited: capLimited,
+      s3Utilization: s3Util, budgetFactor: budgetFactor, capacityLimited: capLimited,
       hiredConsultants: hiredConsultants, hasContent: hasContent, hasDev: hasDev, hasBackOffice: hasBackOffice,
-      staffCount: staffCount, waitingBoost: waitingBoost
+      staffCount: staffCount
     });
   }
 
-  var beOp = null, beCum = null;
+  var beOp = null, beCum = null, beCashCum = null, opc = 0;
   for (var i = 0; i < results.length; i++) {
     if (beOp === null && results[i].mrr >= results[i].totalCosts && results[i].month >= LAUNCH_M) beOp = results[i].month;
     if (beCum === null && results[i].revenueCumulative >= results[i].costsCumulative) beCum = results[i].month;
+    opc += results[i].cashInflow - results[i].totalCosts;
+    if (beCashCum === null && results[i].month >= LAUNCH_M && opc >= 0) beCashCum = results[i].month;
   }
 
   return {
-    results: results, breakEvenOperational: beOp, breakEvenCumulative: beCum,
+    results: results, breakEvenOperational: beOp, breakEvenCumulative: beCum, breakEvenCashCumulative: beCashCum,
     cacPaidS1: paidCumS1 > 0 ? paidCumSpend / paidCumS1 : 0,
-    cashMinimum: cashMin, cashMinimumMonth: cashMinMonth, hiringPlan: hiringPlan
+    cacBlended: newPayingCum > 0 ? mktCumSpend / newPayingCum : 0,
+    cashMinimum: cashMin, cashMinimumMonth: cashMinMonth,
+    cashZeroMonth: cashZeroMonth, reserveBreachMonth: reserveBreachMonth, reserveTarget: reserveTarget,
+    fundingNeed: Math.max(0, reserveTarget - cashMin),
+    hiringPlan: hiringPlan
   };
 };
 
@@ -559,6 +584,21 @@ function logistic(base, K, g, m) {
   if (!K || K <= base) return base;
   return K / (1 + ((K - base) / base) * Math.exp(-g * (m - 1)));
 }
+
+/* Goal-seek: trova il valore minimo della leva (monotòna crescente) che rende vero il predicato */
+window.PROXIMA.goalSeek = function (baseParams, leverPath, lo, hi, predicate) {
+  var p0 = JSON.parse(JSON.stringify(baseParams));
+  function ok(v) {
+    var p = JSON.parse(JSON.stringify(p0)), ref = p;
+    for (var i = 0; i < leverPath.length - 1; i++) ref = ref[leverPath[i]];
+    ref[leverPath[leverPath.length - 1]] = v;
+    return predicate(window.PROXIMA.simulate(p, HORIZON));
+  }
+  if (ok(lo)) return { achievable: true, value: lo, already: true };
+  if (!ok(hi)) return { achievable: false };
+  for (var k = 0; k < 38; k++) { var mid = (lo + hi) / 2; if (ok(mid)) hi = mid; else lo = mid; }
+  return { achievable: true, value: hi };
+};
 
 </script>
 
@@ -1042,7 +1082,7 @@ window.PROXIMA.Dashboard = function Dashboard({ sim, params }) {
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine
   } = window.Recharts;
 
-  const { results, breakEvenOperational, breakEvenCumulative, cacPaidS1, cashMinimum, cashMinimumMonth, hiringPlan } = sim;
+  const { results, breakEvenOperational, breakEvenCumulative, cacBlended, cashMinimum, cashMinimumMonth, hiringPlan } = sim;
 
   const eur = (v) => "€ " + Math.round(v).toLocaleString("it-IT");
   const num = (v) => Math.round(v).toLocaleString("it-IT");
@@ -1122,7 +1162,7 @@ window.PROXIMA.Dashboard = function Dashboard({ sim, params }) {
         <div className="kpi-grid">
           <Kpi label="Pareggio operativo" value={ml(breakEvenOperational)} accent />
           <Kpi label="Pareggio investimento" value={ml(breakEvenCumulative)} />
-          <Kpi label="CAC paid → abbonato S1" value={eur(cacPaidS1)} />
+          <Kpi label="CAC blended" value={eur(cacBlended)} sub="spesa mktg / nuovo pagante" />
           <Kpi label="Cash minimo" value={eur(cashMinimum)} sub={"a " + ml(cashMinimumMonth)} />
           <Kpi label="Team a fine piano" value={num(last.staffCount) + " persone"} />
         </div>
@@ -1305,6 +1345,277 @@ window.PROXIMA.Dashboard = function Dashboard({ sim, params }) {
 </script>
 
 <script type="text/babel" data-presets="env,react">
+/* Boardroom — C1 sopravvivenza & raccolta · C2 metriche da board · C3 bilancio annuale & export */
+window.PROXIMA = window.PROXIMA || {};
+
+window.PROXIMA.Boardroom = function Boardroom({ sim, params, setParams }) {
+  const { results } = sim;
+  const eur = (v) => "€ " + Math.round(v).toLocaleString("it-IT");
+  const eurk = (v) => "€" + Math.round(v / 1000).toLocaleString("it-IT") + "k";
+  const num = (v) => Math.round(v).toLocaleString("it-IT");
+  const pct = (v) => (v * 100).toFixed(0) + "%";
+  const pct1 = (v) => (v * 100).toFixed(1) + "%";
+  const ml = (mo) => (mo == null) ? "—" : window.PROXIMA.monthLabel(mo);
+  const x1 = (v) => v == null ? "—" : v.toFixed(1) + "×";
+
+  const Kpi = ({ label, value, sub, accent, danger }) =>
+    React.createElement("div", { className: "kpi-card" + (accent ? " accent" : ""), style: danger ? { borderColor: "#F87171" } : undefined },
+      React.createElement("div", { className: "kpi-label" }, label),
+      React.createElement("div", { className: "kpi-value mono", style: danger ? { color: "#F87171" } : undefined }, value),
+      sub && React.createElement("div", { className: "kpi-sub text-dim" }, sub));
+
+  const L = (results.find((r) => r.monthLabel === "M0") || { month: 7 }).month;
+  const lastIdx = results.length - 1, last = results[lastIdx], prev = results[lastIdx - 1] || last;
+  const y1ago = results[lastIdx - 12];
+
+  /* ---- C1: sopravvivenza & raccolta ---- */
+  const runwayMonths = sim.cashZeroMonth != null ? (sim.cashZeroMonth - L) : null;
+
+  /* ---- C2: board metrics & unit economics ---- */
+  const arr = last.mrr * 12;
+  const mom = prev.mrr > 0 ? last.mrr / prev.mrr - 1 : 0;
+  const yoy = (y1ago && y1ago.mrr > 0) ? last.mrr / y1ago.mrr - 1 : null;
+  const arpuS1 = last.s1Clients > 0 ? last.revS1 / last.s1Clients : 0;
+  const arpuS2 = last.s2Clients > 0 ? last.revS2 / last.s2Clients : 0;
+  const arpuS3 = last.payingS3 > 0 ? last.revS3 / last.payingS3 : 0;
+  const ch = params.churn;
+  const ltvS1 = ch.s1 > 0 ? arpuS1 / ch.s1 : 0;
+  const ltvS2 = ch.s2 > 0 ? arpuS2 / ch.s2 : 0;
+  const ltvS3 = ch.s3 > 0 ? arpuS3 / ch.s3 : 0;
+  const cac = sim.cacBlended;
+  const ltvCacS1 = cac > 0 ? ltvS1 / cac : null;
+  const payback = arpuS1 > 0 ? cac / arpuS1 : null;
+  const wChurnM = last.mrr > 0 ? (ch.s1 * last.revS1 + ch.s2 * last.revS2 + ch.s3 * last.revS3) / last.mrr : 0;
+  const grr = Math.max(0, 1 - wChurnM * 12);
+  const expM = last.mrr > 0 ? (last.newS2 * arpuS2 + last.newS3app * arpuS3) / last.mrr : 0;
+  const nrr = Math.max(0, 1 - wChurnM * 12 + expM * 12);
+  const win = (n, f) => { let s = 0; for (let i = Math.max(0, lastIdx - n + 1); i <= lastIdx; i++) s += f(results[i]); return s; };
+  const netRev12 = win(12, (r) => r.mrr);
+  const ebitda12 = win(12, (r) => r.mrr - r.operatingCosts - r.personnelCosts - r.marketingCosts);
+  const ebitdaMargin = netRev12 > 0 ? ebitda12 / netRev12 : 0;
+  const rule40 = (yoy != null ? yoy * 100 : 0) + ebitdaMargin * 100;
+  const netBurn12 = win(12, (r) => r.totalCosts - r.cashInflow);
+  const netNewARR12 = (y1ago ? (last.mrr - y1ago.mrr) : last.mrr) * 12;
+  const burnMultiple = netNewARR12 > 0 && netBurn12 > 0 ? netBurn12 / netNewARR12 : null;
+  const mktg12 = win(12, (r) => r.marketingCosts);
+  const magic = mktg12 > 0 ? netNewARR12 / mktg12 : null;
+
+  /* ---- C3: bilancio annuale ---- */
+  const yearDefs = [
+    { label: "Pre-lancio", lo: 1, hi: L - 1 },
+    { label: "Anno 1", lo: L, hi: L + 11 },
+    { label: "Anno 2", lo: L + 12, hi: L + 23 },
+    { label: "Anno 3", lo: L + 24, hi: L + 35 },
+    { label: "Anno 4", lo: L + 36, hi: L + 47 }
+  ];
+  const yearRows = yearDefs.map((yd) => {
+    const rs = results.filter((r) => r.month >= yd.lo && r.month <= yd.hi);
+    if (!rs.length) return null;
+    const S = (f) => rs.reduce((a, r) => a + f(r), 0);
+    const netRev = S((r) => r.mrr);
+    return {
+      label: yd.label, span: rs[0].monthLabel + "–" + rs[rs.length - 1].monthLabel,
+      revS1: S((r) => r.revS1), revS2: S((r) => r.revS2), revS3: S((r) => r.revS3), netRev: netRev,
+      capex: S((r) => r.constitutionCosts + r.techCapex), op: S((r) => r.operatingCosts),
+      pers: S((r) => r.personnelCosts), mktg: S((r) => r.marketingCosts), tax: S((r) => r.taxCost),
+      ebitda: netRev - S((r) => r.operatingCosts + r.personnelCosts + r.marketingCosts),
+      result: netRev - S((r) => r.totalCosts), incassi: S((r) => r.cashInflow),
+      inj: S((r) => r.injection), cashEnd: rs[rs.length - 1].cashRemaining
+    };
+  }).filter(Boolean);
+
+  /* ---- Goal-seek ---- */
+  const targets = [
+    { id: "reserve", label: "Cassa sempre ≥ riserva", pred: (s) => s.cashMinimum >= s.reserveTarget },
+    { id: "positive", label: "Cassa mai negativa", pred: (s) => s.cashMinimum >= 0 },
+    { id: "beop12", label: "Pareggio operativo entro M+12", pred: (s) => s.breakEvenOperational != null && s.breakEvenOperational <= L + 12 },
+    { id: "beop18", label: "Pareggio operativo entro M+18", pred: (s) => s.breakEvenOperational != null && s.breakEvenOperational <= L + 18 },
+    { id: "p1000", label: "1.000 paganti entro M+24", pred: (s) => s.results.some((r) => r.month <= L + 24 && r.totalPaying >= 1000) }
+  ];
+  const levers = [
+    { id: "priceS1", label: "Prezzo S1 (€/mese)", path: ["priceS1"], lo: 1, hi: 25, fmt: (v) => "€" + v.toFixed(2) + "/mese" },
+    { id: "priceS2", label: "Prezzo S2 (€/mese)", path: ["priceS2"], lo: 9, hi: 120, fmt: (v) => "€" + Math.round(v) + "/mese" },
+    { id: "freeToS1", label: "Conversione free→S1", path: ["freemium", "freeToS1"], lo: 0.01, hi: 0.20, fmt: pct1 },
+    { id: "s1ToS2", label: "Conversione S1→S2", path: ["freemium", "s1ToS2"], lo: 0.01, hi: 0.15, fmt: pct1 },
+    { id: "capital", label: "Capitale iniziale", path: ["startingCapital"], lo: 50000, hi: 400000, fmt: eur }
+  ];
+  const [gsTarget, setGsTarget] = React.useState("reserve");
+  const [gsLever, setGsLever] = React.useState("priceS1");
+  const [gsRes, setGsRes] = React.useState(null);
+  const runGoalSeek = () => {
+    const t = targets.find((x) => x.id === gsTarget), l = levers.find((x) => x.id === gsLever);
+    setGsRes({ r: window.PROXIMA.goalSeek(params, l.path, l.lo, l.hi, t.pred), l: l, t: t });
+  };
+  const applyGoalSeek = () => {
+    if (!gsRes || !gsRes.r.achievable) return;
+    const next = JSON.parse(JSON.stringify(params)); let ref = next;
+    for (let i = 0; i < gsRes.l.path.length - 1; i++) ref = ref[gsRes.l.path[i]];
+    ref[gsRes.l.path[gsRes.l.path.length - 1]] = gsRes.r.value; setParams(next);
+    setGsRes(null);
+  };
+
+  /* ---- Export / import / stampa ---- */
+  const exportParams = () => {
+    const blob = new Blob([JSON.stringify(params, null, 2)], { type: "application/json" });
+    const u = URL.createObjectURL(blob); const a = document.createElement("a");
+    a.href = u; a.download = "proxima-scenario.json"; a.click(); URL.revokeObjectURL(u);
+  };
+  const importParams = (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { try { setParams(Object.assign({}, window.PROXIMA.defaultParams(), JSON.parse(rd.result))); } catch (err) { alert("File non valido"); } };
+    rd.readAsText(f); e.target.value = "";
+  };
+
+  const danger = sim.fundingNeed > 0 || sim.cashZeroMonth != null;
+
+  return (
+    <div>
+      {/* ============ C1 — Sopravvivenza & raccolta ============ */}
+      <div className="section">
+        <div className="section-title">Sopravvivenza & raccolta</div>
+        {danger ? (
+          <div className="warn-banner" style={{ background: "rgba(248,113,113,0.10)", borderColor: "rgba(248,113,113,0.35)", color: "#F87171", marginBottom: 16 }}>
+            ⚠ La cassa {sim.cashZeroMonth != null ? <b>&nbsp;va sotto zero a {ml(sim.cashZeroMonth)}</b> : <span>&nbsp;scende sotto la riserva a {ml(sim.reserveBreachMonth)}</span>}.
+            Punto più basso {eur(sim.cashMinimum)} a {ml(sim.cashMinimumMonth)}. Per restare sopra la riserva servono ~<b>&nbsp;{eur(sim.fundingNeed)}</b>&nbsp; (iniezione consigliata entro {ml(Math.max(L, sim.cashMinimumMonth - 2))}).
+          </div>
+        ) : (
+          <div className="info-banner" style={{ background: "rgba(74,222,128,0.08)", borderColor: "rgba(74,222,128,0.25)", color: "#4ADE80", marginBottom: 16 }}>
+            ✓ Con i parametri attuali la cassa resta sopra la riserva di {eur(sim.reserveTarget)} per tutti i 48 mesi. Nessuna raccolta aggiuntiva necessaria.
+          </div>
+        )}
+        <div className="kpi-grid">
+          <Kpi label="Runway" value={runwayMonths != null ? runwayMonths + " mesi" : "oltre l'orizzonte"} sub={sim.cashZeroMonth != null ? "cassa zero a " + ml(sim.cashZeroMonth) : "cassa sempre positiva"} danger={sim.cashZeroMonth != null} />
+          <Kpi label="Cassa minima" value={eur(sim.cashMinimum)} sub={"a " + ml(sim.cashMinimumMonth)} danger={sim.cashMinimum < sim.reserveTarget} />
+          <Kpi label="Fabbisogno di raccolta" value={eur(sim.fundingNeed)} sub={sim.fundingNeed > 0 ? "per restare ≥ riserva" : "nessuno"} accent={sim.fundingNeed > 0} />
+          <Kpi label="Pareggio di cassa" value={ml(sim.breakEvenCashCumulative)} sub="cassa operativa cumulata ≥ 0" />
+        </div>
+
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card-title">Goal-seek — "cosa serve per…"</div>
+          <div className="card-sub">Scegli un obiettivo e la leva: il modello calcola il valore minimo che lo raggiunge (binary search sull'intero modello).</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+            <select value={gsTarget} onChange={(e) => { setGsTarget(e.target.value); setGsRes(null); }}
+              style={{ background: "#0C1420", color: "#E8ECF2", border: "1px solid #2A3952", borderRadius: 8, padding: "8px 10px", fontFamily: "inherit", fontSize: 13 }}>
+              {targets.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+            <span className="text-faint">agendo su</span>
+            <select value={gsLever} onChange={(e) => { setGsLever(e.target.value); setGsRes(null); }}
+              style={{ background: "#0C1420", color: "#E8ECF2", border: "1px solid #2A3952", borderRadius: 8, padding: "8px 10px", fontFamily: "inherit", fontSize: 13 }}>
+              {levers.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+            </select>
+            <button className="btn" onClick={runGoalSeek}>Calcola</button>
+          </div>
+          {gsRes && (
+            <div style={{ marginTop: 14, padding: "12px 14px", background: "#0C1420", border: "1px solid #2A3952", borderRadius: 8 }}>
+              {!gsRes.r.achievable ? (
+                <span style={{ color: "#F87171" }}>Obiettivo <b>non raggiungibile</b> con "{gsRes.l.label}" nel suo intervallo. Prova un'altra leva o un obiettivo meno ambizioso.</span>
+              ) : gsRes.r.already ? (
+                <span style={{ color: "#4ADE80" }}>✓ L'obiettivo è <b>già soddisfatto</b> con i parametri attuali (anche al minimo di "{gsRes.l.label}").</span>
+              ) : (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                  <span>Serve <b className="gold mono" style={{ fontSize: 18 }}>{gsRes.l.fmt(gsRes.r.value)}</b> di "{gsRes.l.label}".</span>
+                  <button className="btn-ghost btn" onClick={applyGoalSeek}>Applica al modello</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ============ C2 — Board metrics & unit economics ============ */}
+      <div className="section">
+        <div className="section-title">Metriche da board & unit economics</div>
+        <div className="kpi-grid">
+          <Kpi label="ARR (run-rate)" value={eur(arr)} sub={(yoy != null ? "YoY " + (yoy >= 0 ? "+" : "") + pct(yoy) + " · " : "") + "MoM " + (mom >= 0 ? "+" : "") + pct1(mom)} accent />
+          <Kpi label="CAC blended" value={eur(cac)} sub="spesa mktg / nuovo pagante" />
+          <Kpi label="LTV/CAC (S1 d'ingresso)" value={ltvCacS1 != null ? x1(ltvCacS1) : "—"} sub={"payback " + (payback != null ? Math.round(payback) + " mesi" : "—")} />
+          <Kpi label="NRR (stima)" value={pct(nrr)} sub={"GRR " + pct(grr) + " + espansione upgrade"} />
+          <Kpi label="Burn multiple" value={x1(burnMultiple)} sub="cassa bruciata / ARR netto nuovo (12m)" />
+          <Kpi label="Rule of 40" value={Math.round(rule40) + ""} sub={"crescita " + (yoy != null ? Math.round(yoy * 100) : 0) + "% + margine EBITDA " + Math.round(ebitdaMargin * 100) + "%"} accent={rule40 >= 40} />
+          <Kpi label="Magic number" value={magic != null ? x1(magic) : "—"} sub="ARR nuovo / spesa mktg (12m)" />
+          <Kpi label="EBITDA margin (12m)" value={pct(ebitdaMargin)} sub={eur(ebitda12) + " su " + eur(netRev12)} />
+        </div>
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card-title">LTV per strato (lordo, al netto di IVA e commissioni)</div>
+          <div className="tbl-wrap">
+            <table className="proj" style={{ fontSize: 13 }}>
+              <thead><tr>
+                <th style={{ textAlign: "left" }}>Strato</th><th>ARPU netto/mese</th><th>Churn mensile</th><th>Vita media</th><th>LTV</th><th>LTV/CAC</th>
+              </tr></thead>
+              <tbody>
+                {[["S1", arpuS1, ch.s1, ltvS1, "#60A5FA"], ["S2", arpuS2, ch.s2, ltvS2, "#A78BFA"], ["S3", arpuS3, ch.s3, ltvS3, "#C4A962"]].map(([nm, ar, cu, lt, col]) => (
+                  <tr key={nm}>
+                    <td style={{ textAlign: "left", color: col, fontWeight: 700 }}>{nm}</td>
+                    <td className="mono">{eur(ar)}</td>
+                    <td className="mono">{pct1(cu)}</td>
+                    <td className="mono">{cu > 0 ? Math.round(1 / cu) + " mesi" : "—"}</td>
+                    <td className="mono" style={{ fontWeight: 700 }}>{eur(lt)}</td>
+                    <td className="mono">{cac > 0 ? x1(lt / cac) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="text-faint" style={{ fontSize: 11, marginTop: 8 }}>
+            LTV = ARPU netto ÷ churn (margine lordo ~100% per S1; S2/S3 al lordo del costo di servizio umano). Il CAC acquisisce soprattutto S1: i clienti che salgono a S2/S3 valgono molto di più (vedi LTV S3).
+          </div>
+        </div>
+      </div>
+
+      {/* ============ C3 — Bilancio annuale & export ============ */}
+      <div className="section">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+          <div className="section-title" style={{ margin: 0 }}>Bilancio annuale (competenza)</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button className="btn-ghost btn" onClick={exportParams}>↓ Esporta scenario</button>
+            <label className="btn-ghost btn" style={{ cursor: "pointer", margin: 0 }}>↑ Importa
+              <input type="file" accept="application/json" onChange={importParams} style={{ display: "none" }} />
+            </label>
+            <button className="btn" onClick={() => window.print()}>🖨 Stampa / PDF</button>
+          </div>
+        </div>
+        <div className="tbl-wrap">
+          <table className="proj" style={{ fontSize: 12 }}>
+            <thead><tr>
+              <th style={{ textAlign: "left" }}>Periodo</th>
+              <th>Ric. S1</th><th>Ric. S2</th><th>Ric. S3</th><th>Ricavi netti</th>
+              <th>Costituz.+App</th><th>Operativi</th><th>Personale</th><th>Marketing</th>
+              <th>EBITDA</th><th>Risultato</th><th>Incassi</th><th>Iniezioni</th><th>Cassa fine</th>
+            </tr></thead>
+            <tbody>
+              {yearRows.map((y) => (
+                <tr key={y.label}>
+                  <td style={{ textAlign: "left" }}><span style={{ fontWeight: 700 }}>{y.label}</span><span className="text-faint mono" style={{ fontSize: 10, marginLeft: 6 }}>{y.span}</span></td>
+                  <td className="mono">{eurk(y.revS1)}</td>
+                  <td className="mono">{eurk(y.revS2)}</td>
+                  <td className="mono">{eurk(y.revS3)}</td>
+                  <td className="mono gold" style={{ fontWeight: 700 }}>{eurk(y.netRev)}</td>
+                  <td className="mono text-dim">{eurk(y.capex)}</td>
+                  <td className="mono text-dim">{eurk(y.op)}</td>
+                  <td className="mono text-dim">{eurk(y.pers)}</td>
+                  <td className="mono text-dim">{eurk(y.mktg)}</td>
+                  <td className="mono" style={{ fontWeight: 700, color: y.ebitda >= 0 ? "#4ADE80" : "#F87171" }}>{eurk(y.ebitda)}</td>
+                  <td className="mono" style={{ fontWeight: 700, color: y.result >= 0 ? "#4ADE80" : "#F87171" }}>{eurk(y.result)}</td>
+                  <td className="mono">{eurk(y.incassi)}</td>
+                  <td className="mono text-dim">{y.inj > 0 ? eurk(y.inj) : "—"}</td>
+                  <td className="mono" style={{ fontWeight: 700, color: y.cashEnd < sim.reserveTarget ? "#F87171" : undefined }}>{eurk(y.cashEnd)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="text-faint" style={{ fontSize: 11, marginTop: 8 }}>
+          Valori in €k, competenza (ricavi netti di IVA e commissioni). EBITDA = ricavi netti − operativi − personale − marketing (esclude capex e tasse). "Cassa fine" = saldo reale a fine periodo (include fatturazione S3 anticipata e iniezioni). Stampa → "Salva come PDF" per il one-pager da board.
+        </div>
+      </div>
+    </div>
+  );
+};
+
+</script>
+
+<script type="text/babel" data-presets="env,react">
 /* Table — proiezione 48 mesi + export CSV/JSON */
 window.PROXIMA = window.PROXIMA || {};
 
@@ -1327,7 +1638,8 @@ window.PROXIMA.ProjectionTable = function ProjectionTable({ sim }) {
     ["Ric. S1", (r) => fmtE(r.revS1), ""],
     ["Ric. S2", (r) => fmtE(r.revS2), ""],
     ["Ric. S3", (r) => fmtE(r.revS3), ""],
-    ["MRR", (r) => fmtE(r.mrr), "gold"],
+    ["MRR netto", (r) => fmtE(r.mrr), "gold"],
+    ["Incassi", (r) => fmtE(r.cashInflow), ""],
     ["Costituz.", (r) => r.constitutionCosts > 0 ? fmtE(r.constitutionCosts) : "—", ""],
     ["App/tech", (r) => (r.techCapex > 0 ? fmtE(r.techCapex) : "—"), ""],
     ["Operativi", (r) => fmtE(r.operatingCosts), ""],
@@ -1458,6 +1770,7 @@ function App() {
         </div>
         <window.PROXIMA.Glossary />
         <window.PROXIMA.Dashboard sim={sim} params={params} />
+        <window.PROXIMA.Boardroom sim={sim} params={params} setParams={setParams} />
         <window.PROXIMA.ProjectionTable sim={sim} />
         <div className="section" style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid #1E2A3E" }}>
           <div className="text-faint" style={{ fontSize: 11, textAlign: "center" }}>
@@ -1471,7 +1784,8 @@ function App() {
 
 function boot() {
   if (!window.PROXIMA.simulate || !window.PROXIMA.Controls || !window.PROXIMA.Dashboard ||
-      !window.PROXIMA.ProjectionTable || !window.PROXIMA.Glossary || !window.PROXIMA.defaultParams) {
+      !window.PROXIMA.ProjectionTable || !window.PROXIMA.Glossary || !window.PROXIMA.Boardroom ||
+      !window.PROXIMA.goalSeek || !window.PROXIMA.defaultParams) {
     return setTimeout(boot, 50);
   }
   ReactDOM.createRoot(document.getElementById("root")).render(<App />);
