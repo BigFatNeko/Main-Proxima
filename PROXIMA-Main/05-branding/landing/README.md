@@ -11,7 +11,9 @@ niente cifre di pricing (parcella ancora da decidere), niente contatore finto.
 | File | Contenuto |
 |---|---|
 | `index.html` | Landing completa: hero con mockup app animato, problema, **calcolatore banca vs indipendente**, come funziona, vetrina app + valori, parcella (senza cifre), team (senza nomi), CTA "accesso anticipato", footer legale. |
-| `privacy.html` | **Bozza** di informativa GDPR. Da completare e far validare a un legale. |
+| `privacy.html` | **Bozza** di informativa GDPR (incl. sezione cookie). Da completare e far validare a un legale. |
+| `fonts/` | Font self-hostati (woff2). **Non** reintrodurre il link a Google Fonts: caricarli da Google trasmette l'IP dei visitatori a terzi (problema GDPR). |
+| `_headers` | Header di sicurezza per Netlify (CSP, no-frame, nosniff…). Su altri hosting vanno replicati. |
 
 ### Scelte di persuasione applicate (e i loro limiti)
 

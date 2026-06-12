@@ -5,8 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Proxima è una Società di Consulenza Finanziaria indipendente e fee-only: nessuna provvigione, solo consigli nel tuo interesse. Anche per chi ha meno di 100.000 €.">
   <title>Proxima · Consulenza finanziaria indipendente</title>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
+    /* Font self-hostati (niente chiamate a Google: GDPR) */
+    @font-face {
+      font-family: 'Plus Jakarta Sans';
+      font-style: normal;
+      font-weight: 300 700;
+      font-display: swap;
+      src: url('fonts/plus-jakarta-sans-latin.woff2') format('woff2');
+    }
+
+    @font-face {
+      font-family: 'DM Sans';
+      font-style: normal;
+      font-weight: 300 500;
+      font-display: swap;
+      src: url('fonts/dm-sans-latin.woff2') format('woff2');
+    }
+
     *, *::before, *::after {
       margin: 0;
       padding: 0;
@@ -1059,6 +1075,21 @@
       display: flex;
     }
 
+    /* Honeypot anti-bot: invisibile agli umani, i bot lo compilano */
+    .hp-field {
+      position: absolute;
+      left: -9999px;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    button[disabled] {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
     /* FOOTER LEGAL */
     .footer-legal {
       max-width: 1140px;
@@ -1589,17 +1620,18 @@
     <div class="hero-accent-line"></div>
     <div class="hero-inner">
       <div class="hero-content">
-        <div class="hero-eyebrow reveal">Fee-only · prossimamente</div>
+        <div class="hero-eyebrow reveal">Consulenza indipendente · al tuo fianco</div>
         <h1 class="reveal reveal-delay-1">Consulenza<br><strong>indipendente</strong>.<br><em>Finalmente dalla tua parte.</em></h1>
         <p class="hero-sub reveal reveal-delay-2">Proxima è una società di consulenza finanziaria che non vive sulle provvigioni e sui prodotti da vendere, ma che basa la propria sussistenza sul successo del cliente. Ogni consiglio è nel tuo interesse, perché il tuo interesse è per forza anche il nostro.</p>
         <div id="heroForm" class="reveal reveal-delay-3">
-          <div class="hero-form">
-            <input type="email" id="heroEmail" placeholder="La tua email" required>
-            <button class="btn-shine" onclick="submitForm('hero')">Avvisami al lancio</button>
-          </div>
+          <form class="hero-form" onsubmit="return submitForm(event, 'hero')" novalidate>
+            <input type="email" id="heroEmail" name="EMAIL" placeholder="La tua email" autocomplete="email" maxlength="254" required>
+            <input type="text" id="heroHp" name="website" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
+            <button type="submit" class="btn-shine">Avvisami al lancio</button>
+          </form>
           <label class="consent-row">
             <input type="checkbox" id="heroConsent">
-            <span>Ho letto l'<a href="privacy.html" target="_blank">informativa privacy</a> e acconsento a ricevere aggiornamenti sul lancio di Proxima.</span>
+            <span>Ho letto l'<a href="privacy.html" target="_blank" rel="noopener">informativa privacy</a> e acconsento a ricevere aggiornamenti sul lancio di Proxima.</span>
           </label>
           <p class="hero-note">Niente spam. Ti scriviamo quando apriamo, e poco altro.</p>
           <div id="heroError" class="form-error">
@@ -1974,13 +2006,14 @@
         </span>
       </div>
       <div id="ctaForm" class="reveal reveal-delay-3">
-        <div class="cta-form">
-          <input type="email" id="ctaEmail" placeholder="La tua email">
-          <button class="btn-shine" onclick="submitForm('cta')">Riserva il mio posto</button>
-        </div>
+        <form class="cta-form" onsubmit="return submitForm(event, 'cta')" novalidate>
+          <input type="email" id="ctaEmail" name="EMAIL" placeholder="La tua email" autocomplete="email" maxlength="254" required>
+          <input type="text" id="ctaHp" name="website" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <button type="submit" class="btn-shine">Riserva il mio posto</button>
+        </form>
         <label class="consent-row center">
           <input type="checkbox" id="ctaConsent">
-          <span>Ho letto l'<a href="privacy.html" target="_blank">informativa privacy</a> e acconsento a ricevere aggiornamenti sul lancio di Proxima.</span>
+          <span>Ho letto l'<a href="privacy.html" target="_blank" rel="noopener">informativa privacy</a> e acconsento a ricevere aggiornamenti sul lancio di Proxima.</span>
         </label>
         <p class="cta-note">Niente spam: ti scriviamo per il lancio, e poco altro.</p>
         <div id="ctaError" class="form-error" style="justify-content: center;">
@@ -2103,31 +2136,44 @@
       setTimeout(() => { el.style.outline = ''; el.style.outlineOffset = ''; }, 2000);
     }
 
-    async function submitForm(type) {
+    async function submitForm(event, type) {
+      event.preventDefault();
+
       const input = document.getElementById(type + 'Email');
       const consent = document.getElementById(type + 'Consent');
       const errorEl = document.getElementById(type + 'Error');
+      const honeypot = document.getElementById(type + 'Hp');
+      const button = event.target.querySelector('button[type="submit"]');
       const email = input.value.trim();
 
       errorEl.classList.remove('show');
 
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      // Bot: campo nascosto compilato → finto successo, nessun invio
+      if (honeypot.value) {
+        document.getElementById(type + 'Form').style.display = 'none';
+        document.getElementById(type + 'Success').classList.add('show');
+        return false;
+      }
+
+      if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
         input.style.borderColor = '#c44a4a';
         setTimeout(() => input.style.borderColor = '', 2000);
-        return;
+        return false;
       }
 
       if (!consent.checked) {
         flagInvalid(consent.parentElement);
-        return;
+        return false;
       }
 
       if (!BREVO_FORM_ACTION) {
         console.warn('Brevo non configurato: impostare BREVO_FORM_ACTION (vedi README.md).');
+        errorEl.querySelector('span').textContent = 'Le iscrizioni si aprono a brevissimo. Riprova tra poco.';
         errorEl.classList.add('show');
-        return;
+        return false;
       }
 
+      button.disabled = true;
       try {
         await fetch(BREVO_FORM_ACTION, {
           method: 'POST',
@@ -2145,18 +2191,11 @@
       } catch (err) {
         errorEl.querySelector('span').textContent = 'Qualcosa è andato storto. Riprova tra qualche minuto.';
         errorEl.classList.add('show');
+      } finally {
+        button.disabled = false;
       }
+      return false;
     }
-
-    // Enter key submit
-    document.querySelectorAll('input[type="email"]').forEach(input => {
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          const type = input.id === 'heroEmail' ? 'hero' : 'cta';
-          submitForm(type);
-        }
-      });
-    });
   </script>
 
 </body>
