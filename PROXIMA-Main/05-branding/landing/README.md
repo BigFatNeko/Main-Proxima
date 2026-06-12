@@ -10,8 +10,17 @@ niente cifre di pricing (parcella ancora da decidere), niente contatore finto.
 
 | File | Contenuto |
 |---|---|
-| `index.html` | Landing completa: hero + waitlist, problema, **calcolatore costi banca**, come funziona, valori, parcella (senza cifre), chi siamo, CTA, footer legale. |
+| `index.html` | Landing completa: hero con mockup app animato, problema, **calcolatore banca vs indipendente**, come funziona, vetrina app + valori, parcella (senza cifre), team (senza nomi), CTA "accesso anticipato", footer legale. |
 | `privacy.html` | **Bozza** di informativa GDPR. Da completare e far validare a un legale. |
+
+### Scelte di persuasione applicate (e i loro limiti)
+
+- CTA in prima persona e benefit-led ("Avvisami al lancio", "Riserva il mio posto").
+- Loss aversion: il calcolatore ancora il costo della banca prima della richiesta email.
+- Scarsità **vera**: "primi posti limitati" = fase Alpha a clienti controllati del piano di lancio. Se la fase cambia, aggiornare il testo.
+- Risk reversal: "gratis / 10 secondi / cancellati quando vuoi".
+- Micro-impegno: l'interazione con gli slider precede la richiesta di iscrizione.
+- **Vietato** aggiungere contatori o testimonianze finte: solo numeri reali.
 
 ## ✅ Da fare prima di pubblicare
 
@@ -23,7 +32,7 @@ niente cifre di pricing (parcella ancora da decidere), niente contatore finto.
    5. Nella scheda "Condividi"/"Integra" copia l'**URL `action`** del modulo (dominio `sibforms.com`).
    6. Incollalo in `index.html` nella costante `BREVO_FORM_ACTION` (cerca `TODO`).
    7. Prova un'iscrizione vera e verifica che il contatto arrivi nella lista e riceva l'email di conferma.
-2. **Sezione "Chi siamo"**: inserire nomi, ruoli, bio (2–3 frasi) e possibilmente foto dei due fondatori. Cerca `TODO` in `index.html`.
+2. **Sezione "Chi siamo"**: per scelta è sul team (senza nomi). Verificare che le partnership con commercialisti citate esistano davvero prima di pubblicare.
 3. **Footer legale**: P.IVA, sede legale, email di contatto reale (oggi `info@proxima.example`).
 4. **Privacy**: completare i campi evidenziati in `privacy.html` e farla validare; poi rimuovere il banner BOZZA.
 5. **Dominio e hosting**: la pagina è statica, va bene qualsiasi hosting (Netlify, Vercel, GitHub Pages). Test locale: `npx serve .`
