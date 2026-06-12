@@ -33,6 +33,8 @@
     .dot{width:10px;height:10px;border-radius:50%;background:#aaa;flex-shrink:0}
     .status.ok{color:#1a7a3e}
     .status.ok .dot{background:#3ac26b}
+    .status.pending{color:#7a5a00}
+    .status.pending .dot{background:#f0a500}
     .status.stale{color:#a83232}
     .status.stale .dot{background:#e05c5c}
   </style>
@@ -69,12 +71,16 @@
           var gen = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
           var oggi = new Date(); oggi.setHours(0,0,0,0);
           var diff = daysBetween(gen, oggi);
-          // sabato genera, domenica/lunedì mattina presto può essere "vecchio di 1-2 giorni" legittimamente
           var dow = oggi.getDay();
-          var soglia = (dow === 0) ? 1 : (dow === 1 ? 2 : 1);
+          // Sun/Mon: tolleranza weekend (sabato non genera, domenica non genera)
+          var soglia = (dow === 0 || dow === 1) ? 2 : 1;
           if(diff <= 0){
             el.classList.add('ok');
             txt.textContent = 'Aggiornato oggi · '+fmt(gen);
+          } else if(diff === 1 && dow >= 2 && dow <= 5){
+            // Mar-Ven mattina: il briefing di oggi deve ancora girare → pending giallo
+            el.classList.add('pending');
+            txt.textContent = 'In aggiornamento · ultimo: '+fmt(gen);
           } else if(diff <= soglia){
             el.classList.add('ok');
             txt.textContent = 'Ultimo: '+fmt(gen)+' ('+diff+'g fa)';
