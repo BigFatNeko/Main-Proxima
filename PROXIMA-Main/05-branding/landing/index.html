@@ -1551,6 +1551,115 @@
       .ps-ring-fg { stroke-dashoffset: 41; }
     }
 
+    /* COOKIE BANNER */
+    .cookie-banner {
+      position: fixed;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      right: 1.25rem;
+      z-index: 300;
+      display: flex;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .cookie-box {
+      pointer-events: auto;
+      max-width: 680px;
+      background: var(--bianco);
+      border: 1px solid var(--perla);
+      border-radius: 20px;
+      padding: 1.75rem 2rem;
+      box-shadow: 0 20px 60px rgba(13, 43, 78, 0.18);
+    }
+
+    .cookie-box h3 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--navy);
+      margin-bottom: 0.5rem;
+    }
+
+    .cookie-box p {
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: var(--antracite);
+      opacity: 0.8;
+      margin-bottom: 1.25rem;
+    }
+
+    .cookie-box p a {
+      color: var(--petrolio);
+    }
+
+    .cookie-toggles {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .cookie-toggles label {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.85rem;
+      color: var(--antracite);
+      cursor: pointer;
+    }
+
+    .cookie-toggles input {
+      accent-color: var(--petrolio);
+    }
+
+    .cookie-actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .ck-btn {
+      flex: 1;
+      min-width: 140px;
+      padding: 0.8rem 1.2rem;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-radius: 100px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .ck-btn.ghost {
+      background: transparent;
+      border: 1.5px solid var(--navy);
+      color: var(--navy);
+    }
+
+    .ck-btn.ghost:hover {
+      background: var(--avorio);
+    }
+
+    .ck-btn.solid {
+      background: var(--navy);
+      border: 1.5px solid var(--navy);
+      color: var(--avorio);
+    }
+
+    .ck-btn.solid:hover {
+      background: var(--petrolio);
+      border-color: var(--petrolio);
+    }
+
+    @media (max-width: 600px) {
+      .cookie-banner { left: 0.75rem; right: 0.75rem; bottom: 0.75rem; }
+      .cookie-box { padding: 1.25rem 1.25rem; }
+      .cookie-actions { flex-direction: column; }
+    }
+
     /* ANIMATIONS */
     .reveal {
       opacity: 0;
@@ -2027,6 +2136,23 @@
     </div>
   </section>
 
+  <!-- COOKIE BANNER (appare solo se GA4/Meta Pixel sono configurati nello script) -->
+  <div id="cookieBanner" class="cookie-banner" hidden>
+    <div class="cookie-box" role="dialog" aria-label="Preferenze cookie">
+      <h3>Cookie e misurazione</h3>
+      <p>Con il tuo consenso usiamo cookie statistici per capire come i visitatori arrivano al sito e cookie di marketing per misurare le nostre campagne. Senza consenso, nessun cookie viene installato. <a href="privacy.html" target="_blank" rel="noopener">Leggi l'informativa</a>.</p>
+      <div class="cookie-toggles" id="cookieToggles" hidden>
+        <label><input type="checkbox" id="ckStats"> Statistici — Google Analytics</label>
+        <label><input type="checkbox" id="ckMkt"> Marketing — Meta Pixel</label>
+      </div>
+      <div class="cookie-actions">
+        <button type="button" id="ckReject" class="ck-btn ghost">Rifiuta tutti</button>
+        <button type="button" id="ckCustom" class="ck-btn ghost">Personalizza</button>
+        <button type="button" id="ckAccept" class="ck-btn solid">Accetta tutti</button>
+      </div>
+    </div>
+  </div>
+
   <!-- FOOTER -->
   <footer>
     <div class="footer-inner">
@@ -2036,6 +2162,7 @@
       </div>
       <div class="footer-right">
         <a href="privacy.html" class="footer-link">Privacy</a>
+        <a href="#" class="footer-link" id="cookiePrefsLink" hidden>Preferenze cookie</a>
         <!-- TODO: sostituire con l'indirizzo email reale -->
         <a href="mailto:info@proxima.example" class="footer-link">Contatti</a>
         <span class="footer-link">© 2026</span>
@@ -2124,6 +2251,89 @@
       document.getElementById(id).addEventListener('input', updateCalc);
     });
     updateCalc();
+
+    // ── Consenso cookie ──
+    // TODO: inserire gli ID quando gli account esistono (vedi README.md).
+    // Finché restano vuoti: nessun banner, nessun cookie, nessuno script esterno.
+    const ANALYTICS_GA4_ID = '';   // es. 'G-XXXXXXXXXX'
+    const META_PIXEL_ID = '';      // es. '123456789012345'
+    const CONSENT_KEY = 'proxima-consent-v1';
+    const trackingConfigured = !!(ANALYTICS_GA4_ID || META_PIXEL_ID);
+
+    function getConsent() {
+      try { return JSON.parse(localStorage.getItem(CONSENT_KEY)); }
+      catch (e) { return null; }
+    }
+
+    function loadGA() {
+      if (window._gaLoaded) return;
+      window._gaLoaded = true;
+      const s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://www.googletagmanager.com/gtag/js?id=' + ANALYTICS_GA4_ID;
+      document.head.appendChild(s);
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function () { dataLayer.push(arguments); };
+      gtag('js', new Date());
+      gtag('config', ANALYTICS_GA4_ID, { anonymize_ip: true });
+    }
+
+    function loadMetaPixel() {
+      if (window._fbLoaded) return;
+      window._fbLoaded = true;
+      !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+      n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+      document,'script','https://connect.facebook.net/it_IT/fbevents.js');
+      fbq('init', META_PIXEL_ID);
+      fbq('track', 'PageView');
+    }
+
+    function applyConsent(c) {
+      if (c && c.stats && ANALYTICS_GA4_ID) loadGA();
+      if (c && c.mkt && META_PIXEL_ID) loadMetaPixel();
+    }
+
+    function showBanner(prefill) {
+      const c = prefill || getConsent() || {};
+      document.getElementById('ckStats').checked = !!c.stats;
+      document.getElementById('ckMkt').checked = !!c.mkt;
+      document.getElementById('cookieBanner').hidden = false;
+    }
+
+    function saveConsent(c) {
+      try { localStorage.setItem(CONSENT_KEY, JSON.stringify({ ...c, ts: new Date().toISOString() })); }
+      catch (e) { /* storage non disponibile: il banner ricomparirà */ }
+      document.getElementById('cookieBanner').hidden = true;
+      document.getElementById('cookieToggles').hidden = true;
+      applyConsent(c);
+    }
+
+    if (trackingConfigured) {
+      document.getElementById('ckAccept').addEventListener('click', () => saveConsent({ stats: true, mkt: true }));
+      document.getElementById('ckReject').addEventListener('click', () => saveConsent({ stats: false, mkt: false }));
+      document.getElementById('ckCustom').addEventListener('click', () => {
+        const toggles = document.getElementById('cookieToggles');
+        if (toggles.hidden) {
+          toggles.hidden = false;
+          document.getElementById('ckCustom').textContent = 'Salva preferenze';
+        } else {
+          saveConsent({
+            stats: document.getElementById('ckStats').checked,
+            mkt: document.getElementById('ckMkt').checked
+          });
+          document.getElementById('ckCustom').textContent = 'Personalizza';
+        }
+      });
+      const prefsLink = document.getElementById('cookiePrefsLink');
+      prefsLink.hidden = false;
+      prefsLink.addEventListener('click', (e) => { e.preventDefault(); showBanner(); });
+
+      const stored = getConsent();
+      if (stored) applyConsent(stored);
+      else showBanner();
+    }
 
     // Iscrizione lista d'attesa via Brevo.
     // TODO: incollare qui l'URL "action" del form Brevo (istruzioni passo-passo nel README.md).

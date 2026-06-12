@@ -55,8 +55,31 @@ niente cifre di pricing (parcella ancora da decidere), niente contatore finto.
 - Niente social proof inventata (il contatore "1.847 in lista" dell'originale è stato
   rimosso apposta). Si possono mostrare solo numeri veri.
 
-## Tracking (non ancora installato)
+## Cookie e tracciamento (predisposti, NON attivi)
 
-Quando servirà misurare il traffico: preferire un'analytics senza cookie
-(es. Plausible) per evitare il cookie banner. Aggiungere il pixel Meta solo
-quando partiranno le campagne paid — a quel punto servirà anche il banner consensi.
+GA4 e Meta Pixel sono già integrati ma **dormienti**: si attivano solo
+inserendo gli ID in `index.html` (`ANALYTICS_GA4_ID`, `META_PIXEL_ID`).
+Finché gli ID sono vuoti: zero cookie, zero banner, zero script esterni.
+
+### Per attivarli
+
+1. Creare la proprietà GA4 (analytics.google.com) → copiare l'ID `G-…`.
+2. Creare il pixel in Meta Events Manager (business.facebook.com) → copiare l'ID numerico.
+3. Incollare gli ID nelle due costanti in `index.html`. Da quel momento il banner
+   appare alla prima visita e gli script partono **solo dopo il consenso**, per categoria.
+4. In `privacy.html`, sezione 5: rimuovere il placeholder iniziale e inserire l'ID GA4.
+
+### Obblighi che scattano all'attivazione
+
+- Il banner deve restare com'è: "Rifiuta tutti" facile quanto "Accetta tutti",
+  scelte granulari, link "Preferenze cookie" nel footer per cambiare idea (Garante,
+  Linee guida cookie 2021).
+- Privacy aggiornata **prima** dell'attivazione (sezione 5 già pronta).
+- In GA4: disattivare Google Signals e ridurre la conservazione dati al minimo (2 mesi).
+- Per Meta Pixel: accettare l'addendum contitolarità nel Business Manager.
+- Il consenso è salvato nel browser dell'utente (`localStorage`): per registri di
+  consenso "audit-proof" valutare un CMP commerciale (es. Iubenda, ~€30/anno,
+  genera anche la cookie policy).
+- I numeri saranno parziali: solo chi acconsente (~60–80%) viene tracciato.
+  Per dati di traffico completi senza consenso, affiancare un'analytics
+  cookieless (es. Plausible).
