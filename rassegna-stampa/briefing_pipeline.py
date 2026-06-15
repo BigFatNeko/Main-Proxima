@@ -636,8 +636,8 @@ def call_claude(system: str, user: str, dry_run: bool = False) -> str:
         log.error("ANTHROPIC_API_KEY non impostata.")
         sys.exit(1)
     client = Anthropic()
-    log.info("Step 4/6: chiamata API Claude %s (cache attivo)...", CLAUDE_MODEL)
-    response = client.messages.create(
+    log.info("Step 4/6: chiamata API Claude %s (cache, streaming)...", CLAUDE_MODEL)
+    with client.messages.stream(
         model=CLAUDE_MODEL,
         max_tokens=CLAUDE_MAX_TOKENS,
         system=[{
@@ -645,7 +645,8 @@ def call_claude(system: str, user: str, dry_run: bool = False) -> str:
             "cache_control": {"type": "ephemeral"},
         }],
         messages=[{"role": "user", "content": user}],
-    )
+    ) as stream:
+        response = stream.get_final_message()
     usage = response.usage
     cache_read = getattr(usage, "cache_read_input_tokens", 0)
     cache_create = getattr(usage, "cache_creation_input_tokens", 0)
