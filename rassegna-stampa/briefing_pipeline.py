@@ -75,8 +75,8 @@ SCREENER_OUTPUT_DIR = SCRIPT_DIR / "data" / "screener_results"
 SYSTEM_PROMPT_PATH = SCRIPT_DIR / "system_prompt.md"
 TEMPLATE_PATH = SCRIPT_DIR / "newspaper_template.html"
 
-CLAUDE_MODEL = "claude-sonnet-4-6"
-CLAUDE_MAX_TOKENS = 16000
+CLAUDE_MODEL = "claude-opus-4-6"
+CLAUDE_MAX_TOKENS = 24000
 
 
 # =============================================================================
@@ -651,9 +651,9 @@ def call_claude(system: str, user: str, dry_run: bool = False) -> str:
     cache_create = getattr(usage, "cache_creation_input_tokens", 0)
     log.info("Token usage: input=%d (cache_read=%d, cache_create=%d), output=%d",
              usage.input_tokens, cache_read, cache_create, usage.output_tokens)
-    # Stima costi Sonnet 4.6 (input $3, cache_create $3.75, cache_read $0.30, output $15 /MTok)
-    cost = (usage.input_tokens * 3 + cache_create * 3.75 + cache_read * 0.30
-            + usage.output_tokens * 15) / 1_000_000
+    # Stima costi Opus 4.6 (input $15, cache_create $18.75, cache_read $1.50, output $75 /MTok)
+    cost = (usage.input_tokens * 15 + cache_create * 18.75 + cache_read * 1.50
+            + usage.output_tokens * 75) / 1_000_000
     log.info("Costo stimato: $%.4f", cost)
     return response.content[0].text
 
