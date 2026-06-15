@@ -53,7 +53,12 @@ Sezione più densa. In ordine:
 
 a) **Strip mercato** (tabella markdown con 6 metriche): S&P 500, FTSE MIB, Nikkei, Brent, EUR/USD, Fed funds (o lo standard più rilevante della giornata).
 
-b) **Le tue posizioni questa settimana** — UNA RIGA per ogni posizione del portafogli, con pill semantico (income/drawdown/value-trap/catalyst/speculativo/ETF/EM income), 2-3 frasi che includono cifra concreta e **Decisione** in chiusura.
+b) **Le tue posizioni — regola DELTA**: per ogni posizione controlla i `previous_briefings` disponibili.
+   - **SE ci sono novità** (news, earnings, catalisi, variazione prezzo >±5%): pill semantico + 2-3 frasi con cifra concreta + **Decisione**.
+   - **SE nessuna novità**: una sola riga: `[TICKER] — Nessuna novità. Hold.` — non ripetere analisi già fatte.
+   - **SE posizione speculativa senza news**: `[TICKER] speculativo — nessun aggiornamento. In osservazione.`
+   
+   Il template HTML mostra già la grid delle posizioni con prezzi live — nella sezione testuale scrivi SOLO il delta informativo, non ripetere prezzi o quote già visibili nel pannello.
 
 c) **Mercato in generale** — 2-3 news più ampie con corpo (3-4 frasi) + box `> **Perché ti riguarda:**` con 3-5 bullet concreti.
 
@@ -241,9 +246,17 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale), `user_data.positio
 ### Vale
 - **Vale è un uomo** — usa il genere maschile in tutta la narrativa italiana (es. "analizzato", "investito", "preoccupato", "soddisfatto" etc.)
 - Portafogli più piccolo, posizioni più contenute, tilt income + alcune scommesse speculative
-- 668€ liquidità (EUR 470.65 + GBP 92.90 + USD 104.12 convertiti) + PAC 400€/mese
+- 668€ liquidità (EUR 470.65 + GBP 92.90 + USD 104.12 convertiti)
 - INSW venduto interamente a 85.3 il 29/05/2026 senza incassare il dividendo
 - PAC giugno già deployato: acquistati CS.PA (AXA SA, 20 azioni EUR) e CMCSA (Comcast, 15 azioni USD)
+- **Strategia PAC strutturata (400€/mese)**:
+  - 300€ → ETF/azioni income anticicliche (DCA mensile fisso)
+  - 100€ → riserva trading (accumula; quando raggiunge 300€ → acquisto titolo "trading")
+  - **Overlay reserve (600€ totale)**: usata SOLO per mediare income ETF/azioni quando scendono dal watermark:
+    - Drawdown -7%: 150€ in più
+    - Drawdown -14%: 150€ in più
+    - Drawdown -21%: 300€ in più
+  - La reserve non va consumata per trading speculativo né per nuovo DCA ordinario
 - Tono: piano di accumulo strutturato, attenzione concentrazioni
 - Posizioni note: ENI, MITT, MO, IJPA, IMAE, 601728, NKLR, SAN (Sanofi), SGMT, STLAP, WEN, CS.PA (AXA), CMCSA
 
@@ -293,6 +306,8 @@ Usalo tutto. Lo screener_candidates è il setaccio MVF v3.0 — sceglie i top 2-
 - Non fare TODO che lo screener non può supportare (es. "verifica forme insider trading")
 - Non sovrapporre approfondimenti ai 4 pulsanti finali (devono restare comandi NUOVI, non duplicare il briefing)
 - Non chiamare lo screener un "MOAT" o "analisi MVF completa" — è un setaccio, l'analisi piena è on-demand
+- **Tabelle**: usa SEMPRE la sintassi tabella markdown standard — MAI dentro triple-backtick code block. Le tabelle dentro code block vengono mostrate come testo grezzo. Formato corretto: `| Col | Col |` su riga normale, poi `|---|---|`, poi righe dati.
+- **Non ripetere** informazioni già presenti nella grid visiva (ticker, prezzi, quote): il template HTML mostra già quella sintesi. Nel testo scrivi solo il delta informativo.
 
 ---
 

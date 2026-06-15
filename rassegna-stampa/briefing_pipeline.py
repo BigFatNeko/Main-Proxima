@@ -677,7 +677,9 @@ def _format_date_it(dt: datetime) -> str:
 # STEP 5 — RENDER HTML
 # =============================================================================
 
-def render_html(markdown_briefing: str, user: str, mode: str) -> Path:
+def render_html(markdown_briefing: str, user: str, mode: str,
+                market_data: dict | None = None,
+                user_data: dict | None = None) -> Path:
     log.info("Step 5/6: render HTML...")
     DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     date_tag = datetime.now().strftime("%Y-%m-%d")
@@ -704,6 +706,8 @@ def render_html(markdown_briefing: str, user: str, mode: str) -> Path:
         date=_format_date_it(datetime.now()),
         user=user, mode=mode, body=body_html,
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        market=market_data or {},
+        portfolio=user_data or {},
     )
     out = DEFAULT_OUTPUT_DIR / f"{date_tag}-{user}.html"
     out.write_text(html, encoding="utf-8")
@@ -828,7 +832,8 @@ def main():
         log.error("Briefing vuoto. Esco.")
         sys.exit(1)
 
-    html_path = render_html(briefing_md, args.user, mode)
+    html_path = render_html(briefing_md, args.user, mode,
+                            market_data=market, user_data=user_data)
     if html_path and not args.dry_run:
         deliver(html_path, args.user)
 
