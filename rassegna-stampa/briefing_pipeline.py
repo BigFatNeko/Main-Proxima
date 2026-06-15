@@ -75,8 +75,8 @@ SCREENER_OUTPUT_DIR = SCRIPT_DIR / "data" / "screener_results"
 SYSTEM_PROMPT_PATH = SCRIPT_DIR / "system_prompt.md"
 TEMPLATE_PATH = SCRIPT_DIR / "newspaper_template.html"
 
-CLAUDE_MODEL = "claude-opus-4-8"
-CLAUDE_MAX_TOKENS = 32000
+CLAUDE_MODEL = "claude-sonnet-4-6"
+CLAUDE_MAX_TOKENS = 16000
 
 
 # =============================================================================
@@ -636,33 +636,26 @@ def call_claude(system: str, user: str, dry_run: bool = False) -> str:
         log.error("ANTHROPIC_API_KEY non impostata.")
         sys.exit(1)
     client = Anthropic()
-    log.info("Step 4/6: chiamata API Claude %s (adaptive thinking, cache, streaming)...", CLAUDE_MODEL)
-    with client.messages.stream(
+    log.info("Step 4/6: chiamata API Claude %s (cache attivo)...", CLAUDE_MODEL)
+    response = client.messages.create(
         model=CLAUDE_MODEL,
         max_tokens=CLAUDE_MAX_TOKENS,
-        thinking={"type": "adaptive"},
-        output_config={"effort": "high"},
         system=[{
             "type": "text", "text": system,
             "cache_control": {"type": "ephemeral"},
         }],
         messages=[{"role": "user", "content": user}],
-    ) as stream:
-        response = stream.get_final_message()
+    )
     usage = response.usage
     cache_read = getattr(usage, "cache_read_input_tokens", 0)
     cache_create = getattr(usage, "cache_creation_input_tokens", 0)
     log.info("Token usage: input=%d (cache_read=%d, cache_create=%d), output=%d",
              usage.input_tokens, cache_read, cache_create, usage.output_tokens)
-    # Stima costi Opus 4.8 (input $15, cache_create $18.75, cache_read $1.50, output $75 /MTok)
-    cost = (usage.input_tokens * 15 + cache_create * 18.75 + cache_read * 1.50
-            + usage.output_tokens * 75) / 1_000_000
+    # Stima costi Sonnet 4.6 (input $3, cache_create $3.75, cache_read $0.30, output $15 /MTok)
+    cost = (usage.input_tokens * 3 + cache_create * 3.75 + cache_read * 0.30
+            + usage.output_tokens * 15) / 1_000_000
     log.info("Costo stimato: $%.4f", cost)
-    text_block = next((b for b in response.content if b.type == "text"), None)
-    if not text_block:
-        log.error("Nessun blocco text nella risposta Claude")
-        return ""
-    return text_block.text
+    return response.content[0].text
 
 
 _GIORNI_IT = ["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato","Domenica"]
