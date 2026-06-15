@@ -176,25 +176,33 @@ def enrich_portfolio_prices(user_data: dict) -> dict:
     if not positions:
         return user_data
 
+    import time as _time
+
     def _fetch_price(pos: dict) -> None:
         tkr = pos["ticker"]
-        try:
-            t = yf.Ticker(tkr)
-            fi = getattr(t, "fast_info", None)
-            price = None
-            if fi is not None:
-                price = getattr(fi, "last_price", None) or getattr(fi, "regularMarketPrice", None)
-            if not price:
-                hist = t.history(period="3d")
-                if not hist.empty:
-                    price = float(hist["Close"].dropna().iloc[-1])
-            if price and price > 0:
-                pos["current_price"] = round(float(price), 2)
-                pos["market_value"] = round(float(price) * pos["shares"], 2)
-        except Exception as e:
-            log.debug("Prezzo %s non disponibile: %s", tkr, e)
+        for attempt in range(3):
+            try:
+                t = yf.Ticker(tkr)
+                fi = getattr(t, "fast_info", None)
+                price = None
+                if fi is not None:
+                    price = getattr(fi, "last_price", None) or getattr(fi, "regularMarketPrice", None)
+                if not price:
+                    hist = t.history(period="3d")
+                    if not hist.empty:
+                        price = float(hist["Close"].dropna().iloc[-1])
+                if price and price > 0:
+                    pos["current_price"] = round(float(price), 2)
+                    pos["market_value"] = round(float(price) * pos["shares"], 2)
+                return
+            except Exception as e:
+                if attempt < 2:
+                    _time.sleep(5 * (2 ** attempt))  # 5s poi 10s
+                else:
+                    log.debug("Prezzo %s non disponibile: %s", tkr, e)
 
-    with ThreadPoolExecutor(max_workers=min(len(positions), 8)) as ex:
+    # Riduco workers a 4 (vs 8) per non sommergere Yahoo dopo lo screener
+    with ThreadPoolExecutor(max_workers=min(len(positions), 4)) as ex:
         list(ex.map(_fetch_price, positions))
 
     enriched = sum(1 for p in positions if "current_price" in p)
