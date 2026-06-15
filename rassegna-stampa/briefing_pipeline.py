@@ -230,7 +230,7 @@ def load_previous_briefings(user: str, days: int = 30) -> list[dict]:
 def detect_mode_auto(previous: list[dict]) -> str:
     """Detect modalità da data + briefing precedenti."""
     today = datetime.now()
-    weekday = today.weekday()  # 5=sat, 6=sun
+    weekday = today.weekday()  # 0=lun, 5=sab, 6=dom
     holidays = {(1, 1), (4, 25), (5, 1), (8, 15), (12, 25), (12, 26)}
     if (today.month, today.day) in holidays:
         return "festivo"
@@ -238,6 +238,9 @@ def detect_mode_auto(previous: list[dict]) -> str:
         return "weekend"
     if not previous:
         return "onboarding"
+    # Lunedì: preview settimana + rassegna weekend (gap weekend è fisiologico)
+    if weekday == 0:
+        return "lunedì"
     last_date = datetime.strptime(previous[0]["date"], "%Y-%m-%d")
     gap_days = (today - last_date).days
     if gap_days <= 1:
@@ -748,7 +751,7 @@ def main():
     p = argparse.ArgumentParser(description="Proxima Briefing Pipeline")
     p.add_argument("--user", default=None, choices=["alex", "vale"])
     p.add_argument("--mode",
-                   choices=["auto", "daily", "weekend", "catchup", "festivo", "onboarding"],
+                   choices=["auto", "daily", "weekend", "lunedì", "catchup", "festivo", "onboarding"],
                    default="auto")
     p.add_argument("--region", default="GLOBAL", choices=["US", "EU", "ASIA", "GLOBAL"])
     p.add_argument("--skip-screener", action="store_true")
