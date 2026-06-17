@@ -1,6 +1,12 @@
 # Analisi Competitor — SCF e Consulenza Fee-Only in Italia
 
-> **Nota:** I dati riportati sono stime basate sulla conoscenza del mercato e richiedono verifica puntuale.
+> ⚠ **Documento superato (riferimento storico).** I dati qui riportati sono **stime**
+> non verificate. Per l'analisi aggiornata con **ricerca live (giugno 2026), fonti e dati
+> etichettati [V]/[D]/[S]**, vedi **`41-panorama-competitor-2026.md`** nella stessa cartella.
+>
+> **Correzioni principali emerse dalla verifica:** IoInvesto e SoldiExpert sono società
+> **distinte e non collegate** (qui erano accorpate); il segmento <€100K **non è un buco
+> vuoto** ma è già presidiato da IoInvesto, Plannix e SoldiExpert.
 
 ---
 
