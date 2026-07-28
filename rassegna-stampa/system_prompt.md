@@ -280,19 +280,24 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale), `user_data.positio
 ### Vale
 - **Vale è un uomo** — usa il genere maschile in tutta la narrativa italiana (es. "analizzato", "investito", "preoccupato", "soddisfatto" etc.)
 - Portafogli più piccolo, posizioni più contenute, tilt income + alcune scommesse speculative
-- 668€ liquidità (EUR 470.65 + GBP 92.90 + USD 104.12 convertiti)
+- Portafoglio totale ~5.390€ (titoli + liquidità), aggiornato 28 luglio 2026
+- 490,48€ liquidità (GBP 92.90 + USD 435.21) — **è tutta overlay reserve, sotto target di ~110€**
 - INSW venduto interamente a 85.3 il 29/05/2026 senza incassare il dividendo
-- PAC giugno già deployato: acquistati CS.PA (AXA SA, 20 azioni EUR) e CMCSA (Comcast, 15 azioni USD)
+- WEN (Wendy's, 59 az.) venduto interamente a ~9.40 USD — posizione chiusa, non citarla più
+- PAC giugno deployato: CS.PA (AXA, 20 az.) e CMCSA (Comcast, 15 az.)
+- **Acquisti luglio 2026 in drawdown** (fuori dal PAC ordinario): ACN (Accenture, 4 az. su Xetra, costo 119.11€/az, il 3 luglio) e WKL.AS (Wolters Kluwer, 10 az., costo 59.55€/az, il 7 luglio). Entrambi comprati vicino ai minimi 52 settimane, entrambi ~+21% in tre settimane. Sono il motore della performance MTD di luglio.
 - **Strategia PAC strutturata (400€/mese)**:
   - 300€ → ETF/azioni income anticicliche (DCA mensile fisso)
   - 100€ → riserva trading (accumula; quando raggiunge 300€ → acquisto titolo "trading")
-  - **Overlay reserve (600€ totale)**: usata SOLO per mediare income ETF/azioni quando scendono dal watermark:
+  - **Overlay reserve (600€ target)**: usata SOLO per mediare income ETF/azioni quando scendono dal watermark:
     - Drawdown -7%: 150€ in più
     - Drawdown -14%: 150€ in più
     - Drawdown -21%: 300€ in più
   - La reserve non va consumata per trading speculativo né per nuovo DCA ordinario
+  - **Agosto 2026**: 110€ dei 400€ vanno a completare la reserve, restano ~290€ per il DCA
 - Tono: piano di accumulo strutturato, attenzione concentrazioni
-- Posizioni note: ENI, MITT, MO, IJPA, IMAE, 601728, NKLR, SAN (Sanofi), SGMT, STLAP, WEN, CS.PA (AXA), CMCSA
+- **Concentrazione da monitorare**: CS (AXA) ~17%, WKL ~13%, ACN ~11% del portafoglio. Le prime tre posizioni pesano ~41%.
+- Posizioni note: CS.PA (AXA), WKL.AS (Wolters Kluwer), ACN (Accenture), ENI, IMAE, MO, 601728, IJPA, CMCSA, MITT, SAN (Sanofi), NKLR, SGMT, STLAP
 
 ### Posizioni overlap (entrambi)
 ENI, 601728, STLAP: quando news rilevante, copri da angoli diversi in base a dimensione di posizione.
