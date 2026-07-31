@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proxima · Modello Scalabile App (Abbonamenti)</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#1a1d23; --muted:#5b6270; --line:#e5e8ee;
+    --accent:#0f766e; --accent2:#b45309; --free:#64748b; --pro:#0f766e; --max:#b45309;
+    --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{--bg:#0e1116;--panel:#161a21;--ink:#e8eaed;--muted:#9aa3b2;--line:#252b34;
+      --accent:#2dd4bf;--accent2:#fbbf24;--free:#94a3b8;--pro:#2dd4bf;--max:#fbbf24;
+      --shadow:0 1px 3px rgba(0,0,0,.4);}
+  }
+  :root[data-theme="light"]{--bg:#f7f8fa;--panel:#fff;--ink:#1a1d23;--muted:#5b6270;--line:#e5e8ee;--accent:#0f766e;--accent2:#b45309;--free:#64748b;--pro:#0f766e;--max:#b45309;--shadow:0 1px 3px rgba(0,0,0,.06);}
+  :root[data-theme="dark"]{--bg:#0e1116;--panel:#161a21;--ink:#e8eaed;--muted:#9aa3b2;--line:#252b34;--accent:#2dd4bf;--accent2:#fbbf24;--free:#94a3b8;--pro:#2dd4bf;--max:#fbbf24;--shadow:0 1px 3px rgba(0,0,0,.4);}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 60px}
+  h1{font-size:22px;margin:0 0 2px}
+  .sub{color:var(--muted);margin:0 0 20px;font-size:13.5px}
+  .grid{display:grid;grid-template-columns:320px 1fr;gap:20px}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
+  .panel h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 12px}
+  .ctrl{margin-bottom:14px}
+  .ctrl label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+  .ctrl label b{color:var(--accent);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+  @media(max-width:680px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow)}
+  .kpi .lab{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  .kpi .val{font-size:21px;font-weight:650;margin-top:3px;font-variant-numeric:tabular-nums}
+  .kpi .note{font-size:11px;color:var(--muted);margin-top:2px}
+  canvas{width:100%;height:300px;display:block}
+  table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.02em}
+  .legend{display:flex;gap:16px;font-size:12.5px;color:var(--muted);margin:10px 0 4px;flex-wrap:wrap}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button{flex:1;padding:7px;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:8px;cursor:pointer;font-size:12.5px}
+  .tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .pricing{font-size:12.5px;color:var(--muted);margin-top:14px;line-height:1.7}
+  .pricing b{color:var(--ink)}
+  details{margin-top:8px}summary{cursor:pointer;color:var(--muted);font-size:12.5px}
+  .split{display:flex;gap:2px;height:10px;border-radius:5px;overflow:hidden;margin-top:6px}
+  .flag{font-size:12px;color:var(--muted);margin-top:14px;padding:10px 12px;border-left:3px solid var(--accent2);background:color-mix(in srgb,var(--accent2) 8%,transparent);border-radius:0 8px 8px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Proxima · Modello Scalabile App</h1>
+  <p class="sub">Abbonamenti Free / Pro / Max + fee di costituzione 3%. Motore coorti mensili · orizzonte 36 mesi. Muovi le leve per proiettare ARR, ricavi e carico chiamate.</p>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Acquisizione &amp; conversione</h2>
+      <div class="ctrl"><label>Signup Free iniziali/mese <b id="l_su"></b></label><input id="su" type="range" min="20" max="800" step="10" value="150"></div>
+      <div class="ctrl"><label>Crescita signup /mese <b id="l_gr"></b></label><input id="gr" type="range" min="0" max="15" step="0.5" value="6"></div>
+      <div class="ctrl"><label>Cap signup/mese <b id="l_cap"></b></label><input id="cap" type="range" min="500" max="8000" step="100" value="2500"></div>
+      <div class="ctrl"><label>Conv. Free→Pro /mese <b id="l_cp"></b></label><input id="cp" type="range" min="0.2" max="5" step="0.1" value="1.5"></div>
+      <div class="ctrl"><label>Conv. Free→Max /mese <b id="l_cm"></b></label><input id="cm" type="range" min="0.05" max="2" step="0.05" value="0.4"></div>
+      <h2 style="margin-top:6px">Churn mensile</h2>
+      <div class="ctrl"><label>Free <b id="l_chf"></b></label><input id="chf" type="range" min="1" max="15" step="0.5" value="6"></div>
+      <div class="ctrl"><label>Pro <b id="l_chp"></b></label><input id="chp" type="range" min="1" max="10" step="0.5" value="4"></div>
+      <div class="ctrl"><label>Max <b id="l_chm"></b></label><input id="chm" type="range" min="0.5" max="8" step="0.5" value="3"></div>
+      <h2 style="margin-top:6px">Fee costituzione 3%</h2>
+      <div class="ctrl"><label>Tasso costituzione (nuovi paganti) <b id="l_ct"></b></label><input id="ct" type="range" min="0" max="80" step="5" value="25"></div>
+      <div class="ctrl"><label>Portafoglio medio nuovo <b id="l_pf"></b></label><input id="pf" type="range" min="5000" max="120000" step="5000" value="35000"></div>
+
+      <details>
+        <summary>Mix cadenza abbonamenti (avanzate)</summary>
+        <div style="margin-top:10px">
+          <b style="font-size:12px;color:var(--pro)">PRO</b> (mensile / 3m / 6m / anno)
+          <div class="ctrl" style="margin-top:6px"><label>mensile <b id="l_pm0"></b></label><input class="pmix" data-i="0" type="range" min="0" max="100" value="40"></div>
+          <div class="ctrl"><label>3 mesi <b id="l_pm1"></b></label><input class="pmix" data-i="1" type="range" min="0" max="100" value="20"></div>
+          <div class="ctrl"><label>6 mesi <b id="l_pm2"></b></label><input class="pmix" data-i="2" type="range" min="0" max="100" value="15"></div>
+          <div class="ctrl"><label>annuale <b id="l_pm3"></b></label><input class="pmix" data-i="3" type="range" min="0" max="100" value="25"></div>
+          <b style="font-size:12px;color:var(--max)">MAX</b> (mensile / 3m / 6m / anno)
+          <div class="ctrl" style="margin-top:6px"><label>mensile <b id="l_mm0"></b></label><input class="mmix" data-i="0" type="range" min="0" max="100" value="30"></div>
+          <div class="ctrl"><label>3 mesi <b id="l_mm1"></b></label><input class="mmix" data-i="1" type="range" min="0" max="100" value="20"></div>
+          <div class="ctrl"><label>6 mesi <b id="l_mm2"></b></label><input class="mmix" data-i="2" type="range" min="0" max="100" value="20"></div>
+          <div class="ctrl"><label>annuale <b id="l_mm3"></b></label><input class="mmix" data-i="3" type="range" min="0" max="100" value="30"></div>
+        </div>
+      </details>
+
+      <div class="pricing">
+        <b>Prezzi</b> · Pro: 10/mese · 25/3m · 40/6m · 80/anno &nbsp;|&nbsp; Max: 48/mese · 130/3m · 250/6m · 500/anno<br>
+        Pro 6m include 1 mese Max + 1 call · Max include call immediata + trimestrale · <b>3% una tantum</b> su nuovo portafoglio (anno 1).
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <div class="tabs">
+          <button data-ch="rev" class="on">Ricavi (MRR + one-off)</button>
+          <button data-ch="usr">Utenti attivi</button>
+        </div>
+        <canvas id="chart" width="800" height="300"></canvas>
+        <div class="legend" id="legend"></div>
+      </div>
+
+      <div class="panel" style="margin-top:20px">
+        <h2>Milestone</h2>
+        <table id="tbl"><thead><tr><th>Mese</th><th>Free</th><th>Pro</th><th>Max</th><th>MRR</th><th>ARR</th><th>One-off/mese</th><th>Chiamate/mese</th></tr></thead><tbody></tbody></table>
+        <div class="flag" id="flag"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+// Prezzi -> €/mese effettivo per cadenza [mensile,3m,6m,anno]
+const PRO_EFF=[10, 25/3, 40/6, 80/12];
+const MAX_EFF=[48, 130/3, 250/6, 500/12];
+const $=id=>document.getElementById(id);
+const eur=n=>'€'+Math.round(n).toLocaleString('it-IT');
+const wavg=(mix,vals)=>{const s=mix.reduce((a,b)=>a+b,0)||1;return mix.reduce((a,w,i)=>a+w*vals[i],0)/s;};
+
+function readMix(cls){return [...document.querySelectorAll('.'+cls)].sort((a,b)=>a.dataset.i-b.dataset.i).map(x=>+x.value);}
+
+function params(){
+  return {
+    months:36,
+    signupStart:+su.value, signupGrowth:+gr.value/100, signupCap:+cap.value,
+    convProM:+cp.value/100, convMaxM:+cm.value/100,
+    churnFree:+chf.value/100, churnPro:+chp.value/100, churnMax:+chm.value/100,
+    constRate:+ct.value/100, avgPortfolio:+pf.value,
+    proMix:readMix('pmix'), maxMix:readMix('mmix')
+  };
+}
+
+function simulate(p){
+  const Apro=wavg(p.proMix,PRO_EFF), Amax=wavg(p.maxMix,MAX_EFF);
+  const pro6share=(p.proMix[2]||0)/((p.proMix.reduce((a,b)=>a+b,0))||1);
+  let free=0,pro=0,max=0,signups=p.signupStart;
+  const rows=[]; let cumSub=0,cumOff=0;
+  for(let m=0;m<p.months;m++){
+    const newFree=signups;
+    const newPro=free*p.convProM, newMax=free*p.convMaxM;
+    free=(free+newFree-newPro-newMax)*(1-p.churnFree);
+    pro=pro*(1-p.churnPro)+newPro;
+    max=max*(1-p.churnMax)+newMax;
+    const mrr=pro*Apro+max*Amax;
+    const oneoff=(newPro+newMax)*p.constRate*p.avgPortfolio*0.03;
+    const calls=max/3 + newMax + newPro*pro6share;
+    cumSub+=mrr; cumOff+=oneoff;
+    rows.push({m:m+1,free,pro,max,mrr,arr:mrr*12,oneoff,calls});
+    signups=Math.min(signups*(1+p.signupGrowth),p.signupCap);
+  }
+  return {rows,Apro,Amax,cumSub,cumOff};
+}
+
+let chartMode='rev';
+function render(){
+  const p=params(); const r=simulate(p);
+  // labels
+  l_su.textContent=su.value; l_gr.textContent=(+gr.value).toFixed(1)+'%'; l_cap.textContent=(+cap.value).toLocaleString('it-IT');
+  l_cp.textContent=(+cp.value).toFixed(1)+'%'; l_cm.textContent=(+cm.value).toFixed(2)+'%';
+  l_chf.textContent=chf.value+'%'; l_chp.textContent=chp.value+'%'; l_chm.textContent=chm.value+'%';
+  l_ct.textContent=ct.value+'%'; l_pf.textContent=eur(+pf.value);
+  const pm=readMix('pmix'),mm=readMix('mmix'),ps=pm.reduce((a,b)=>a+b,0)||1,ms=mm.reduce((a,b)=>a+b,0)||1;
+  pm.forEach((v,i)=>$('l_pm'+i).textContent=Math.round(v/ps*100)+'%');
+  mm.forEach((v,i)=>$('l_mm'+i).textContent=Math.round(v/ms*100)+'%');
+
+  const m24=r.rows[23], m36=r.rows[35];
+  const rev24=r.rows.slice(0,24).reduce((s,x)=>s+x.mrr+x.oneoff,0);
+  const ltvPro=r.Apro/(p.churnPro||1), ltvMax=r.Amax/(p.churnMax||1);
+  const share=r.cumSub/((r.cumSub+r.cumOff)||1);
+  $('kpis').innerHTML=`
+    <div class="kpi"><div class="lab">ARR a M24</div><div class="val">${eur(m24.arr)}</div><div class="note">MRR ${eur(m24.mrr)}</div></div>
+    <div class="kpi"><div class="lab">ARR a M36</div><div class="val">${eur(m36.arr)}</div><div class="note">${Math.round(m36.pro)} Pro · ${Math.round(m36.max)} Max</div></div>
+    <div class="kpi"><div class="lab">Ricavo cum. 24 mesi</div><div class="val">${eur(rev24)}</div>
+      <div class="note">abb. ${Math.round(share*100)}% · one-off ${Math.round((1-share)*100)}%</div>
+      <div class="split"><span style="flex:${share};background:var(--pro)"></span><span style="flex:${1-share};background:var(--max)"></span></div></div>
+    <div class="kpi"><div class="lab">LTV Pro / Max</div><div class="val">${eur(ltvPro)} · ${eur(ltvMax)}</div><div class="note">ARPU/anno ${eur(r.Apro*12)} · ${eur(r.Amax*12)}</div></div>`;
+
+  // table milestones
+  const idx=[5,11,17,23,29,35];
+  $('tbl').querySelector('tbody').innerHTML=idx.map(i=>{const x=r.rows[i];
+    return `<tr><td>M${x.m}</td><td>${Math.round(x.free)}</td><td>${Math.round(x.pro)}</td><td>${Math.round(x.max)}</td><td>${eur(x.mrr)}</td><td>${eur(x.arr)}</td><td>${eur(x.oneoff)}</td><td>${Math.round(x.calls)}</td></tr>`;
+  }).join('');
+
+  const callsYr=Math.round(m36.calls*12);
+  $('flag').innerHTML=`Al M36 il carico è ≈ <b>${Math.round(m36.calls)} chiamate/mese</b> (~${callsYr.toLocaleString('it-IT')}/anno): dimensiona l'organico consulenti. `+
+    `Il one-off 3% pesa <b>${Math.round((1-share)*100)}%</b> del ricavo cumulato — l'app nasce come motore di acquisizione advisory, il ricorrente scala dopo.`;
+
+  drawChart(r);
+}
+
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+function drawChart(r){
+  const c=$('chart'),dpr=window.devicePixelRatio||1;
+  const W=c.clientWidth,H=300; c.width=W*dpr;c.height=H*dpr;
+  const g=c.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
+  const padL=54,padB=24,padT=12,padR=12, w=W-padL-padR, h=H-padT-padB;
+  const rows=r.rows, n=rows.length;
+  const inkMut=css('--muted'),line=css('--line');
+  g.strokeStyle=line;g.fillStyle=inkMut;g.font='11px sans-serif';g.lineWidth=1;
+  let series, cols, labels;
+  if(chartMode==='rev'){series=[rows.map(x=>x.mrr),rows.map(x=>x.oneoff)];cols=[css('--pro'),css('--max')];labels=['MRR (abbonamenti)','One-off 3%/mese'];}
+  else{series=[rows.map(x=>x.free),rows.map(x=>x.pro),rows.map(x=>x.max)];cols=[css('--free'),css('--pro'),css('--max')];labels=['Free','Pro','Max'];}
+  const max=Math.max(1,...series.flat());
+  const X=i=>padL+w*i/(n-1), Y=v=>padT+h-h*v/max;
+  // gridlines
+  for(let k=0;k<=4;k++){const yv=max*k/4,y=Y(yv);g.beginPath();g.moveTo(padL,y);g.lineTo(padL+w,y);g.stroke();
+    g.fillText(chartMode==='rev'?eur(yv):Math.round(yv),4,y+3);}
+  // x labels
+  [0,11,23,35].forEach(i=>{g.fillText('M'+(i+1),X(i)-8,H-6);});
+  series.forEach((s,si)=>{g.beginPath();s.forEach((v,i)=>{const x=X(i),y=Y(v);i?g.lineTo(x,y):g.moveTo(x,y);});
+    g.strokeStyle=cols[si];g.lineWidth=2;g.stroke();});
+  $('legend').innerHTML=labels.map((l,i)=>`<span><span class="dot" style="background:${cols[i]}"></span>${l}</span>`).join('');
+}
+
+document.querySelectorAll('input').forEach(el=>el.addEventListener('input',render));
+document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');chartMode=b.dataset.ch;render();
+}));
+window.addEventListener('resize',render);
+if(window.matchMedia)window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',render);
+render();
+</script>
+</body>
+</html>
