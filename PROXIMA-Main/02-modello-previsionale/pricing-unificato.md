@@ -56,6 +56,9 @@ il problema del 3% troppo alto sui patrimoni grandi che avevo segnalato):
 | oltre €100.000 | **0,5%** |
 | *minimo* | *€300* |
 
+> ✅ **Aliquote confermate dai fondatori** (3/2/1/0,5%, minimo €300). Il **Free non ha costituzione**
+> (l'unico accesso all'umano per il Free è l'oraria €100/h). La costituzione si applica solo a Pro/Max.
+
 **Effetto (una tantum, anno 1):**
 | Portafoglio | Costituzione | Aliquota effettiva |
 |---|---|---|
@@ -78,8 +81,10 @@ pianificazione e impostazione"**, non come "% sul capitale".
 ## 4. Componente C — Ricalibrazione / extra (a consumo)
 
 - **Inclusa** nel Max (check-up trimestrale) e come 1 call nel Pro 6 mesi.
-- **Oltre** l'incluso, o per Pro/Free: **tariffa oraria €150–180/h** (add-on). Così l'idea "oraria alla
+- **Oltre** l'incluso, o per Pro/Free: **tariffa oraria €100/h** (add-on). Così l'idea "oraria alla
   ricalibrazione" diventa un **add-on marginale**, non un quarto modello.
+- **Per il Free è l'unico accesso all'umano:** il Free **non ha** la fee di costituzione; se vuole tempo
+  di un consulente paga **€100/h** a consumo. (È anche un naturale downsell/porta d'ingresso verso Pro/Max.)
 
 ---
 
