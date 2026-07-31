@@ -54,8 +54,25 @@ free            = (free + nuovi_free - nuovi_pro - nuovi_max) * (1 - churn_free)
 pro             = pro * (1 - churn_pro) + nuovi_pro
 max             = max * (1 - churn_max) + nuovi_max
 
+upgrade         = pro * up_rate_mese                  # upgrade Pro->Max (v2)
+pro            -= upgrade ; max += upgrade
+
 MRR             = pro * ARPU_pro + max * ARPU_max     # ricavo ricorrente abbonamenti
 one_off(3%)     = (nuovi_pro + nuovi_max) * tasso_costituzione * portafoglio_medio * 0,03
+```
+
+### Strato costi → margine (v2)
+
+```
+chiamate        = max/3 + (nuovi_max + upgrade) + nuovi_pro·quota_pro_6m
+chiamate_umane  = chiamate * (1 - ai_deflection)     # <-- leva AI
+ore_call        = chiamate_umane * durata_min / 60
+FTE consulenti  = ceil(ore_call / ore_produttive_FTE)
+costo_consulenti= ore_call * costo_ora
+costo_AI        = chiamate*ai_deflection*costo_AI_interazione + free*costo_AI_self_service
+costo_totale    = costo_consulenti + costo_AI + ricavo*commissioni_pagamento
+                  + nuovi_paganti*CAC + costo_fisso_piattaforma
+margine         = ricavo - costo_totale
 ```
 
 Dove `ARPU` (€/mese per utente attivo) = media pesata dei €/mese-effettivi sul **mix di cadenza**
@@ -138,7 +155,48 @@ fee 3% (una tantum, concentrata nell'anno 1 di ogni coorte).
 
 ---
 
-## 6. Limiti del modello (v1)
+## 6. Strato costi & margine — assunzioni e output
+
+**Assunzioni costi (scenario base):** upgrade Pro→Max 1%/mese del bacino Pro · durata chiamata 30′ ·
+costo consulente €35/ora · 100 ore produttive/FTE·mese · costo fisso piattaforma €4.000/mese ·
+CAC €50/nuovo pagante · commissioni pagamento 2,5% · costo AI ~€0,30/interazione.
+
+**Margine (con upgrade attivo):**
+| Mese | ARR | Ricavo/mese | Costo/mese | Margine | % | Chiamate umane | FTE |
+|---|---|---|---|---|---|---|---|
+| M12 | €31.394 | €10.208 | €6.192 | €4.016 | 39% | 23 | 1 |
+| M24 | €131.150 | €29.623 | €9.955 | €19.668 | 66% | 83 | 1 |
+| M36 | €332.434 | €66.611 | €17.048 | €49.564 | 74% | 203 | 2 |
+
+**Break-even di margine: ~M8.** L'upgrade Pro→Max porta i Max a M36 da ~331 a **~432** (più valore).
+
+## 7. Eliminare il "problema chiamate" con l'AI
+
+Il vincolo che limita davvero la scala non è il prezzo ma la **capacità umana** delle chiamate incluse.
+L'AI lo scioglie — con un caveat regolatorio onesto.
+
+**Come:**
+1. **Da sincrono a AI-first asincrono.** La chiamata trimestrale diventa un **copilot in-app** che monitora
+   il portafoglio in continuo, genera il check-up periodico (report/video personalizzato), risponde in chat
+   24/7 e propone ribilanciamenti. Nessuno slot da prenotare.
+2. **AI per tier:**
+   - **Free** → AI pura (insight di mercato, education): zero umano.
+   - **Pro** → self-service AI completo (analisi, simulazioni, Q&A). La call del Pro 6m diventa opzionale/escalation.
+   - **Max** → AI continua + **1 sola validazione umana annuale** (invece di 4 call) + escalation on-demand;
+     onboarding guidato dall'AI con revisione umana asincrona.
+3. **Effetto nel modello** (leva `AI deflection`): a ~85% il carico umano al M36 crolla da **~203 a ~30
+   chiamate/mese** e da **2 FTE a 1**; il costo consulenti passa da ~€3.560 a ~€530/mese, sostituito da ~€470
+   di AI. Soprattutto **rompe il legame lineare clienti↔organico**: a 10× utenti il modello a mano si spezza,
+   quello AI-first no.
+
+**Il caveat che non va nascosto:** in Italia la **raccomandazione personalizzata** su strumenti finanziari è
+attività riservata e il **consulente iscritto OCF resta responsabile** della raccomandazione (MiFID II).
+Quindi l'AI può fare il ~90% (profilazione, analisi, bozza di raccomandazione, conversazione, alert), ma un
+umano deve **validare/firmare** la raccomandazione. **L'AI elimina il *tempo* umano ripetitivo, non la
+*responsabilità* umana.** Per azzerare del tutto l'umano servirebbe riposizionarsi come *software di supporto
+alle decisioni* (non "consulenza personalizzata" riservata): è una scelta di **modello**, non solo tecnica.
+
+## 8. Limiti del modello (v1)
 
 - Conversione modellata come tasso mensile sul bacino free (no lag esplicito di attivazione).
 - Churn per tier costante (i prepagati 6m/annuali sono in realtà "lockati" → churn effettivo più basso:
