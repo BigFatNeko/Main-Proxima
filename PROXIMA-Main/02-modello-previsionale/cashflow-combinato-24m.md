@@ -106,15 +106,16 @@ Valori trimestrali; "cash fine" = liquidità a fine periodo.
 
 ---
 
-## 5. Caveat — riconciliazione dei modelli di pricing (da decidere)
+## 5. Caveat — riconciliazione dei modelli di pricing
 
-Sul tavolo ci sono **tre logiche di prezzo** non ancora unificate:
-- **Doc 04 (Fase 1):** parcella fissa annua per fascia (ARPU €490/anno).
-- **Tua ipotesi recente:** % una tantum alla costituzione + oraria a ricalibrazione.
-- **App (Fase 2):** abbonamenti Free/Pro/Max + **3% costituzione** una tantum.
+✅ **Risolto in `pricing-unificato.md`.** Le tre logiche (parcella doc 04 · "% costituzione + oraria" ·
+abbonamenti app) sono ora un **unico listino su due canali**: componente **A** ricorrente (Free/Pro/Max,
+dove la parcella €490 = tier Max), **B** costituzione una tantum a scaglioni (3/2/1/0,5%), **C** oraria a
+consumo.
 
-⚠️ **Sovrapposizione:** il "3% costituzione" dell'app è economicamente **lo stesso atto** della costituzione
-portafoglio della consulenza SCF. Nel combinato le due fasi sono trattate come **flussi additivi su una
-timeline** (SCF fino al lancio app, poi app in aggiunta): utile per il cash-flow, ma **prima del lancio app
-va deciso quale pricing prevale** ed evitato il doppio conteggio dello stesso cliente/portafoglio.
-Le leve (mese di lancio app, costo fisso app, AI deflection, reception AI) sono tutte regolabili nel modello.
+⚠️ **Conseguenza su questo documento (da aggiornare in v2):** qui SCF e app sono sommate come **flussi
+additivi**, ma per la regola anti-doppio-conteggio (`pricing-unificato.md` §5) **non lo sono**: l'app non
+aggiunge ricavo parallelo, **sposta** acquisizione e servizio dal canale umano a quello app — stesso ricavo,
+**più margine** (costo-to-serve più basso con AI) e **più volume** (funnel Free/Pro più largo). Serve il
+**mix di canale mese-per-mese** (decisione aperta) per rifare il combinato senza doppio conteggio.
+Le leve (mese di lancio app, costo fisso app, AI deflection, reception AI) restano regolabili nel modello.
