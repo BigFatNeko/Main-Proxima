@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proxima · Modello Scalabile App (Abbonamenti + Margine)</title>
+<style>
+  :root{--bg:#f7f8fa;--panel:#fff;--ink:#1a1d23;--muted:#5b6270;--line:#e5e8ee;--accent:#0f766e;--accent2:#b45309;--free:#64748b;--pro:#0f766e;--max:#b45309;--cost:#dc2626;--shadow:0 1px 3px rgba(0,0,0,.06)}
+  @media (prefers-color-scheme:dark){:root{--bg:#0e1116;--panel:#161a21;--ink:#e8eaed;--muted:#9aa3b2;--line:#252b34;--accent:#2dd4bf;--accent2:#fbbf24;--free:#94a3b8;--pro:#2dd4bf;--max:#fbbf24;--cost:#f87171;--shadow:0 1px 3px rgba(0,0,0,.4)}}
+  :root[data-theme="light"]{--bg:#f7f8fa;--panel:#fff;--ink:#1a1d23;--muted:#5b6270;--line:#e5e8ee;--accent:#0f766e;--accent2:#b45309;--free:#64748b;--pro:#0f766e;--max:#b45309;--cost:#dc2626;--shadow:0 1px 3px rgba(0,0,0,.06)}
+  :root[data-theme="dark"]{--bg:#0e1116;--panel:#161a21;--ink:#e8eaed;--muted:#9aa3b2;--line:#252b34;--accent:#2dd4bf;--accent2:#fbbf24;--free:#94a3b8;--pro:#2dd4bf;--max:#fbbf24;--cost:#f87171;--shadow:0 1px 3px rgba(0,0,0,.4)}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1200px;margin:0 auto;padding:24px 20px 60px}
+  h1{font-size:22px;margin:0 0 2px}
+  .sub{color:var(--muted);margin:0 0 20px;font-size:13.5px}
+  .grid{display:grid;grid-template-columns:330px 1fr;gap:20px}
+  @media(max-width:880px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
+  .panel h2{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:14px 0 12px}
+  .panel h2:first-child{margin-top:0}
+  .ctrl{margin-bottom:13px}
+  .ctrl label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+  .ctrl label b{color:var(--accent);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+  .ai input[type=range]{accent-color:var(--accent2)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+  @media(max-width:680px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow)}
+  .kpi .lab{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  .kpi .val{font-size:20px;font-weight:650;margin-top:3px;font-variant-numeric:tabular-nums}
+  .kpi .note{font-size:11px;color:var(--muted);margin-top:2px}
+  canvas{width:100%;height:300px;display:block}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+  th,td{padding:6px 7px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase}
+  .legend{display:flex;gap:16px;font-size:12.5px;color:var(--muted);margin:10px 0 4px;flex-wrap:wrap}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button{flex:1;padding:7px;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:8px;cursor:pointer;font-size:12.5px}
+  .tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .pricing{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6}
+  .flag{font-size:12.5px;color:var(--ink);margin-top:14px;padding:11px 13px;border-left:3px solid var(--accent2);background:color-mix(in srgb,var(--accent2) 10%,transparent);border-radius:0 8px 8px 0}
+  .split{display:flex;gap:2px;height:10px;border-radius:5px;overflow:hidden;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Proxima · Modello Scalabile App — Ricavi &amp; Margine</h1>
+  <p class="sub">Abbonamenti Free/Pro/Max + costituzione a scaglioni + upgrade Pro→Max + strato costi con leva <b>AI deflection</b>. Coorti mensili · 36 mesi.</p>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Acquisizione &amp; conversione</h2>
+      <div class="ctrl"><label>Signup Free/mese <b id="l_su"></b></label><input id="su" type="range" min="20" max="800" step="10" value="150"></div>
+      <div class="ctrl"><label>Crescita signup/mese <b id="l_gr"></b></label><input id="gr" type="range" min="0" max="15" step="0.5" value="6"></div>
+      <div class="ctrl"><label>Cap signup/mese <b id="l_cap"></b></label><input id="cap" type="range" min="500" max="10000" step="100" value="2500"></div>
+      <div class="ctrl"><label>Conv. Free→Pro/mese <b id="l_cp"></b></label><input id="cp" type="range" min="0.2" max="5" step="0.1" value="1.5"></div>
+      <div class="ctrl"><label>Conv. Free→Max/mese <b id="l_cm"></b></label><input id="cm" type="range" min="0.05" max="2" step="0.05" value="0.4"></div>
+      <div class="ctrl"><label>Upgrade Pro→Max/mese <b id="l_up"></b></label><input id="up" type="range" min="0" max="5" step="0.1" value="1.0"></div>
+
+      <h2>Churn mensile</h2>
+      <div class="ctrl"><label>Free / Pro / Max <b id="l_ch"></b></label></div>
+      <div class="ctrl"><input id="chf" type="range" min="1" max="15" step="0.5" value="6"></div>
+      <div class="ctrl"><input id="chp" type="range" min="1" max="10" step="0.5" value="4"></div>
+      <div class="ctrl"><input id="chm" type="range" min="0.5" max="8" step="0.5" value="3"></div>
+
+      <h2>Fee costituzione (scaglioni 3/2/1/0,5%)</h2>
+      <div class="ctrl"><label>Tasso costituzione (nuovi paganti) <b id="l_ct"></b></label><input id="ct" type="range" min="0" max="80" step="5" value="25"></div>
+      <div class="ctrl"><label>Portafoglio medio nuovo <b id="l_pf"></b></label><input id="pf" type="range" min="5000" max="120000" step="5000" value="35000"></div>
+
+      <h2 class="ai" style="color:var(--accent2)">🤖 Costi &amp; AI</h2>
+      <div class="ctrl ai"><label>AI deflection chiamate <b id="l_ad"></b></label><input id="ad" type="range" min="0" max="95" step="5" value="0"></div>
+      <div class="ctrl"><label>Durata chiamata (min) <b id="l_cd"></b></label><input id="cd" type="range" min="15" max="60" step="5" value="30"></div>
+      <div class="ctrl"><label>Costo consulente €/ora <b id="l_co"></b></label><input id="co" type="range" min="20" max="80" step="5" value="35"></div>
+      <div class="ctrl"><label>Ore produttive/FTE·mese <b id="l_ph"></b></label><input id="ph" type="range" min="60" max="140" step="10" value="100"></div>
+      <div class="ctrl"><label>Costo fisso piattaforma/mese <b id="l_fx"></b></label><input id="fx" type="range" min="1000" max="15000" step="500" value="4000"></div>
+      <div class="ctrl"><label>CAC per nuovo pagante <b id="l_cac"></b></label><input id="cac" type="range" min="0" max="200" step="10" value="50"></div>
+
+      <div class="pricing">
+        Pro: 10/mese·25/3m·40/6m·80/anno · Max: 48/mese·130/3m·250/6m·500/anno · costituzione <b>a scaglioni 3/2/1/0,5%</b> (min €300) su nuovo portafoglio. Commissioni pagamento 2,5%. Costo AI ~€0,30/interazione.
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <div class="tabs">
+          <button data-ch="rev" class="on">Ricavi</button>
+          <button data-ch="mar">Ricavi vs Costi</button>
+          <button data-ch="usr">Utenti</button>
+          <button data-ch="call">Carico chiamate</button>
+        </div>
+        <canvas id="chart" width="820" height="300"></canvas>
+        <div class="legend" id="legend"></div>
+      </div>
+
+      <div class="panel" style="margin-top:20px">
+        <h2 style="margin-top:0">Milestone</h2>
+        <table id="tbl"><thead><tr><th>Mese</th><th>Pro</th><th>Max</th><th>ARR</th><th>Ricavo/mese</th><th>Costo/mese</th><th>Margine</th><th>Chiam. umane</th><th>FTE</th></tr></thead><tbody></tbody></table>
+        <div class="flag" id="flag"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const PRO_EFF=[10,25/3,40/6,80/12], MAX_EFF=[48,130/3,250/6,500/12];
+// Costituzione a scaglioni marginali (3/2/1/0,5%, min €300) — sostituisce il 3% flat
+function constFee(P){let f=Math.min(P,25000)*0.03;
+  if(P>25000)f+=Math.min(P-25000,25000)*0.02;
+  if(P>50000)f+=Math.min(P-50000,50000)*0.01;
+  if(P>100000)f+=(P-100000)*0.005;return Math.max(f,300);}
+const $=id=>document.getElementById(id);
+const eur=n=>'€'+Math.round(n).toLocaleString('it-IT');
+const wavg=(m,v)=>{const s=m.reduce((a,b)=>a+b,0)||1;return m.reduce((a,w,i)=>a+w*v[i],0)/s;};
+
+function params(){return{
+  months:36, signupStart:+su.value, signupGrowth:+gr.value/100, signupCap:+cap.value,
+  convProM:+cp.value/100, convMaxM:+cm.value/100, upRate:+up.value/100,
+  churnFree:+chf.value/100, churnPro:+chp.value/100, churnMax:+chm.value/100,
+  constRate:+ct.value/100, avgPortfolio:+pf.value,
+  aiDefl:+ad.value/100, callMin:+cd.value, costHour:+co.value, prodHours:+ph.value,
+  fixed:+fx.value, cac:+cac.value, aiCost:0.30, aiFreeCost:0.05, payFee:0.025,
+  proMix:[40,20,15,25], maxMix:[30,20,20,30]
+};}
+
+function simulate(p){
+  const Apro=wavg(p.proMix,PRO_EFF),Amax=wavg(p.maxMix,MAX_EFF);
+  const pro6=p.proMix[2]/p.proMix.reduce((a,b)=>a+b,0);
+  let free=0,pro=0,max=0,su=p.signupStart;const rows=[];
+  for(let m=0;m<p.months;m++){
+    const nf=su, np=free*p.convProM, nm=free*p.convMaxM;
+    free=(free+nf-np-nm)*(1-p.churnFree);
+    pro=pro*(1-p.churnPro)+np;
+    max=max*(1-p.churnMax)+nm;
+    const upg=pro*p.upRate; pro-=upg; max+=upg;
+    const mrr=pro*Apro+max*Amax;
+    const oneoff=(np+nm)*p.constRate*constFee(p.avgPortfolio);
+    const rev=mrr+oneoff;
+    const calls=max/3 + (nm+upg) + np*pro6;
+    const human=calls*(1-p.aiDefl), aiN=calls*p.aiDefl;
+    const callHours=human*p.callMin/60;
+    const fte=Math.ceil(callHours/p.prodHours);
+    const cConsult=callHours*p.costHour;
+    const cAI=aiN*p.aiCost + free*p.aiFreeCost;
+    const cost=cConsult+cAI+rev*p.payFee+(np+nm)*p.cac+p.fixed;
+    rows.push({m:m+1,free,pro,max,mrr,arr:mrr*12,oneoff,rev,calls,human,fte,cConsult,cAI,cost,margin:rev-cost});
+    su=Math.min(su*(1+p.signupGrowth),p.signupCap);
+  }
+  return {rows,Apro,Amax};
+}
+
+let mode='rev';
+function render(){
+  const p=params(), r=simulate(p);
+  l_su.textContent=su.value; l_gr.textContent=(+gr.value).toFixed(1)+'%'; l_cap.textContent=(+cap.value).toLocaleString('it-IT');
+  l_cp.textContent=(+cp.value).toFixed(1)+'%'; l_cm.textContent=(+cm.value).toFixed(2)+'%'; l_up.textContent=(+up.value).toFixed(1)+'%';
+  l_ch.textContent=chf.value+'% / '+chp.value+'% / '+chm.value+'%';
+  l_ct.textContent=ct.value+'%'; l_pf.textContent=eur(+pf.value);
+  l_ad.textContent=ad.value+'%'; l_cd.textContent=cd.value+'′'; l_co.textContent='€'+co.value; l_ph.textContent=ph.value+'h';
+  l_fx.textContent=eur(+fx.value); l_cac.textContent='€'+cac.value;
+
+  const m24=r.rows[23], m36=r.rows[35];
+  const be=r.rows.findIndex(x=>x.margin>0);
+  const marShare=m36.margin/(m36.rev||1);
+  const ltvPro=r.Apro/(p.churnPro||1), ltvMax=r.Amax/(p.churnMax||1);
+  $('kpis').innerHTML=`
+    <div class="kpi"><div class="lab">ARR a M24 / M36</div><div class="val">${eur(m24.arr)}</div><div class="note">M36 ${eur(m36.arr)}</div></div>
+    <div class="kpi"><div class="lab">Margine a M36</div><div class="val">${eur(m36.margin)}</div><div class="note">${Math.round(marShare*100)}% del ricavo</div>
+      <div class="split"><span style="flex:${Math.max(0,marShare)};background:var(--accent)"></span><span style="flex:${1-Math.max(0,marShare)};background:var(--cost)"></span></div></div>
+    <div class="kpi"><div class="lab">Break-even margine</div><div class="val">${be<0?'&gt;M36':'M'+(be+1)}</div><div class="note">LTV Pro ${eur(ltvPro)} · Max ${eur(ltvMax)}</div></div>
+    <div class="kpi"><div class="lab">Carico umano M36</div><div class="val">${Math.round(m36.human)}/mese</div><div class="note">${m36.fte} FTE · consulenti ${eur(m36.cConsult)} vs AI ${eur(m36.cAI)}</div></div>`;
+
+  const idx=[11,17,23,29,35];
+  $('tbl').querySelector('tbody').innerHTML=idx.map(i=>{const x=r.rows[i];
+    return `<tr><td>M${x.m}</td><td>${Math.round(x.pro)}</td><td>${Math.round(x.max)}</td><td>${eur(x.arr)}</td><td>${eur(x.rev)}</td><td>${eur(x.cost)}</td><td>${eur(x.margin)}</td><td>${Math.round(x.human)}</td><td>${x.fte}</td></tr>`;
+  }).join('');
+
+  const savedFte=simulate({...p,aiDefl:0}).rows[35].fte;
+  $('flag').innerHTML= p.aiDefl>0
+    ? `Con <b>${ad.value}% di deflection AI</b>: al M36 le chiamate umane scendono a ~<b>${Math.round(m36.human)}/mese</b> (${m36.fte} FTE) invece di ${savedFte} FTE a mano. L'AI (${eur(m36.cAI)}/mese) costa una frazione dei consulenti e <b>rompe il legame lineare clienti↔organico</b>: è ciò che rende l'app scalabile.`
+    : `Senza AI, al M36 servono <b>${savedFte} FTE</b> per ~${Math.round(m36.human)} chiamate/mese. Alza "AI deflection" per vedere crollare il carico umano: è la leva che elimina il vincolo di capacità.`;
+
+  draw(r,p);
+}
+
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+function draw(r,p){
+  const c=$('chart'),dpr=window.devicePixelRatio||1,W=c.clientWidth,H=300;
+  c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
+  const padL=58,padB=24,padT=12,padR=12,w=W-padL-padR,h=H-padT-padB,rows=r.rows,n=rows.length;
+  let series,cols,labels,money=true;
+  if(mode==='rev'){series=[rows.map(x=>x.mrr),rows.map(x=>x.oneoff)];cols=[css('--pro'),css('--max')];labels=['MRR abbonamenti','One-off costituzione'];}
+  else if(mode==='mar'){series=[rows.map(x=>x.rev),rows.map(x=>x.cost),rows.map(x=>x.margin)];cols=[css('--pro'),css('--cost'),css('--accent')];labels=['Ricavo','Costo','Margine'];}
+  else if(mode==='usr'){series=[rows.map(x=>x.free),rows.map(x=>x.pro),rows.map(x=>x.max)];cols=[css('--free'),css('--pro'),css('--max')];labels=['Free','Pro','Max'];money=false;}
+  else{series=[rows.map(x=>x.calls),rows.map(x=>x.human)];cols=[css('--muted'),css('--accent2')];labels=['Chiamate totali','Chiamate umane (post-AI)'];money=false;}
+  const mn=Math.min(0,...series.flat()), mx=Math.max(1,...series.flat());
+  const X=i=>padL+w*i/(n-1), Y=v=>padT+h-h*(v-mn)/(mx-mn);
+  g.strokeStyle=css('--line');g.fillStyle=css('--muted');g.font='11px sans-serif';g.lineWidth=1;
+  for(let k=0;k<=4;k++){const yv=mn+(mx-mn)*k/4,y=Y(yv);g.beginPath();g.moveTo(padL,y);g.lineTo(padL+w,y);g.stroke();g.fillText(money?eur(yv):Math.round(yv),4,y+3);}
+  [0,11,23,35].forEach(i=>g.fillText('M'+(i+1),X(i)-8,H-6));
+  series.forEach((s,si)=>{g.beginPath();s.forEach((v,i)=>{const x=X(i),y=Y(v);i?g.lineTo(x,y):g.moveTo(x,y);});g.strokeStyle=cols[si];g.lineWidth=2;g.stroke();});
+  $('legend').innerHTML=labels.map((l,i)=>`<span><span class="dot" style="background:${cols[i]}"></span>${l}</span>`).join('');
+}
+
+document.querySelectorAll('input').forEach(el=>el.addEventListener('input',render));
+document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');mode=b.dataset.ch;render();}));
+window.addEventListener('resize',render);
+if(window.matchMedia)window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',render);
+render();
+</script>
+</body>
+</html>

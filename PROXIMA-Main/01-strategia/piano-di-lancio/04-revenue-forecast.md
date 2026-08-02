@@ -2,6 +2,12 @@
 
 *Modello basato su pricing a parcella fissa annuale, 3 scenari*
 
+> ⚠️ **Aggiornamento pricing.** Il listino è stato unificato (`../../02-modello-previsionale/pricing-unificato.md`):
+> le fasce qui sotto sono **superate** da **Free/Pro/Max** (la parcella €490 ≈ tier **Max**). Soprattutto,
+> questo forecast conta **solo il ricorrente** e **omette la fee di costituzione** una tantum (componente B del
+> listino): vedi la nuova sezione qui sotto e il `cashflow-combinato-24m.md` (con la costituzione, break-even
+> ~M+1 e cash M+24 ~€234K–€406K invece dei valori solo-ricorrente).
+
 ---
 
 ## Struttura Pricing Proxima
@@ -18,6 +24,25 @@
 Calcolo: (0.30 × €250) + (0.35 × €500) + (0.25 × €800) + (0.10 × €1.200) = €75 + €175 + €200 + €120 = **€570/anno**
 
 *Nota: l'ARPU effettivo sarà più basso nei primi mesi perché i primi clienti tendono ad avere patrimoni più piccoli. Usiamo €490 come stima conservativa che include lo sconto early-adopter del 20% sui primi 50 clienti.*
+
+---
+
+## Componente Una Tantum — Costituzione Portafoglio (NON contata sotto)
+
+Oltre al ricorrente, il listino unificato prevede una **fee di costituzione** una tantum sul **nuovo**
+portafoglio, fatturata all'avvio, a **scaglioni marginali**: **3%** fino €25K · **2%** €25–50K · **1%**
+€50–100K · **0,5%** oltre (minimo €300). Il **Free ne è escluso** (accede all'umano solo a €100/h).
+
+| Portafoglio | Costituzione una tantum |
+|---|---|
+| €20.000 | €600 |
+| €35.000 | €950 |
+| €50.000 | €1.250 |
+| €100.000 | €1.750 |
+
+**Effetto:** è ricavo **anticipato** e cash-generativo → nel modello combinato porta il break-even a ~M+1
+(non M+11) e la cassa a M+24 a ~€234K–€406K. **La proiezione mensile qui sotto NON la include** (è solo
+ricorrente): per il quadro completo vedi `../../02-modello-previsionale/cashflow-combinato-24m.md`.
 
 ---
 
