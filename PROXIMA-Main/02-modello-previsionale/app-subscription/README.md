@@ -2,7 +2,7 @@
 
 > Motore di ricavo dell'**app** (strategia di massa, Fase 2), distinto dal funnel SCF
 > fee-only della Fase 1 (`../funnel-model/`). Modella abbonamenti multi-durata **Free / Pro /
-> Max** + la **fee di costituzione 3%** una tantum. Strumento interattivo:
+> Max** + la **fee di costituzione a scaglioni** una tantum. Strumento interattivo:
 > **`app-model.html`** (single-file, stesso motore di questo documento).
 >
 > ⚠️ I numeri "scenario base" qui sotto sono **output calcolati** dal motore con le assunzioni
@@ -35,10 +35,11 @@ Insight di mercato + visualizzazione performance. Top-of-funnel: bacino da cui c
 
 **Incluso nel Max:** 1 chiamata immediata (onboarding) + 1 **chiamata trimestrale**.
 
-### Fee di costituzione — 3% una tantum
-Sia Pro sia Max: se al **primo anno** c'è da **costituire un portafoglio nuovo**, si applica il
-**3% sulla cifra del portafoglio**, **fatturato subito**. È la parcella fee-only di impostazione
-(pagata dal cliente, nessuna retrocessione) incorporata nell'app.
+### Fee di costituzione — a scaglioni, una tantum
+Sia Pro sia Max: se al **primo anno** c'è da **costituire un portafoglio nuovo**, si applica una fee a
+**scaglioni marginali** — **3%** fino €25K · **2%** €25–50K · **1%** €50–100K · **0,5%** oltre (minimo €300),
+**fatturata subito**. Il **Free ne è escluso** (accede all'umano solo a €100/h). È la parcella fee-only di
+impostazione (pagata dal cliente, nessuna retrocessione) incorporata nell'app. Dettagli: `../pricing-unificato.md`.
 
 ---
 
@@ -58,7 +59,8 @@ upgrade         = pro * up_rate_mese                  # upgrade Pro->Max (v2)
 pro            -= upgrade ; max += upgrade
 
 MRR             = pro * ARPU_pro + max * ARPU_max     # ricavo ricorrente abbonamenti
-one_off(3%)     = (nuovi_pro + nuovi_max) * tasso_costituzione * portafoglio_medio * 0,03
+one_off         = (nuovi_pro + nuovi_max) * tasso_costituzione * constFee(portafoglio_medio)
+                  # constFee = scaglioni 3/2/1/0,5% (min €300); es. €35K -> €950
 ```
 
 ### Strato costi → margine (v2)
@@ -77,7 +79,7 @@ margine         = ricavo - costo_totale
 
 Dove `ARPU` (€/mese per utente attivo) = media pesata dei €/mese-effettivi sul **mix di cadenza**
 scelto (mensile/3m/6m/annuale). Il ricavo è la somma di **due flussi**: abbonamenti (ricorrente) +
-fee 3% (una tantum, concentrata nell'anno 1 di ogni coorte).
+fee di costituzione (una tantum, concentrata nell'anno 1 di ogni coorte).
 
 **Carico chiamate** (vincolo di capacità consulenti), stima mensile:
 `chiamate ≈ max/3 (trimestrali) + nuovi_max (immediata) + nuovi_pro·quota_pro_6mesi (call inclusa)`.
@@ -110,7 +112,7 @@ fee 3% (una tantum, concentrata nell'anno 1 di ogni coorte).
 → **Un cliente Max vale ~7× un cliente Pro.** La leva di valore è l'upgrade a Max.
 
 **Proiezione (scenario base):**
-| Mese | Free | Pro | Max | MRR | ARR | One-off 3% (mese) |
+| Mese | Free | Pro | Max | MRR | ARR | One-off costituz. (mese) |
 |---|---|---|---|---|---|---|
 | M6 | 822 | 30 | 8 | €596 | €7.151 | €3.425 |
 | M12 | 1.671 | 120 | 33 | €2.443 | €29.312 | €7.592 |
@@ -122,14 +124,18 @@ fee 3% (una tantum, concentrata nell'anno 1 di ogni coorte).
 | Flusso | Anno 1 | Anno 2 |
 |---|---|---|
 | Abbonamenti | €10.889 | €71.668 |
-| One-off 3% | **€45.308** | **€157.755** |
+| One-off costituz. | **€45.308** | **€157.755** |
 | **Totale (24 mesi)** | colspan | **€285.620** |
+
+> ⚠️ I valori one-off qui sono calcolati col **3% flat** (versione precedente). Con gli **scaglioni**
+> confermati, su portafoglio medio €35K la costituzione è **€950** invece di €1.050 → one-off **~10% più
+> bassi**. Lo strumento `app-model.html` usa già gli scaglioni: fa fede quello per le cifre esatte.
 
 ---
 
 ## 5. Cinque letture strategiche
 
-1. **Il 3% di costituzione domina i ricavi iniziali** (€45K vs €11K di abbonamenti nell'anno 1). Nei
+1. **La costituzione domina i ricavi iniziali** (€45K vs €11K di abbonamenti nell'anno 1). Nei
    primi mesi l'app è di fatto un **motore di acquisizione per la consulenza fee-only**, non ancora un
    business da abbonamenti. Il ricorrente cresce e supera il one-off solo più avanti, con la base
    installata. Implicazione: la sostenibilità dell'app dipende dal **flusso di nuovi portafogli**, quindi
@@ -144,10 +150,10 @@ fee 3% (una tantum, concentrata nell'anno 1 di ogni coorte).
    (€1.490) pur includendo chiamate periodiche. La coppia Pro/Max copre bene la finestra <€100K
    individuata in `../../01-strategia/competitor/43-pricing-competitor.md`.
 
-4. **Attenzione al 3% su patrimoni grandi (nota fee-only + pricing).** 3% su €35K = €1.050 (proporzionato);
-   su €100K = €3.000 (alto). Valutare un **cap** o **scaglioni decrescenti**. È fee-only a norma (pagato dal
-   cliente, zero retrocessioni), ma va comunicato come **"parcella una tantum di pianificazione"**, non come
-   "% sul capitale" — per non evocare la commissione d'ingresso bancaria da cui Proxima vuole distinguersi.
+4. **Costituzione a scaglioni (risolto).** Gli scaglioni 3/2/1/0,5% rendono la fee proporzionata su ogni
+   taglia: €35K → €950, €100K → €1.750 (1,75% eff.) invece del 3% flat (€3.000). È fee-only a norma (pagata
+   dal cliente, zero retrocessioni), ma va comunicata come **"parcella una tantum di pianificazione"**, non
+   come "% sul capitale" — per non evocare la commissione d'ingresso bancaria da cui Proxima vuole distinguersi.
 
 5. **Le chiamate incluse sono un costo di capacità (tempo consulente).** Al M36 (~331 Max attivi) il carico
    è ~1.300+ chiamate trimestrali/anno + le immediate: va dimensionato l'**organico consulenti** o la
@@ -202,6 +208,6 @@ alle decisioni* (non "consulenza personalizzata" riservata): è una scelta di **
 - Churn per tier costante (i prepagati 6m/annuali sono in realtà "lockati" → churn effettivo più basso:
   il modello è **prudente** sui ricorrenti lunghi).
 - Upgrade Pro→Max non modellato esplicitamente (incluso implicitamente nelle conversioni): da aggiungere in v2.
-- One-off 3% applicato ai **nuovi** paganti dell'anno; non ai rinnovi (corretto: la costituzione è una tantum).
+- One-off costituzione applicato ai **nuovi** paganti dell'anno; non ai rinnovi (corretto: la costituzione è una tantum).
 - Nessun costo dedotto (è un modello di **ricavo**): margini e organico vanno incrociati col budget operativo
   (`../../01-strategia/piano-di-lancio/60-budget-operativo-24m.md`).

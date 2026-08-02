@@ -48,7 +48,7 @@
 <body>
 <div class="wrap">
   <h1>Proxima · Modello Scalabile App — Ricavi &amp; Margine</h1>
-  <p class="sub">Abbonamenti Free/Pro/Max + fee costituzione 3% + upgrade Pro→Max + strato costi con leva <b>AI deflection</b>. Coorti mensili · 36 mesi.</p>
+  <p class="sub">Abbonamenti Free/Pro/Max + costituzione a scaglioni + upgrade Pro→Max + strato costi con leva <b>AI deflection</b>. Coorti mensili · 36 mesi.</p>
 
   <div class="kpis" id="kpis"></div>
 
@@ -68,7 +68,7 @@
       <div class="ctrl"><input id="chp" type="range" min="1" max="10" step="0.5" value="4"></div>
       <div class="ctrl"><input id="chm" type="range" min="0.5" max="8" step="0.5" value="3"></div>
 
-      <h2>Fee costituzione 3%</h2>
+      <h2>Fee costituzione (scaglioni 3/2/1/0,5%)</h2>
       <div class="ctrl"><label>Tasso costituzione (nuovi paganti) <b id="l_ct"></b></label><input id="ct" type="range" min="0" max="80" step="5" value="25"></div>
       <div class="ctrl"><label>Portafoglio medio nuovo <b id="l_pf"></b></label><input id="pf" type="range" min="5000" max="120000" step="5000" value="35000"></div>
 
@@ -81,7 +81,7 @@
       <div class="ctrl"><label>CAC per nuovo pagante <b id="l_cac"></b></label><input id="cac" type="range" min="0" max="200" step="10" value="50"></div>
 
       <div class="pricing">
-        Pro: 10/mese·25/3m·40/6m·80/anno · Max: 48/mese·130/3m·250/6m·500/anno · <b>3%</b> una tantum su nuovo portafoglio. Commissioni pagamento 2,5%. Costo AI ~€0,30/interazione.
+        Pro: 10/mese·25/3m·40/6m·80/anno · Max: 48/mese·130/3m·250/6m·500/anno · costituzione <b>a scaglioni 3/2/1/0,5%</b> (min €300) su nuovo portafoglio. Commissioni pagamento 2,5%. Costo AI ~€0,30/interazione.
       </div>
     </div>
 
@@ -109,6 +109,11 @@
 <script>
 "use strict";
 const PRO_EFF=[10,25/3,40/6,80/12], MAX_EFF=[48,130/3,250/6,500/12];
+// Costituzione a scaglioni marginali (3/2/1/0,5%, min €300) — sostituisce il 3% flat
+function constFee(P){let f=Math.min(P,25000)*0.03;
+  if(P>25000)f+=Math.min(P-25000,25000)*0.02;
+  if(P>50000)f+=Math.min(P-50000,50000)*0.01;
+  if(P>100000)f+=(P-100000)*0.005;return Math.max(f,300);}
 const $=id=>document.getElementById(id);
 const eur=n=>'€'+Math.round(n).toLocaleString('it-IT');
 const wavg=(m,v)=>{const s=m.reduce((a,b)=>a+b,0)||1;return m.reduce((a,w,i)=>a+w*v[i],0)/s;};
@@ -134,7 +139,7 @@ function simulate(p){
     max=max*(1-p.churnMax)+nm;
     const upg=pro*p.upRate; pro-=upg; max+=upg;
     const mrr=pro*Apro+max*Amax;
-    const oneoff=(np+nm)*p.constRate*p.avgPortfolio*0.03;
+    const oneoff=(np+nm)*p.constRate*constFee(p.avgPortfolio);
     const rev=mrr+oneoff;
     const calls=max/3 + (nm+upg) + np*pro6;
     const human=calls*(1-p.aiDefl), aiN=calls*p.aiDefl;
@@ -189,7 +194,7 @@ function draw(r,p){
   c.width=W*dpr;c.height=H*dpr;const g=c.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
   const padL=58,padB=24,padT=12,padR=12,w=W-padL-padR,h=H-padT-padB,rows=r.rows,n=rows.length;
   let series,cols,labels,money=true;
-  if(mode==='rev'){series=[rows.map(x=>x.mrr),rows.map(x=>x.oneoff)];cols=[css('--pro'),css('--max')];labels=['MRR abbonamenti','One-off 3%'];}
+  if(mode==='rev'){series=[rows.map(x=>x.mrr),rows.map(x=>x.oneoff)];cols=[css('--pro'),css('--max')];labels=['MRR abbonamenti','One-off costituzione'];}
   else if(mode==='mar'){series=[rows.map(x=>x.rev),rows.map(x=>x.cost),rows.map(x=>x.margin)];cols=[css('--pro'),css('--cost'),css('--accent')];labels=['Ricavo','Costo','Margine'];}
   else if(mode==='usr'){series=[rows.map(x=>x.free),rows.map(x=>x.pro),rows.map(x=>x.max)];cols=[css('--free'),css('--pro'),css('--max')];labels=['Free','Pro','Max'];money=false;}
   else{series=[rows.map(x=>x.calls),rows.map(x=>x.human)];cols=[css('--muted'),css('--accent2')];labels=['Chiamate totali','Chiamate umane (post-AI)'];money=false;}
