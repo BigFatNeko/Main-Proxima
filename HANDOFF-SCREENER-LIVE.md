@@ -5,7 +5,11 @@
 - **Programma esistente** (già in produzione): genera un briefing finanziario quotidiano automatico.
 - **Programma da costruire**: uno screener massivo che, **su richiesta e in tempo reale davanti a un cliente**, restituisce pool di titoli che soddisfano criteri predefiniti, organizzati in pacchetti.
 
-Il criterio di selezione dei titoli deriverà dalle **regole MVF 4.0**, evoluzione delle regole MVF v3.0 documentate qui sotto.
+**Documenti di riferimento nel repository**:
+- `rassegna-stampa/docs-mvf/MVF_v4.0_istruzioni_operative.md` — la specifica MVF completa (1.212 righe). **È la fonte autorevole**: questo handoff ne è una sintesi orientata all'implementazione, non un sostituto.
+- Il codice Python esistente implementa la **v3.0**, ferma a due versioni indietro. La Parte 2 mappa la distanza tra le due.
+
+> **Nota di versionamento**: il file caricato si chiama `MVF_V41.MD` ma l'intestazione, il changelog e il piè di pagina dichiarano ovunque **v4.0**. Da chiarire se esistono delta v4.1 non presenti nel documento.
 
 ---
 
@@ -34,235 +38,249 @@ Directory di lavoro: `rassegna-stampa/`
 | File | Righe | Ruolo |
 |---|---|---|
 | `screener.py` | 2.492 | Screener massivo: universe building, fetch dati, filtri, scoring |
-| `mvf_valuation.py` | 729 | **Motore di valutazione MVF v3.0** — il pezzo da riusare |
+| `mvf_valuation.py` | 729 | Motore di valutazione **MVF v3.0** — da riscrivere per la v4.0 |
 | `briefing_pipeline.py` | 847 | Orchestratore end-to-end |
 | `filiere_screener.py` | 365 | Screener per filiere tematiche (15 settori strategici) |
-| `system_prompt.md` | 365 | Istruzioni per il modello che scrive il briefing |
-| `newspaper_template.html` | — | Template Jinja2 dell'output |
+| `docs-mvf/MVF_v4.0_istruzioni_operative.md` | 1.212 | **La specifica target** |
 
-### Cosa è riutilizzabile per il nuovo programma
+### Cosa è riutilizzabile
 
-**Da riusare quasi integralmente**:
-- `mvf_valuation.py` — tutto il motore di valutazione
-- `screener.py` sezioni: universe building TradingView, mappatura ticker TV→yfinance, fetch dati, filtri hard/soft, calcolo metriche
+**Da riusare quasi integralmente** — è infrastruttura, non logica di valutazione:
+- Universe building TradingView, mappatura ticker TV→yfinance (`screener.py` righe 65-360)
+- Fetch dati, gestione sessioni, retry, parallelismo
+- Calcolo delle metriche di bilancio grezze
 
-**Da NON riusare**: tutto il layer briefing (chiamata Claude, template HTML, logica modalità giornaliere, personalizzazione utente).
+**Da riscrivere**: `mvf_valuation.py`, che implementa la v3.0 su base 257. La v4.0 cambia base, scala, e introduce concetti che non esistono nel codice (IQI, DIP, gate, routing per classe).
+
+**Da ignorare**: tutto il layer briefing (chiamata Claude, template HTML, modalità giornaliere, personalizzazione utente, GitHub Actions).
 
 ---
 
-## Parte 2 — Il motore MVF v3.0 (base per MVF 4.0)
+## Parte 2 — Da MVF v3.0 (implementato) a MVF v4.0 (target)
 
-Questa è la parte che conta per il nuovo programma. MVF = sistema di valutazione proprietario che assegna a ogni titolo un voto su 100 più un Confidence Score.
+### 2.1 — Il salto in sintesi
 
-### 2.1 — Universe building
-
-Fonte primaria: **TradingView screener** (libreria `tradingview-screener`), con fallback su `finvizfinance` per il mercato USA.
-
-Mercati coperti (`TV_MARKETS`):
-- **US**: america
-- **EU**: italy, germany, france, spain, netherlands, switzerland, uk, sweden, denmark, norway, finland, belgium, ireland, austria, portugal, poland, turkey, greece, hungary, czech_republic
-- **ASIA**: japan, china, hong_kong, korea, india, singapore, taiwan, australia, indonesia, malaysia, thailand, vietnam, philippines, new_zealand
-- **LATAM**: brazil, mexico, chile, colombia, argentina
-- **AFRICA_ME**: south_africa, saudi_arabia, israel, uae
-
-I ticker TradingView vengono convertiti in ticker yfinance tramite `TV_TO_YF_SUFFIX` (es. `BIT` → `.MI`, `XETR` → `.DE`, `EURONEXT` → `.PA`, `LSE` → `.L`).
-
-**Nota critica per il nuovo programma**: molti mercati emergenti (`.PSE` Filippine, `.JK` Indonesia, `.DU` Dubai, `.BA` Argentina) restituiscono sistematicamente 404 da Yahoo Finance. Nel programma esistente questi errori sono tollerati e ignorati. Se il nuovo programma deve mostrare risultati a un cliente, conviene **escludere a monte** i mercati non coperti da dati affidabili.
-
-Filtri di ingresso all'universe:
-```python
-min_market_cap_million = 300     # small-cap 300M+ inclusi
-min_price_usd = 0.50
-data_years = 5
-```
-
-### 2.2 — Hard filters (esclusione immediata)
-
-Un titolo che fa scattare **anche uno solo** di questi flag viene escluso:
-
-| Filtro | Soglia | Eccezioni |
+| | v3.0 (nel codice) | v4.0 (specifica) |
 |---|---|---|
-| `altman_z_below_1_23` | Altman Z < 1,23 (zona distress) | banche, assicurazioni, REIT |
-| `fcf_negative_3y` | Free cash flow negativo per 3 anni consecutivi | — |
-| `debt_equity_above_3` | Debt/Equity > 3,0 | banche, assicurazioni |
-| `net_margin_neg_2_of_3` | Margine netto negativo in 2 anni su 3 | — |
-| `goodwill_over_50_pct_equity` | Goodwill > 50% del patrimonio netto | — |
-| `sbc_over_8_pct_revenue` | Stock-based comp > 8% dei ricavi | solo settori Tech/Software |
+| Base di calcolo | 257, unica | **Cinque basi per classe di strumento** |
+| Scala del voto | 0-100 | **0-1000** |
+| Classi di strumento | una sola | **5, con routing obbligatorio** |
+| Margine di sicurezza | derivato dal fair value | **derivato dall'IQI + overlay CS** |
+| Indice di qualità investimento | assente | **IQI 0-100, nuovo** |
+| Qualità dei dati | assente | **DIP con provenance tagging** |
+| Esclusioni | 6 hard filter | **6 gate strutturali G1-G6 + red flag separati** |
+| Fiscalità | assente | **Rendimento netto post-imposte obbligatorio** |
 
-### 2.3 — Soft filters (warning, non escludono)
+### 2.2 — Le cinque classi e le loro basi
 
-Ogni warning attivo sottrae 3 punti dal composite score:
+Prima di qualsiasi calcolo, lo **STEP 0** instrada il titolo:
 
-| Filtro | Soglia |
-|---|---|
-| `altman_z_grey_zone` | 1,23 ≤ Altman Z ≤ 1,81 |
-| `fcf_negative_1_of_3` | FCF negativo in 1 anno su 3 |
-| `payout_above_100` | Payout ratio > 100% |
-| `revenue_decline_2y` | Ricavi in calo per 2 anni consecutivi |
-| `roe_below_capm_r` | ROE inferiore al costo del capitale (WACC) |
-| `accruals_above_0_10` | Accruals ratio > 0,10 (qualità utili scadente) |
-| `ccr_below_0_5` | Cash conversion ratio < 0,5 |
-| `share_dilution_above_3_pct` | Diluizione azionaria > 3% annuo |
-| `tax_rate_volatile_below_10` | Tax rate < 10% (anomalo/volatile) |
-
-### 2.4 — Punteggio MVF: 24 metriche, base 257 punti
-
-Il voto MVF nasce da 24 metriche pesate, normalizzate su una base di 257 punti e riportate su scala 100.
-
-```python
-MVF_WEIGHTS = {
-    # Redditività (103 punti)
-    "gross_margin": 15, "ebitda_margin": 5, "operating_margin": 25,
-    "net_margin": 18, "fcf_margin": 22, "roic": 15, "roe": 3, "roa": 5,
-
-    # Solidità patrimoniale (25 punti)
-    "debt_to_equity": 10, "debt_to_assets": 10, "altman_z": 5,
-
-    # Efficienza del capitale (25 punti)
-    "sbc_revenue": 5, "capex_revenue": 5, "capex_da": 3,
-    "rd_revenue": 7, "insider_trading": 5,
-
-    # Ritorno per l'azionista (46 punti)
-    "dividend_yield": 16, "payout_ratio": 10, "dividend_growth_5y": 10,
-    "buyback_yield": 5, "price_cagr_5y": 5,
-
-    # Qualità del business (53 punti)
-    "tax_rate": 13, "moat_score": 25, "earnings_quality": 15,
-}
-# somma = 257 (verificata da assert nel codice)
-```
-
-Target ottimali per la normalizzazione (valore che porta la metrica al punteggio pieno):
-
-```python
-MVF_TARGETS = {
-    "gross_margin": 0.50, "ebitda_margin": 0.25, "operating_margin": 0.20,
-    "net_margin": 0.15, "fcf_margin": 0.15, "roic": 0.15, "roe": 0.15,
-    "roa": 0.08, "debt_to_equity": 0.60, "debt_to_assets": 0.30,
-    "altman_z": 3.0, "sbc_revenue": 0.03, "capex_revenue": 0.05,
-    "capex_da": 1.2, "rd_revenue": 0.08, "insider_trading": 0.0,
-    "dividend_yield": 0.04, "payout_ratio": 0.50, "dividend_growth_5y": 0.05,
-    "buyback_yield": 0.03, "price_cagr_5y": 0.10, "tax_rate": 0.22,
-    "moat_score": 7.0, "earnings_quality": 1.0,
-}
-
-# Metriche dove "più basso è meglio" (normalizzazione invertita)
-MVF_INVERTED = {"debt_to_equity", "debt_to_assets", "sbc_revenue",
-                "capex_revenue", "payout_ratio", "tax_rate"}
-```
-
-### 2.5 — I cinque modelli di valutazione
-
-Per ogni titolo `mvf_valuation.py` calcola il fair value con cinque metodi indipendenti:
-
-1. **Graham** — formula rivista, con floor sul rendimento risk-free al 2,5%
-2. **DDM a 1 stadio** — Gordon growth, per società a dividendo stabile
-3. **DDM a 2 stadi** — crescita alta iniziale poi perpetua
-4. **DCF a 2 stadi su 10 anni** — con tabella di sensitività 5×5 (WACC ±100/±200 bp × crescita terminale ±100/±200 bp)
-5. **EPV (Earnings Power Value)** — valore degli utili normalizzati senza crescita
-
-Più un **Reverse DCF** che estrae la crescita implicita nel prezzo corrente.
-
-Il fair value finale è una **media ponderata dei cinque modelli**, con pesi che variano per regime (settore, presenza di dividendo). Da questo derivano:
-- `weighted_fair_value` — fair value di riferimento
-- `margin_of_safety_pct` — margine di sicurezza
-- `ideal_purchase_price` — prezzo ideale di acquisto
-- `upside_at_current_pct` — upside al prezzo corrente
-
-Scenari: `bull_fv`, `base_fv`, `bear_fv`, ed `expected_fv = 0,25 × bull + 0,50 × base + 0,25 × bear`.
-
-### 2.6 — WACC via CAPM esteso
-
-```
-WACC = Rf + beta × ERP + CRP
-```
-
-Costanti per mercato (fonte Damodaran NYU, aggiornamento semestrale):
-
-| Mercato | Risk-free | ERP | Country Risk Premium |
+| Classe | Base | Lente di analisi | Sezione |
 |---|---|---|---|
-| US | 4,3% | 5,5% | 0,0% |
-| EU core | 2,5% | 5,8% | 0,0% |
-| Italia | 3,8% | 6,3% | 1,8% |
-| Spagna | 3,2% | 6,0% | 0,8% |
-| UK | 4,0% | 5,7% | 0,0% |
-| Giappone | 1,3% | 6,1% | 0,5% |
-| Emergenti | 7,5% | 8,5% | 3,0% |
+| Common equity | **280** | motore standard | Sez. 3 |
+| REIT | **370** | AFFO/share, same-store NOI, accretion spread | Sez. 9B |
+| BDC | **299** | NAV/NII, non-accrual, first-lien | Sez. 9J |
+| MLP / midstream | **309** | DCF per unit (Distributable Cash Flow), K-1 | Sez. 9K |
+| Preferred / ibridi | **168** (voto MVF-P) | credito e reddito: YTW, copertura, call | Sez. 9L |
 
-Vincoli: `g_terminal_max = 2%`, `g_perpetua_max = 4%`, `rf_floor = 2,5%`.
+Il voto è sempre normalizzato su 1000: `Voto = (punteggio grezzo / BASE) × 1000`.
 
-Viene inoltre calcolato l'**economic spread** = ROIC − WACC, con flag se negativo per 2 anni.
+> **Conseguenza diretta sui "pacchetti"**: la specifica dichiara esplicitamente che **i voti non sono confrontabili tra classi diverse** (Sez. 11F) — solo intra-classe e intra-versione. Un pacchetto income che mescola common, REIT, BDC, MLP e preferred **non può essere ordinato per voto MVF**. Serve un criterio di ranking cross-classe: i candidati naturali sono l'**IQI** (sempre su 100) o il **rendimento netto Italia**. Questa è una decisione di progetto da prendere prima di scrivere lo schema dati.
 
-### 2.7 — Confidence Score (0-100)
+### 2.3 — Pesi common equity, base 280
 
-Quattro sotto-punteggi da 0 a 25 ciascuno:
+```
+Gross Margin                              15
+EBITDA Margin                              5
+Operating Margin                          25
+Net Margin                                18
+FCF Margin                                12    ← era 22 in v3.0
+EPS Growth (CAGR 5y, min 3y)              10    ← era 18
+FCF per Share Growth (CAGR 5y, min 3y)    18    ← NUOVO in v4.0
+ROIC                                      15
+ROE                                        3
+ROA                                        5
+Debt to Equity                            10
+Debt to Assets                            10
+Altman-Z Score                             5
+SBC / Revenue                              5
+CapEx / Revenue                            5
+CapEx / D&A                                3
+R&D / Revenue                              7
+Insider Trading                            5
+Dividend Yield                            16
+Dividend Payout Ratio                     10
+Dividend Growth (5y, min 3y)              10
+Buyback of Shares                          5
+Price CAGR                                 5
+Multiple Expansion/Contraction (Δ P/E)     5    ← NUOVO
+Tax Percentage                            13
+MOAT Economico (solo Morningstar)         25
+Earnings Quality (Accruals / CCR)         15
+─────────────────────────────────────────────
+TOTALE                                   280
+```
+
+**Le tre metriche nuove o ribilanciate** meritano attenzione perché portano guard anti-manipolazione:
+
+- **FCF per Share Growth (18)** — bande: >12% → 100%, 8-12% → 80%, 4-8% → 60%, 0-4% → 35%, <0 → 0%. **Guard anti-diluizione**: se FCF/share cresce molto più del FCF aggregato per effetto dei buyback con FCF aggregato piatto o in calo → cap al 50% (financial engineering).
+- **EPS Growth (10)** — bande: >15% → 100%, 10-15% → 80%, 5-10% → 60%, 0-5% → 35%, <0 → 0%. Stesso modificatore qualità sui buyback.
+- **Multiple Expansion/Contraction (5)** — direzione value: la contrazione del multiplo è premiata, l'espansione forte penalizzata. **Value-trap guard**: multiplo contratto per fondamentali in deterioramento → max 25%.
+
+**Segnale di qualità utili incrociato**: EPS/share in crescita ma FCF/share piatto o in calo per 2+ anni → red flag, da confermare con Accruals/CCR.
+
+### 2.4 — Clausole di redistribuzione dei pesi
+
+**Azienda senza dividendo**: i 36 punti dividendo (16+10+10) si redistribuiscono → FCF Margin 12→22, Buyback 5→15, Price CAGR 5→13, ROIC 15→23.
+
+**Doppia ponderazione dividendi**: se il titolo paga dividendi *e* si applica il DDM, i pesi dividendo si dimezzano (16→8, 10→5, 10→5) e i 18 punti liberati vanno a FCF Margin 12→22 e Net Margin 18→26. Il regime va sempre dichiarato.
+
+**Penalità Altman-Z additiva sul voto finale**: zona grigia 1,23-1,80 → −10% sul voto normalizzato; sotto 1,23 → −20%. Esenti: banche, assicurazioni, REIT, utility regolate, asset-light (es. tabacco).
+
+### 2.5 — IQI, il concetto centralmente nuovo
+
+L'**Indice di Qualità dell'Investimento** (0-100) è distinto dal voto MVF e **guida il margine di sicurezza**:
+
+```
+IQI = 0,40 × BLOCCO A (Solidità) + 0,60 × BLOCCO B (Prospettive & Reddito)
+```
+
+**Blocco A — Solidità (0-100)**
+| Componente | Max | Contenuto |
+|---|---|---|
+| A1 Patrimoniale | 30 | leva D/E, D/A, NetDebt/EBITDA (12); liquidità (6); copertura interessi (6); qualità attivo + Altman-Z (6) |
+| A2 Reddituale | 25 | livello margini (8); stabilità margini (7); ROIC e spread ROIC−WACC (10) |
+| A3 Cassa | 30 | FCF Margin (8); costanza FCF (7); conversione + earnings quality (8); copertura FCF/(Div+CapEx mant.) (7) |
+| A4 Competitiva | 15 | moat Morningstar none 0 / narrow 6 / wide 12; trend moat + capital allocation (3) |
+
+**Blocco B — Prospettive & Reddito (0-100)**, modulato sul profilo dividendo:
+
+| Tier dividendo | B1 Crescita | B2 Remunerazione |
+|---|---|---|
+| Forte (≥10 anni) | 25 | 45 |
+| Solido (5-9 anni) | 32 | 38 |
+| Nascente (<3 anni) | 55 | 15 |
+| No div + buyback | 45 | 25 |
+| Nessuna remunerazione | 70 | 0 |
+
+Fissi in tutti i tier: **B3 Posizionamento multiplo** (15) e **B4 TSR forward** (15: ≥12% → 100, 8-12% → 70, 4-8% → 40, <4% → 10).
+
+### 2.6 — Margine di sicurezza: derivazione a due passi
+
+```
+Prezzo Ideale = Fair Value medio ponderato × (1 − MoS_finale)
+MoS_finale    = MoS_base(IQI) + overlay(CS)
+```
+
+**Passo 1 — MoS base dall'IQI**:
+| IQI | MoS |
+|---|---|
+| ≥90 | 15% |
+| 80-89 | 20% |
+| 70-79 | 25% |
+| 60-69 | 30% |
+| 50-59 | 35% |
+| 40-49 | 45% |
+| 30-39 | 55% |
+| <30 | **astensione** |
+
+**Passo 2 — Overlay dal Confidence Score**: CS ≥80 → +0% · 65-79 → +5% · 50-64 → +10% con warning · **<50 → gate, non azionabile**.
+
+Vincoli: overlay max +10%; MoS finale con cap al 60% (oltre → astensione); CS <65 → convinzione massima "Media".
+
+**Riconciliazione MVF ↔ IQI**: Δ = (Voto MVF ÷ 10) − IQI.
+- |Δ| ≤ 20 → convergenza, nessun aggiustamento
+- Δ > +20 → "qualità cara": ottimo business a prezzo non attraente → watchlist, non forzare un Buy
+- Δ < −20 → **sospetto value trap**: scrutinio con Reverse DCF obbligatorio, capital allocation come tie-breaker, convinzione −1 livello, MoS +1 scalino
+- MVF <400 e IQI <40 → astensione confermata
+
+### 2.7 — Pesi dei modelli di valutazione per classe
+
+| Classe | Composizione |
+|---|---|
+| Con dividendo (standard) | vedi Sez. 7 della specifica |
+| Senza dividendo | Graham 25 / DCF 50 / EPV 20 / Reverse DCF 5 |
+| REIT | DDM 50 / DCF 30 / EPV 10 / Graham 0 + Reverse DCF sanity |
+| BDC | P/NAV comparables 40 / DDM base-div 35 / EPV su NII 15 / reverse-yield 10 |
+| MLP | DDM distribuzione 35 / EV-EBITDA + DCF-yield 35 / DCF-model su DCF/unit 20 / EPV 10 |
+| Preferred | modelli di crescita **non applicabili**; target = min(fair value da required yield, call price) |
+
+**Robustezza valutativa**: dispersione tra modelli <15% → pesi standard; 15-30% → media; >30% → riduci il peso dell'outlier e alza un red flag di processo. Non tocca MoS né CS.
+
+### 2.8 — DIP: Protocollo di Integrità dei Dati
+
+Assente dal codice attuale, e probabilmente il pezzo più oneroso da implementare.
+
+**Gerarchia delle fonti**: SEC EDGAR programmatico (XBRL come ground truth) per US-listed, ADR e FPI → IR e bilanci IFRS per l'Europa → EDINET per il Giappone → HKEXnews/SSE/SZSE per Cina e Hong Kong → Damodaran per ERP/CRP.
+
+**Provenance tagging su ogni dato storico**:
+- `[P]` primario, fonte ufficiale
+- `[V]` validato, ≥2 fonti concordi dopo normalizzazione
+- `[U]` non validato, fonte singola o conflitto
+
+Tolleranze di riconciliazione: voci esatte ≤1%, ratio ≤1 punto percentuale o ≤2% relativo.
+
+**Pre-flight gate**: si reperisce, si tagga, si calcola un CS provvisorio. Se CS <50 o esistono input material `[U]` → output "NON AZIONABILE — DATI INSUFFICIENTI" con l'elenco dei dati mancanti. Mai una tesi ad alta convinzione su dati deboli.
+
+**Tagging separato per gli input forward**: `[G]` guidance ufficiale, `[C]` consensus multi-broker, `[S]` stima propria. Se B1+B4 sono prevalentemente `[S]` → cap al 50%, convinzione max "Media", red flag forward.
+
+### 2.9 — Confidence Score v4.0
+
+Quattro sub-score da 0 a 25, ora **calcolati oggettivamente dai tag di provenienza** pesati per il peso delle metriche:
 
 | Sub-score | Cosa misura |
 |---|---|
-| `data_quality` | Completezza dei dati, affidabilità fonti, coerenza interna |
-| `business_stability` | Volatilità del FCF, maturità del business, concentrazione clienti |
-| `projection_reliability` | Ciclicità, esposizione macro, visibilità sulla pipeline |
-| `model_coherence` | Dispersione tra i fair value dei cinque modelli |
+| A. Provenienza | quota `[P]`: ≥80% → 22-25 · 60-79 → 17-21 · 40-59 → 11-16 · 20-39 → 6-10 · <20 → 0-5 |
+| B. Completezza | metriche reperite vs vuote o stimate; storico 5y/3y |
+| C. Puntualità | ultimo esercizio completato e auditato; prezzo e macro attuali |
+| D. Coerenza | concordanza tra fonti; le discrepanze non risolte abbassano |
 
-**Questo è un elemento chiave per l'uso davanti a un cliente**: un voto MVF alto con Confidence basso significa "il numero c'è ma non ci puoi appoggiare una decisione". Nel nuovo programma va reso visibile, non nascosto.
+Lettura: ≥80 Alta · 65-79 Media · 50-64 Bassa · **<50 gate**.
 
-### 2.8 — Composite score e bonus
+### 2.10 — Gate di esclusione qualità (NO-BUY strutturale)
 
-Oltre al voto MVF esiste un `composite_score` con un sistema di bonus/malus:
+Distinti dai red flag: i red flag segnalano, i gate **escludono a prescindere da prezzo, MoS e IQI**.
 
-| Fattore | Effetto |
+| Gate | Condizione |
 |---|---|
-| Piotroski F-Score ≥ 8 | +10 |
-| Piotroski F-Score ≥ 6 | +5 |
-| Piotroski F-Score < 4 | −5 |
-| Moat score (scala 0-10) | +1,5 × punteggio (max +15) |
-| DCF upside > 10% | +min(upside × 20, 10) |
-| Appartenenza a filiera strategica | +5 |
-| Accelerazione utili > 5% | +5 |
-| EV/EBITDA < 8 | +8 |
-| EV/EBITDA < 12 | +4 |
-| EV/EBITDA > 20 | −4 |
-| FCF yield > 8% | +8 |
-| FCF yield > 5% | +4 |
-| FCF yield > 3% | +2 |
-| Ogni soft filter attivo | −3 |
+| **G1** | Distruzione di cassa strutturale: FCF negativo in tutti gli ultimi 5 anni (ciclici: media normalizzata negativa). SaaS growth con FCF negativo strategico esclusa dal gate |
+| **G2** | Distruzione di valore persistente: ROIC−WACC < 0 per ≥4 anni normalizzati |
+| **G3** | Leva fuori scala non servita: Net Debt/EBITDA oltre soglia, in aumento, **e** EBIT/oneri < 1,5x. Settori leveraged-by-design esenti |
+| **G4** | Trasferimento di valore dall'azionista: diluizione netta > 5%/anno per 3 anni **e** SBC/Revenue > 8% |
+| **G5** | Insolvenza tecnica confermata: Altman-Z < 1,23 (settore non esente) + almeno un secondo segnale |
+| **G6** | Capital allocation distruttiva persistente: giudizio "Carente" ricorrente (Morningstar Poor + M&A distruttivi o svalutazioni goodwill ripetute) |
 
-### 2.9 — Tag di strategia già implementati
+Regola trasversale importante: **conferma multi-segnale** — nessun segnale isolato con storia di falsi positivi esclude da solo.
 
-Il programma esistente etichetta i titoli con questi tag — **sono il punto di partenza naturale per i "pacchetti" del nuovo programma**:
+### 2.11 — Fiscalità: il rendimento netto Italia
 
-**`income`** — richiede tutte queste condizioni:
-```python
-dividend_yield > 0.04 and payout_ratio < 0.80 and pe_ratio < 18
-and net_margin > 0.05 and debt_to_equity < 1.5
+Novità v4.0, **obbligatoria per ogni titolo che paga dividendo** e particolarmente rilevante per il caso d'uso di questo progetto (cliente persona fisica residente in Italia, regime del risparmio amministrato).
+
+```
+Netto HOME   = Yield_lordo × (1 − w_home)
+Netto ITALIA = Yield_lordo × (1 − w_home) × (1 − 0,26)
 ```
 
-**`quality`**:
-```python
-operating_margin > 0.15 and roic > 0.12
-and debt_to_equity < 1.0 and warning_count <= 1
-```
+Ritenute alla fonte indicative — **la specifica impone di verificare la convenzione vigente prima dell'uso**:
 
-**`post_news_bull`** — sorpresa utili > +5% ma il prezzo si è mosso meno del 3% nei 5 giorni successivi (reazione mancata al rialzo)
+| Paese | Ritenuta |
+|---|---|
+| USA | 15% con W-8BEN (30% senza) |
+| UK | 0% |
+| Paesi Bassi | 15% |
+| Germania | 26,375% → 15% con rimborso |
+| Francia | 25% → ~15% |
+| Spagna | 19% |
+| Svizzera | 35% → 15% con rimborso |
+| Canada | 25% → 15% |
+| Irlanda | ~15-25% |
 
-**`post_news_bear`** — sorpresa utili < −5% con stessa mancata reazione
+**Casi speciali che rompono il 15% standard**:
+- **REIT USA**: le ordinary dividend distributions spesso non godono del treaty → usare **30%** salvo prova contraria
+- **MLP USA**: ritenuta IRC §1446 fino a **~37%**
+- **BDC USA**: ordinary income, spesso 30% per non residenti
 
-### 2.10 — Filiere strategiche (15)
-
-Mappatura industria → filiera, usata per il tag tematico:
-
-**Classiche**: semiconduttori, difesa, uranio/nucleare, energia oil&gas, rare earth e metalli, batterie/litio/storage, gestione rifiuti, consumer staples, helium e gas industriali
-
-**Meno analizzate** (bassa copertura analisti, potenziale alfa): agroalimentare upstream (fertilizzanti, sementi, macchinari), siderurgia e metalli speciali, shipping marittimo (container/bulk/tanker), infrastrutture idriche, riassicurazione specialty, packaging e foreste
-
-### 2.11 — Tier del programma esistente
-
-| Tier | Cosa contiene | Universo |
-|---|---|---|
-| **Tier 1** | Quality — analisi MVF completa | 500 titoli, market cap > 300M |
-| **Tier 2** | Speculative/catalyst — segnali di volume, short squeeze, accelerazione | market cap 5M-500M, prezzo > 0,10 |
-| **Tier 3** | Special situations | buckets tematici |
-| **Filiere** | Candidati per settore strategico | 15 filiere |
+> **Il confronto tra titoli a dividendo si fa sul netto Italia**, non sul lordo. Per un pacchetto income mostrato a un cliente italiano questo è il numero che conta — e ribalta l'ordinamento rispetto allo yield lordo, soprattutto quando ci sono REIT e MLP americani in lista.
 
 ---
 
@@ -276,15 +294,9 @@ Mappatura industria → filiera, usata per il tag tematico:
 >
 > I criteri per selezionare i titoli verranno estrapolati dalle regole MVF 4.0 che usa lo stock screener."
 
-### Contesto d'uso
+### Il primo vincolo: latenza
 
-Consulenza finanziaria **in presenza**. Il consulente è seduto davanti al cliente, il cliente esprime preferenze o vincoli, e il portafoglio si costruisce sul momento. È una situazione di vendita: la latenza e gli errori visibili costano credibilità.
-
-### Il vincolo architetturale centrale
-
-**Lo screener attuale impiega dai 5 ai 45 minuti per girare.** Analizza 500-600 titoli scaricando bilanci completi da Yahoo Finance, uno alla volta, in parallelo su 8 thread.
-
-Davanti a un cliente questo è inutilizzabile. La differenza fondamentale tra i due programmi non è funzionale, è **temporale**:
+Lo screener attuale impiega **dai 5 ai 45 minuti**. Davanti a un cliente è inutilizzabile.
 
 | | Briefing (esistente) | Screener live (da costruire) |
 |---|---|---|
@@ -293,70 +305,94 @@ Davanti a un cliente questo è inutilizzabile. La differenza fondamentale tra i 
 | Se un dato manca | Si degrada in silenzio | Il cliente lo vede |
 | Modello | Calcolo on-demand | **Pre-computazione + query** |
 
-La conseguenza progettuale è netta: il nuovo programma **non può calcolare MVF al momento della richiesta**. Deve avere un database pre-calcolato, aggiornato in batch (notturno o settimanale), e in sessione limitarsi a interrogarlo e filtrarlo.
-
-Architettura suggerita:
+Architettura conseguente:
 
 ```
-BATCH (notturno, non presidiato)
-  universe building → fetch dati → MVF 4.0 → scrittura su DB
-                                              (SQLite / Parquet / Postgres)
+BATCH (notturno o settimanale, non presidiato)
+  universe → fetch dati → DIP tagging → MVF 4.0 → IQI → CS → gate
+                                                    ↓
+                                              DATABASE
 
 LIVE (davanti al cliente, millisecondi)
   UI → query sul DB → filtri per pacchetto → risultati
-     → eventuale refresh prezzi solo per i titoli mostrati
+     → refresh prezzi solo per i titoli mostrati
 ```
 
-Solo i prezzi correnti vanno aggiornati in tempo reale, e solo per la manciata di titoli effettivamente visualizzati. Tutto il resto (bilanci, fair value, voti, confidence) è pre-computato.
+### Il secondo vincolo, più serio: la v4.0 non è interamente automatizzabile
+
+Questo è il punto che va affrontato prima di scrivere codice.
+
+MVF v4.0 è scritta come **procedura di analisi per un operatore o un LLM che fa ricerca documentale su un singolo titolo**, non come algoritmo deterministico su migliaia di titoli. Diversi elementi non sono ottenibili da API finanziarie:
+
+| Elemento | Perché non si automatizza facilmente |
+|---|---|
+| **MOAT (peso 25)** | La specifica impone "solo Morningstar" — dato proprietario a pagamento, non su yfinance |
+| **DIP tagging [P]/[V]/[U]** | Richiede fetch da SEC EDGAR, riconciliazione multi-fonte e normalizzazione FY/TTM, GAAP/adjusted |
+| **Same-store NOI, cap rate (REIT)** | Vivono negli supplement IR in PDF |
+| **B1/B4 forward** | Servono guidance ufficiale e consensus multi-broker |
+| **Capital allocation (G6)** | Giudizio qualitativo su M&A e svalutazioni ricorrenti |
+| **Auditor change, CFO turnover** | Da proxy statement e comunicati |
+
+Il MOAT da solo pesa 25 su 280, quasi il 9% del voto. Il DIP determina il CS, che determina l'overlay del MoS e può attivare un gate.
+
+**La strada praticabile è a due livelli**:
+
+1. **Livello screening** (batch, automatico, su migliaia di titoli): il sottoinsieme di MVF v4.0 calcolabile da dati strutturati. Produce un voto parziale dichiarato come tale, più i gate calcolabili (G1, G2, G3, G4, G5 sono quasi tutti derivabili da bilancio; G6 no).
+2. **Livello analisi completa** (on-demand, sui pochi titoli che entrano nel portafoglio del cliente): MVF v4.0 integrale, con ricerca documentale, eventualmente assistita da LLM.
+
+Il livello 1 seleziona, il livello 2 giustifica. Va deciso **come rappresentare la differenza nell'interfaccia**: un titolo con voto da screening non ha lo stesso status di un titolo con analisi completa, e mostrarli identici davanti a un cliente è fuorviante.
+
+Una conseguenza pratica: il **Confidence Score da screening** sarà strutturalmente basso, perché i dati vengono da un aggregatore singolo (`[U]` secondo la specifica). Se si applicasse il gate CS <50 alla lettera, quasi nulla passerebbe. Serve una regola esplicita per il regime screening, diversa da quella dell'analisi completa.
 
 ### Cosa significa "pacchetti" — da chiarire
 
-Il termine non è stato ancora definito dal committente. Le letture possibili:
+Il termine non è ancora definito. Letture possibili:
 
-1. **Per obiettivo dell'investitore**: income / dividend growth / crescita / difensivo / speculativo
-2. **Per profilo di rischio**: conservativo / bilanciato / aggressivo
-3. **Per orizzonte**: breve / medio / lungo termine
-4. **Per tema o filiera**: i 15 settori strategici già mappati
-5. **Portafogli pre-confezionati**: pacchetto = allocazione completa pronta, non solo una lista
+1. Per obiettivo: income / dividend growth / crescita / difensivo / speculativo
+2. Per profilo di rischio: conservativo / bilanciato / aggressivo
+3. Per orizzonte temporale
+4. Per tema o filiera: i 15 settori strategici già mappati
+5. **Portafogli pre-confezionati**: pacchetto = allocazione completa con pesi, non solo una lista
 
-L'interpretazione 5 è la più coerente con il caso d'uso descritto ("il cliente vuole vedere la creazione del portafoglio lì sul posto"), ma va confermata prima di progettare lo schema dati.
+La quinta è la più coerente con "il cliente vuole vedere la creazione del portafoglio lì sul posto", ma va confermata perché determina lo schema dati.
 
-Base di partenza già disponibile: i tag `income` e `quality` della sezione 2.9, più le 15 filiere della 2.10.
+Elementi già disponibili come base: i tag `income` e `quality` del codice v3.0 (Sez. 2.9 del vecchio handoff, ancora validi come euristica), le 15 filiere, e in v4.0 i **tier dividendo** del Blocco B (forte ≥10 anni / solido 5-9 / nascente <3 / no-div con buyback / nessuna remunerazione), che sono già una segmentazione naturale per pacchetti income.
 
-### Domande da porre al committente prima di scrivere codice
+### Domande aperte per il committente
 
-1. **Pacchetti**: quali sono esattamente, e sono liste di candidati o allocazioni complete con pesi?
-2. **MVF 4.0**: quali regole cambiano rispetto alla v3.0 documentata sopra? Pesi diversi, metriche nuove, soglie riviste?
-3. **Ampiezza dell'universo**: si mantiene la copertura globale o ci si concentra sui mercati sviluppati? (Vedi il problema dei 404 sui mercati emergenti in 2.1 — davanti a un cliente un titolo senza prezzo è imbarazzante.)
-4. **Input del cliente**: cosa può scegliere in sessione? Importo, orizzonte, rischio, settori da escludere, valuta?
-5. **Output**: schermo condiviso, PDF stampabile, entrambi?
-6. **Frequenza di aggiornamento del batch**: giornaliera come oggi, o settimanale è sufficiente?
-7. **Vincoli normativi**: il programma produce una raccomandazione personalizzata? In tal caso il perimetro regolamentare (consulenza finanziaria) va verificato prima, non dopo.
+1. **Pacchetti**: liste di candidati o allocazioni complete con pesi?
+2. **Ranking cross-classe**: dato che i voti MVF non sono confrontabili tra common, REIT, BDC, MLP e preferred, su cosa si ordina un pacchetto misto? IQI, netto Italia, o si separano i pacchetti per classe?
+3. **MOAT**: si compra la licenza dati Morningstar, si usa un proxy calcolato, o si accetta un voto parziale in fase di screening?
+4. **Regime CS in screening**: quale soglia sostituisce il gate <50 quando per costruzione i dati sono `[U]`?
+5. **Universo**: copertura globale o solo mercati sviluppati? (Vedi 4.1: davanti a un cliente un titolo senza prezzo è un problema di credibilità.)
+6. **Input del cliente in sessione**: importo, orizzonte, rischio, settori da escludere, valuta, vincoli fiscali?
+7. **Output**: schermo condiviso, PDF stampabile (la specifica ha già una scheda A4 in Sez. 11D), entrambi?
+8. **Perimetro regolamentare**: il programma produce una raccomandazione personalizzata a un cliente. Il vincolo normativo va verificato prima di costruirlo, non dopo — nel progetto esistente è già emerso il tema della regolamentazione SCF.
 
 ---
 
-## Parte 4 — Vincoli tecnici da tenere presenti
+## Parte 4 — Vincoli tecnici noti
 
-### Yahoo Finance / yfinance
+### 4.1 — Yahoo Finance / yfinance
 
-- **Rate limiting aggressivo**. Dopo qualche centinaio di richieste la sessione decade con errore 401 `Invalid Crumb`. Nel programma esistente il problema si è manifestato così: dopo lo screener completo, l'arricchimento prezzi del portafoglio falliva su 20 titoli su 20. Mitigazione applicata: retry con backoff 5s/10s e riduzione della concorrenza da 8 a 4 thread.
-- **404 sistematici** su Filippine, Indonesia, Dubai, Argentina, alcune linee di Euronext.
+- **Rate limiting aggressivo**: dopo qualche centinaio di richieste la sessione decade con 401 `Invalid Crumb`. Nel programma esistente il sintomo è stato l'arricchimento prezzi fallito su 20 titoli su 20 subito dopo lo screener. Mitigazione applicata: retry con backoff 5s/10s e concorrenza ridotta da 8 a 4 thread.
+- **404 sistematici**: Filippine (`.PSE`), Indonesia (`.JK`), Dubai (`.DU`), Argentina (`.BA`), alcune linee Euronext.
 - **500 sporadici** lato server, transitori.
-- **Timezone/calendar mancanti** per molti titoli asiatici.
+- **Timezone e calendar mancanti** per molti titoli asiatici.
 
-Per un'applicazione mostrata a un cliente, valutare un data provider a pagamento con SLA (Refinitiv, FactSet, Financial Modeling Prep, EODHD) almeno per i prezzi live.
+Per un'applicazione mostrata a un cliente conviene un provider con SLA (Refinitiv, FactSet, Financial Modeling Prep, EODHD) almeno per i prezzi live. Il DIP della v4.0 spinge comunque verso SEC EDGAR per i fondamentali US, che è gratuito e richiede solo uno User-Agent.
 
-### Costi API modello
+### 4.2 — Costi
 
-Il briefing usa `claude-opus-4-6` con `max_tokens = 24000` e prompt caching sul system prompt. Costo osservato: circa **1,00-1,05 $ per briefing generato**. Con `max_tokens` elevati la SDK Anthropic **impone lo streaming** (`messages.stream()` + `get_final_message()`); `messages.create()` solleva `ValueError`.
+Il briefing usa `claude-opus-4-6` con `max_tokens = 24000` e prompt caching: circa **1,00-1,05 $ per briefing**. Con `max_tokens` elevati la SDK Anthropic **impone lo streaming** (`messages.stream()` + `get_final_message()`); `messages.create()` solleva `ValueError`.
 
-Se il nuovo programma non deve generare testo narrativo, questo costo non si applica — è puro screening deterministico.
+Per lo screener live: il livello 1 è deterministico e non ha costi LLM. Il livello 2, se assistito da LLM per la ricerca documentale, ha un costo per titolo analizzato — da dimensionare sul numero di titoli che entrano davvero in un portafoglio cliente.
 
-### Ambiente di esecuzione
+### 4.3 — Ambiente
 
-Il programma esistente gira su GitHub Actions (`ubuntu-latest`, timeout 130 minuti, Python 3.11). Per un applicativo usato in presenza serve invece un'esecuzione locale o un servizio sempre attivo — GitHub Actions non è adatto a richieste interattive.
+Il programma esistente gira su GitHub Actions (`ubuntu-latest`, timeout 130 minuti, Python 3.11). Per un applicativo usato in presenza serve esecuzione locale o un servizio sempre attivo: GitHub Actions non è adatto a richieste interattive.
 
-### Dipendenze
+### 4.4 — Dipendenze attuali
 
 ```
 tradingview-screener>=2.5.0,<3.0
@@ -372,14 +408,14 @@ requests>=2.31,<3.0
 
 ---
 
-## Parte 5 — Riepilogo operativo per chi riceve questo documento
+## Parte 5 — Ordine di lettura consigliato
 
-**Da leggere per primo nel repository** (`BigFatNeko/Main-Proxima`, branch `claude/financial-briefing-pipeline-aVCmh`):
+1. **`rassegna-stampa/docs-mvf/MVF_v4.0_istruzioni_operative.md`** — la specifica completa. Prioritarie: Sez. 2 (STEP 0 routing), Sez. 3 (pesi), Sez. 7 (IQI, MoS, fiscalità), Sez. 8-bis (gate), Sez. 6-bis (DIP).
+2. `rassegna-stampa/screener.py` righe 65-360 — configurazione, mercati, mappatura ticker, data class.
+3. `rassegna-stampa/screener.py` righe 880-1210 — filtri e scoring v3.0, utili come riferimento di ciò che è già automatizzato.
+4. `rassegna-stampa/mvf_valuation.py` — implementazione v3.0: da riscrivere, ma mostra come sono già strutturati i cinque modelli di valutazione e il WACC via CAPM esteso.
 
-1. `rassegna-stampa/mvf_valuation.py` — il motore da portare a MVF 4.0, 729 righe, autonomo
-2. `rassegna-stampa/screener.py` righe 65-360 — configurazione, mercati, data class
-3. `rassegna-stampa/screener.py` righe 880-1210 — filtri e scoring
+**Due decisioni da prendere prima di scrivere codice**, in quest'ordine:
 
-**Da ignorare**: tutto ciò che riguarda briefing, template HTML, system prompt, personalizzazione utente, GitHub Actions.
-
-**Primo problema da risolvere in ordine di importanza**: il passaggio da calcolo on-demand a pre-computazione su database. È la scelta che determina tutta l'architettura successiva.
+1. **Quale sottoinsieme della v4.0 è automatizzabile in batch**, e come si dichiara la differenza tra un voto da screening e un'analisi completa.
+2. **Pre-computazione su database** invece di calcolo on-demand — è la scelta che determina tutta l'architettura successiva.
