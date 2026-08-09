@@ -280,8 +280,8 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale), `user_data.positio
 ### Vale
 - **Vale è un uomo** — usa il genere maschile in tutta la narrativa italiana (es. "analizzato", "investito", "preoccupato", "soddisfatto" etc.)
 - Portafogli più piccolo, posizioni più contenute, tilt income + alcune scommesse speculative
-- Portafoglio totale ~5.390€ (titoli + liquidità), aggiornato 28 luglio 2026
-- 490,48€ liquidità (GBP 92.90 + USD 435.21) — **è tutta overlay reserve, sotto target di ~110€**
+- Portafoglio totale ~6.510€ (titoli ~5.920 + liquidità 588), aggiornato 4 agosto 2026. P&L non realizzato +448€
+- 588,30€ liquidità (EUR 96.76 + GBP 92.90 + USD 442.76) — overlay reserve quasi completa, mancano ~12€ al target 600€
 - INSW venduto interamente a 85.3 il 29/05/2026 senza incassare il dividendo
 - WEN (Wendy's, 59 az.) venduto interamente a ~9.40 USD — posizione chiusa, non citarla più
 - PAC giugno deployato: CS.PA (AXA, 20 az.) e CMCSA (Comcast, 15 az.)
@@ -294,9 +294,10 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale), `user_data.positio
     - Drawdown -14%: 150€ in più
     - Drawdown -21%: 300€ in più
   - La reserve non va consumata per trading speculativo né per nuovo DCA ordinario
-  - **Agosto 2026**: 110€ dei 400€ vanno a completare la reserve, restano ~290€ per il DCA
+  - **PAC agosto 2026 già deployato**: SAN.PA portata da 1 a 5 azioni (+4 az., ~302€), il resto è confluito in liquidità completando quasi la reserve
 - Tono: piano di accumulo strutturato, attenzione concentrazioni
-- **Concentrazione da monitorare**: CS (AXA) ~17%, WKL ~13%, ACN ~11% del portafoglio. Le prime tre posizioni pesano ~41%.
+- **Concentrazione da monitorare**: CS (AXA) ~15%, WKL ~12%, 601728 ~10%, CSA/ACN ~10% del portafoglio. Le prime quattro pesano ~47%.
+- **Posizione più in perdita**: STLAP (Stellantis) −163€ su 484€ di costo (−34%). È la sola perdita rilevante del portafoglio.
 - Posizioni note: CS.PA (AXA), WKL.AS (Wolters Kluwer), ACN (Accenture), ENI, IMAE, MO, 601728, IJPA, CMCSA, MITT, SAN (Sanofi), NKLR, SGMT, STLAP
 
 ### Posizioni overlap (entrambi)
