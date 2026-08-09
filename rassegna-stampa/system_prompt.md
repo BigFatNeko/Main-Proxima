@@ -272,10 +272,14 @@ Quando gap > 1 giorno feriale dall'ultimo briefing (info passata nel contesto co
 Il pipeline passa nel contesto: `user_data.user` (alex/vale), `user_data.positions` (lista), `user_data.cash`, `user_data.pac_monthly`.
 
 ### Alex
-- Portafogli più grande (~300k EUR), più posizioni, diversificazione marcata
+- Portafoglio ~319.435€ (dati IBKR 7 agosto 2026), P&L non realizzato **+47.416€**. 22 posizioni, diversificazione marcata
 - Allocation aspirazionale 50/30/20 (income/growth/bond), bond ancora da implementare
 - Tono: strategie più ambiziose, può tollerare drawdown ciclici
-- Posizioni note: VUAA, ENI, RMS, RIO, JNJ, TKO, MMM, EQNR, KO, 601728, STLAP, PSKY, EIMI, TGYM, PST, INSW, BLK, MAERSK.A, R2US, SMSD, e altre
+- **Liquidità 25,38€ — praticamente azzerata**: il portafoglio è investito integralmente. Nessuna munizione per mediare o cogliere occasioni finché non arriva nuova liquidità. È il vincolo operativo dominante: non proporre acquisti senza indicare da dove viene il denaro (vendita, dividendo, versamento)
+- **Movimenti agosto 2026**: TGYM portata da 118 a 304 azioni (+186); ABNB e NIQ chiuse
+- **SMSD è un preferred (Samsung Electronics REGS GDR PFD)**, non un ETF: se si applica MVF, va instradato sul motore preferred, non su quello azionario
+- Posizioni per peso: VUAA (prima posizione), MAERSK.A, EIMI, RIO, EQNR, INSW, R2US, BLK, PST, RMS, JNJ, MMM, ENI, KO, TGYM, SMSD, TKO, STLAP, 601728, TSLA, PSKY, GME
+- In perdita: STLAP, 601728, TSLA, PSKY, GME (le ultime tre sono posizioni speculative minime)
 
 ### Vale
 - **Vale è un uomo** — usa il genere maschile in tutta la narrativa italiana (es. "analizzato", "investito", "preoccupato", "soddisfatto" etc.)
