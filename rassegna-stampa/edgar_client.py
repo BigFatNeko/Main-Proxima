@@ -195,6 +195,8 @@ class EdgarClient:
     _last_request = 0.0
     _lookups_used = 0
     _budget_warned = False
+    _stats = {"agree": 0, "conflict": 0, "partial": 0, "not_covered": 0,
+              "from_cache": 0, "downloaded": 0, "http_errors": 0}
 
     @classmethod
     def budget_remaining(cls) -> int:
@@ -204,6 +206,35 @@ class EdgarClient:
     def reset_budget(cls) -> None:
         cls._lookups_used = 0
         cls._budget_warned = False
+        for k in cls._stats:
+            cls._stats[k] = 0
+
+    @classmethod
+    def record(cls, key: str) -> None:
+        with cls._lock:
+            if key in cls._stats:
+                cls._stats[key] += 1
+
+    @classmethod
+    def run_summary(cls) -> str:
+        """Riepilogo del run, da emettere a livello INFO.
+
+        Senza questo il cross-check è invisibile nei log: tutti i suoi
+        messaggi sono a livello debug, e un EDGAR che non ha mai risposto
+        sarebbe indistinguibile da un EDGAR che ha confermato tutto.
+        """
+        s = cls._stats
+        verdicts = s["agree"] + s["conflict"] + s["partial"] + s["not_covered"]
+        if verdicts == 0 and s["downloaded"] == 0:
+            return ("EDGAR: nessuna verifica eseguita in questo run "
+                    "(cross-check inattivo o nessun titolo US tra i candidati)")
+        return (
+            f"EDGAR cross-check — {verdicts} titoli valutati: "
+            f"{s['agree']} confermati, {s['conflict']} in conflitto, "
+            f"{s['partial']} parziali, {s['not_covered']} fuori perimetro SEC "
+            f"| download {s['downloaded']}, da cache {s['from_cache']}, "
+            f"errori HTTP {s['http_errors']} "
+            f"| budget residuo {cls.budget_remaining()}/{MAX_LOOKUPS_PER_RUN}")
 
     def __init__(self, user_agent: Optional[str] = None,
                  cache_dir: Optional[Path] = None):
@@ -346,6 +377,7 @@ class EdgarClient:
                 try:
                     cached = json.loads(extract_path.read_text())
                     if cached.get("fiscal_year_req") == fiscal_year:
+                        EdgarClient.record("from_cache")
                         out.entity_name = cached.get("entity_name", "")
                         out.values = cached.get("values", {})
                         out.derived = cached.get("derived", {})
@@ -374,8 +406,10 @@ class EdgarClient:
 
         facts = self._fetch_json(COMPANYFACTS_URL.format(cik=cik))
         if not facts:
+            EdgarClient.record("http_errors")
             out.error = "companyfacts non recuperabili"
             return out
+        EdgarClient.record("downloaded")
 
         out.entity_name = facts.get("entityName", "")
         gaap = facts.get("facts", {}).get("us-gaap", {})
@@ -474,6 +508,11 @@ CONFLICT_RATIO = 0.34      # oltre un terzo di campi discordi -> conflitto
 AGREE_RATIO = 0.80         # almeno l'80% concorde -> conferma
 
 
+def _record_verdict(res: "CrossCheckResult") -> "CrossCheckResult":
+    EdgarClient.record(res.verdict)
+    return res
+
+
 def cross_check_fundamentals(yf_values: dict,
                              edgar: EdgarFundamentals) -> CrossCheckResult:
     """Confronta i valori yfinance con quelli EDGAR.
@@ -489,7 +528,7 @@ def cross_check_fundamentals(yf_values: dict,
     if not edgar.is_usable:
         res.verdict = "not_covered"
         res.notes.append(edgar.error or "EDGAR non copre questo emittente")
-        return res
+        return _record_verdict(res)
 
     reference = {**edgar.values, **edgar.derived}
     for key, yf_val in (yf_values or {}).items():
@@ -519,7 +558,7 @@ def cross_check_fundamentals(yf_values: dict,
         res.notes.append(
             f"solo {res.checked} campi confrontabili: sotto il minimo di "
             f"{MIN_FIELDS_FOR_VERDICT} per un verdetto")
-        return res
+        return _record_verdict(res)
 
     mismatch_ratio = res.mismatched / res.checked
     match_ratio = res.matched / res.checked
@@ -543,7 +582,7 @@ def cross_check_fundamentals(yf_values: dict,
         res.verdict = "partial"
         res.notes.append(
             f"conferma parziale: {res.matched}/{res.checked} campi concordi")
-    return res
+    return _record_verdict(res)
 
 
 # =============================================================================

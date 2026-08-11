@@ -2769,6 +2769,9 @@ def main():
              sum(len(v) for v in filiere_data.values()) if filiere_data else 0,
              "ok" if market_ctx else "skip")
 
+    if EDGAR_OK:
+        log.info(edgar.EdgarClient.run_summary())
+
     # Log di copertura + allerta su scostamento (RISK-ASSESSMENT-yfinance §4.4).
     # Il rischio dominante di yfinance non e' il dato sbagliato: e' il dato
     # assente che passa inosservato. Tre run dello stesso giorno hanno
