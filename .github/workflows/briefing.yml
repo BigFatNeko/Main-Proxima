@@ -53,6 +53,19 @@ jobs:
         run: |
           mkdir -p briefings
           mkdir -p rassegna-stampa/data/screener_results
+          mkdir -p rassegna-stampa/data/edgar_cache
+
+      # La cache EDGAR contiene solo estratti normalizzati (~0.8 KB per
+      # emittente) piu' la mappa ticker->CIK. Persisterla evita di
+      # riscaricare gli stessi companyfacts a ogni run e conserva il budget
+      # di lookup per i titoli non ancora verificati.
+      - name: Cache SEC EDGAR
+        uses: actions/cache@v4
+        with:
+          path: rassegna-stampa/data/edgar_cache
+          key: edgar-cache-${{ github.run_id }}
+          restore-keys: |
+            edgar-cache-
 
       - name: Cancella cache screener (solo se force_rescreen)
         if: ${{ github.event.inputs.force_rescreen == 'true' }}
@@ -81,6 +94,10 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
           BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
+          # SEC EDGAR richiede uno User-Agent identificativo (nome + email).
+          # Senza, le richieste vengono rifiutate e il cross-check si limita
+          # a non eseguirsi: il pipeline resta sui dati yfinance con tag [V].
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
         run: |
           cd rassegna-stampa
           python briefing_pipeline.py --user alex
@@ -91,6 +108,10 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
           BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
+          # SEC EDGAR richiede uno User-Agent identificativo (nome + email).
+          # Senza, le richieste vengono rifiutate e il cross-check si limita
+          # a non eseguirsi: il pipeline resta sui dati yfinance con tag [V].
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
         run: |
           cd rassegna-stampa
           python briefing_pipeline.py --user vale

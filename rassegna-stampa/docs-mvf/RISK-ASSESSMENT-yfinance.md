@@ -161,14 +161,31 @@ SEZIONE 4 — COSA VALIDEREBBE DAVVERO
 Il controllo incrociato è la strada giusta, ma il suo valore dipende molto da
 quale seconda fonte si sceglie.
 
-  4.1 SEC EDGAR — il candidato migliore per i titoli US
+  4.1 SEC EDGAR — IMPLEMENTATO (edgar_client.py)
       Programmatico, gratuito, richiede solo uno User-Agent. XBRL è ground
       truth nel senso pieno della specifica: è il documento depositato.
-      Endpoint: companyfacts, companyconcept, frames.
-      Copre: US-listed, ADR, FPI (10-K, 10-Q, 20-F, 40-F).
-      Con EDGAR quei titoli passano genuinamente a [P], non a [V].
-      Costo: sviluppo, non licenza. È il singolo intervento con il miglior
-      rapporto tra valore e costo.
+      Copre US-listed, ADR e FPI (10-K, 20-F, 40-F).
+
+      Implementazione:
+        · ticker -> CIK da company_tickers.json (10.387 emittenti)
+        · 14 concetti con fallback multipli per tassonomia ed emittente
+        · selezione del fatto annuale: form annuale, periodo di ~12 mesi,
+          deposito più recente (riflette i restatement)
+        · confronto con le tolleranze di Sez. 6-bis C, tre esiti:
+            agree      -> provenienza 21/25
+            conflict   -> degradata a [U], 10/25
+            not_covered-> resta [V], 18/25
+        · budget di 60 lookup per run (EDGAR_MAX_LOOKUPS): i companyfacts
+          grezzi pesano 1-20 MB e su CI il filesystem parte pulito
+        · cache del solo estratto normalizzato: ~0,8 KB per emittente
+          invece dei MB del file grezzo, persistita tra run via actions/cache
+
+      NOTA SUL TAG RISULTANTE. Il riscontro EDGAR porta a [V] con conferma
+      (21/25), non a [P] (25/25): il valore usato nel calcolo resta quello
+      dell'aggregatore, EDGAR lo verifica soltanto. Per arrivare a [P]
+      occorrerebbe sostituire i valori di calcolo con quelli XBRL — passo
+      successivo, più invasivo, che riguarda soprattutto il progetto
+      screener live.
 
   4.2 SECONDA FONTE COMMERCIALE — per il resto del mondo
       Financial Modeling Prep, EODHD, Twelve Data. Fascia di prezzo bassa,
@@ -217,16 +234,23 @@ SEZIONE 5 — RACCOMANDAZIONE OPERATIVA
   nella fascia 60-79% del sub-score A della specifica (17-21). 18 è il
   valore basso della fascia, coerente con l'assenza di verifica incrociata.
 
-5.2 PRIORITÀ DEGLI INTERVENTI
+5.2 STATO DEGLI INTERVENTI
 
-  1. Log di copertura per run con allerta su scostamento     (§4.4)
-     Costo minimo, intercetta il rischio dominante.
-  2. Controlli di coerenza interna                            (§4.3)
-     Nessuna dipendenza esterna, alimenta già il CS.
-  3. SEC EDGAR per i titoli US                                (§4.1)
-     Porta i titoli US a [P] e prepara il progetto screener live.
-  4. Seconda fonte commerciale per il non-US                  (§4.2)
-     Solo se il perimetro resta ampio.
+  [FATTO] 1. Log di copertura per run con allerta            (§4.4)
+             Soglia 40% sulla media mobile degli ultimi 10 run. Verificato
+             sul caso reale: il crollo a 65 candidati produce un avviso
+             esplicito che il briefing non è confrontabile con i precedenti.
+  [FATTO] 2. SEC EDGAR per i titoli US                       (§4.1)
+             edgar_client.py, integrato nello STEP 7 del pipeline.
+  [APERTO] 3. Controlli di coerenza interna                  (§4.3)
+             Il parametro internal_coherence_ok è già esposto da
+             compute_confidence_score ma non è ancora alimentato: quadratura
+             di bilancio, FCF ≈ CFO − CapEx, salti anno su anno oltre ±60%.
+             Costo basso, nessuna dipendenza esterna.
+  [APERTO] 4. Seconda fonte commerciale per il non-US        (§4.2)
+             Rilevante solo se il perimetro resta ampio. Oggi i titoli
+             europei del portafoglio restano [V] non verificati: EDGAR non
+             li copre e non esiste un equivalente paneuropeo.
 
 5.3 COSA NON FARE
 

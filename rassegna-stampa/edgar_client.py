@@ -65,6 +65,14 @@ REQUEST_TIMEOUT = 45
 TICKER_MAP_TTL_DAYS = 7
 COMPANYFACTS_TTL_DAYS = 7
 
+# Budget di lookup per run. I companyfacts pesano da 1 a 20 MB ciascuno e su
+# CI il filesystem parte pulito: verificare l'intero universo significherebbe
+# centinaia di MB e diversi minuti. Il cross-check serve sui titoli che
+# finiscono davanti a un lettore, non su tutto il setaccio. Esaurito il
+# budget i titoli restano [V], che e' il comportamento corretto: non
+# verificato non significa sbagliato.
+MAX_LOOKUPS_PER_RUN = int(os.environ.get("EDGAR_MAX_LOOKUPS", "60"))
+
 # Tolleranze di riconciliazione (MVF Sez. 6-bis C)
 TOLERANCE_ABSOLUTE = 0.01     # voci esatte: <= 1%
 TOLERANCE_RATIO_PP = 0.01     # ratio: <= 1 punto percentuale
@@ -185,6 +193,17 @@ class EdgarClient:
 
     _lock = threading.Lock()
     _last_request = 0.0
+    _lookups_used = 0
+    _budget_warned = False
+
+    @classmethod
+    def budget_remaining(cls) -> int:
+        return max(0, MAX_LOOKUPS_PER_RUN - cls._lookups_used)
+
+    @classmethod
+    def reset_budget(cls) -> None:
+        cls._lookups_used = 0
+        cls._budget_warned = False
 
     def __init__(self, user_agent: Optional[str] = None,
                  cache_dir: Optional[Path] = None):
@@ -317,10 +336,43 @@ class EdgarClient:
             return out
         out.cik = cik
 
-        facts = self._cached_json(
-            f"facts_{cik:010d}.json",
-            COMPANYFACTS_URL.format(cik=cik),
-            COMPANYFACTS_TTL_DAYS)
+        # Si mette in cache l'ESTRATTO normalizzato, non il companyfacts
+        # grezzo: quest'ultimo contiene 500+ concetti con tutta la storia e
+        # pesa da 1 a 20 MB per emittente. L'estratto sta in pochi KB.
+        extract_path = self.cache_dir / f"extract_{cik:010d}.json"
+        if extract_path.exists():
+            age = datetime.now() - datetime.fromtimestamp(extract_path.stat().st_mtime)
+            if age < timedelta(days=COMPANYFACTS_TTL_DAYS):
+                try:
+                    cached = json.loads(extract_path.read_text())
+                    if cached.get("fiscal_year_req") == fiscal_year:
+                        out.entity_name = cached.get("entity_name", "")
+                        out.values = cached.get("values", {})
+                        out.derived = cached.get("derived", {})
+                        out.period_end = cached.get("period_end", "")
+                        out.fiscal_year = cached.get("fiscal_year")
+                        out.form = cached.get("form", "")
+                        out.filed = cached.get("filed", "")
+                        out.covered = bool(out.values)
+                        return out
+                except Exception:
+                    pass
+
+        # Il budget si consuma solo su download reali: una cache valida non
+        # costa nulla e non va contata.
+        with EdgarClient._lock:
+            if EdgarClient._lookups_used >= MAX_LOOKUPS_PER_RUN:
+                if not EdgarClient._budget_warned:
+                    log.info(
+                        "EDGAR: budget di %d lookup esaurito per questo run; "
+                        "i titoli successivi restano [V] non verificati",
+                        MAX_LOOKUPS_PER_RUN)
+                    EdgarClient._budget_warned = True
+                out.error = "budget di lookup EDGAR esaurito per questo run"
+                return out
+            EdgarClient._lookups_used += 1
+
+        facts = self._fetch_json(COMPANYFACTS_URL.format(cik=cik))
         if not facts:
             out.error = "companyfacts non recuperabili"
             return out
@@ -348,6 +400,16 @@ class EdgarClient:
 
         out.covered = bool(out.values)
         out.derived = self._derive_ratios(out.values)
+
+        try:
+            extract_path.write_text(json.dumps({
+                "entity_name": out.entity_name, "values": out.values,
+                "derived": out.derived, "period_end": out.period_end,
+                "fiscal_year": out.fiscal_year, "form": out.form,
+                "filed": out.filed, "fiscal_year_req": fiscal_year,
+            }))
+        except Exception as e:
+            log.debug("estratto EDGAR non messo in cache (CIK %s): %s", cik, e)
         return out
 
     @staticmethod
