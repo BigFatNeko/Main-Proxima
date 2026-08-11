@@ -47,13 +47,26 @@ except ImportError:
     TV_OK = False
     log.warning("tradingview-screener non installato. pip install tradingview-screener")
 
-# MVF v3.0 — modulo valutazione finanziaria
+# MVF v4.1 — modulo valutazione finanziaria
 try:
     from . import mvf_valuation as mvf
     from . import filiere_screener as filiere_mod
 except ImportError:
     import mvf_valuation as mvf
     import filiere_screener as filiere_mod
+
+# SEC EDGAR — controllo incrociato dei fondamentali (MVF Sez. 6-bis).
+# Opzionale: senza il modulo il pipeline resta sui dati yfinance con tag [V].
+try:
+    try:
+        from . import edgar_client as edgar
+    except ImportError:
+        import edgar_client as edgar
+    EDGAR_OK = True
+except ImportError:
+    edgar = None
+    EDGAR_OK = False
+    log.debug("edgar_client non disponibile: cross-check disattivato")
 
 try:
     from finvizfinance.screener.overview import Overview as FinvizOverview
@@ -295,6 +308,7 @@ class Candidate:
     iqi_score: Optional[dict] = None        # IQI -> guida il MoS (Sez. 7)
     mvf_iqi_reconciliation: Optional[dict] = None
     net_yield: Optional[dict] = None        # netto HOME vs ITALIA (Sez. 7)
+    edgar_cross_check: Optional[dict] = None  # riscontro XBRL (Sez. 6-bis)
     confidence_score: Optional[dict] = None
     variation_5y: Optional[dict] = None
     sector_median_pe: Optional[float] = None
@@ -1526,7 +1540,40 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
 
     c.variation_5y = asdict(var)
 
-    # === STEP 7: Confidence Score ===
+    # === STEP 7: controllo incrociato EDGAR + Confidence Score ===
+    # Il DIP (Sez. 6-bis) impone primary-first: per gli emittenti SEC il
+    # riscontro XBRL porta il dato da [V] a [P]; un conflitto material lo
+    # degrada a [U], perche' due fonti discordi valgono meno di una sola non
+    # verificata. Fuori dal perimetro SEC il tag resta [V].
+    cross_checked = False
+    cross_agrees = None
+    if EDGAR_OK:
+        yf_for_check = {
+            "revenue": rev_series[0] if rev_series else None,
+            "net_income": safe_row(fin, "Net Income"),
+            "operating_income": safe_row(fin, "Operating Income"),
+            "assets": safe_row(bs, "Total Assets"),
+            "equity": safe_row(bs, "Stockholders Equity"),
+            "operating_cash_flow": safe_row(cf, "Operating Cash Flow"),
+            "net_margin": c.metrics.net_margin,
+            "operating_margin": c.metrics.operating_margin,
+            "roe": c.metrics.roe,
+        }
+        yf_for_check = {k: v for k, v in yf_for_check.items() if v is not None}
+        xc = edgar.verify_ticker(c.ticker, yf_for_check)
+        c.edgar_cross_check = {
+            "verdict": xc.verdict, "checked": xc.checked,
+            "matched": xc.matched, "mismatched": xc.mismatched,
+            "notes": xc.notes,
+        }
+        if xc.verdict in ("agree", "conflict"):
+            cross_checked = True
+            cross_agrees = xc.agrees
+            if xc.verdict == "conflict":
+                notes.append(
+                    f"EDGAR in conflitto: {xc.mismatched}/{xc.checked} campi "
+                    f"fuori tolleranza")
+
     completeness = sum(1 for v in [c.metrics.gross_margin, c.metrics.operating_margin,
                                     c.metrics.net_margin, c.metrics.roic,
                                     c.metrics.fcf_margin, c.metrics.roe, eps,
@@ -1535,7 +1582,10 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
         completeness, fcf_series, c.sector,
         [val.graham_fv, val.ddm_2stage_fv or val.ddm_1stage_fv,
          val.dcf_2stage_fv, val.epv_fv],
-        has_quality_audit=True)
+        has_quality_audit=True,
+        source_tag="V",
+        cross_checked=cross_checked,
+        cross_check_agrees=cross_agrees)
     c.confidence_score = asdict(cs)
 
     # === STEP 8: Voto MVF /1000 su base 280 ===
@@ -2569,6 +2619,7 @@ def output_results(cands, out_dir, top_n=30,
             "iqi_score": c.iqi_score,
             "mvf_iqi_reconciliation": c.mvf_iqi_reconciliation,
             "net_yield": c.net_yield,
+            "edgar_cross_check": c.edgar_cross_check,
             "confidence_score": c.confidence_score,
             "variation_5y": c.variation_5y,
             "intrinsic_value": c.intrinsic_value,
