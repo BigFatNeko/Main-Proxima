@@ -1232,6 +1232,55 @@ def _series_to_list(df, row_name, n: int = 5) -> list:
     return []
 
 
+COVERAGE_ALERT_THRESHOLD = 0.40   # scostamento oltre il quale allertare
+
+
+def _log_coverage(n_candidates: int, out_dir) -> None:
+    """Registra la copertura del run e allerta se si discosta dalla storia.
+
+    yfinance degrada in silenzio: sotto rate limiting restituisce risposte
+    vuote, non eccezioni. Un run che analizza un terzo dei titoli abituali
+    produce un output dall'aria normale. Questo confronto e' l'unico modo
+    per accorgersene senza leggere i log riga per riga.
+    """
+    try:
+        hist_path = Path(out_dir) / "coverage_history.json"
+        history = []
+        if hist_path.exists():
+            history = json.loads(hist_path.read_text())
+        prev = [h["candidates"] for h in history[-10:] if h.get("candidates")]
+
+        if prev:
+            avg = sum(prev) / len(prev)
+            if avg > 0:
+                delta = (n_candidates - avg) / avg
+                if delta < -COVERAGE_ALERT_THRESHOLD:
+                    log.warning(
+                        "COPERTURA ANOMALA: %d candidati contro una media di "
+                        "%.0f sugli ultimi %d run (%.0f%%). Probabile "
+                        "degrado silenzioso della fonte dati: il briefing di "
+                        "oggi NON e' confrontabile con i precedenti.",
+                        n_candidates, avg, len(prev), delta * 100)
+                elif delta > COVERAGE_ALERT_THRESHOLD:
+                    log.info(
+                        "Copertura in forte aumento: %d candidati contro una "
+                        "media di %.0f (+%.0f%%).",
+                        n_candidates, avg, delta * 100)
+                else:
+                    log.info("Copertura nella norma: %d candidati (media %.0f).",
+                             n_candidates, avg)
+
+        history.append({
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "candidates": n_candidates,
+            "mvf_version": mvf.MVF_VERSION,
+        })
+        hist_path.parent.mkdir(parents=True, exist_ok=True)
+        hist_path.write_text(json.dumps(history[-60:], indent=2))
+    except Exception as e:
+        log.debug("Log di copertura non riuscito: %s", e)
+
+
 _YF_SUFFIX_TO_COUNTRY = {
     ".MI": "IT", ".DE": "DE", ".F": "DE", ".PA": "FR", ".AS": "NL",
     ".BR": "BE", ".L": "UK", ".MC": "ES", ".SW": "CH", ".VX": "CH",
@@ -2663,10 +2712,17 @@ def main():
         filiere_data=filiere_data,
     )
     log.info("Output: %s | %s", csv_path, json_path)
-    log.info("TOTALE — T1:%d quality (MVF v3.0) | T2:%d catalyst | T3:%d special | filiere:%d | ctx:%s",
-             min(len(cands), args.top), len(spec_cands), len(special_cands),
+    log.info("TOTALE — T1:%d quality (MVF v%s) | T2:%d catalyst | T3:%d special | filiere:%d | ctx:%s",
+             min(len(cands), args.top), mvf.MVF_VERSION, len(spec_cands),
+             len(special_cands),
              sum(len(v) for v in filiere_data.values()) if filiere_data else 0,
              "ok" if market_ctx else "skip")
+
+    # Log di copertura + allerta su scostamento (RISK-ASSESSMENT-yfinance §4.4).
+    # Il rischio dominante di yfinance non e' il dato sbagliato: e' il dato
+    # assente che passa inosservato. Tre run dello stesso giorno hanno
+    # prodotto 240, 174 e 65 candidati senza sollevare un solo errore fatale.
+    _log_coverage(len(cands), args.output)
 
 
 if __name__ == "__main__":
