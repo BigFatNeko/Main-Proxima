@@ -283,12 +283,21 @@ class Candidate:
     dcf_upside_pct: Optional[float] = None
     filiera_tag: Optional[str] = None
     earnings_acceleration: Optional[float] = None
-    # MVF v3.0 — valutazione completa
-    mvf_vote_100: Optional[float] = None
+    # MVF v4.1 — valutazione completa
+    instrument_class: str = "common"        # STEP 0 routing (Sez. 2)
+    instrument_base: int = 280
+    mvf_vote_1000: Optional[float] = None   # voto su base per classe, /1000
+    mvf_vote_100: Optional[float] = None    # compat v3.0: voto/10
+    mvf_engine_note: str = ""               # motivo se il motore non e' disponibile
     mvf_valuation: Optional[dict] = None
     mvf_red_flags: Optional[dict] = None
+    quality_gates: Optional[dict] = None    # G1-G6 (Sez. 8-bis)
+    iqi_score: Optional[dict] = None        # IQI -> guida il MoS (Sez. 7)
+    mvf_iqi_reconciliation: Optional[dict] = None
+    net_yield: Optional[dict] = None        # netto HOME vs ITALIA (Sez. 7)
     confidence_score: Optional[dict] = None
     variation_5y: Optional[dict] = None
+    sector_median_pe: Optional[float] = None
     # Display fields per briefing (sintesi)
     intrinsic_value: Optional[float] = None
     relative_value_summary: Optional[dict] = None
@@ -1223,11 +1232,38 @@ def _series_to_list(df, row_name, n: int = 5) -> list:
     return []
 
 
-def apply_mvf_valuation(c, data: dict, market: str) -> None:
-    """Applica MVF v3.0 a un candidato. Modifica c in-place.
+_YF_SUFFIX_TO_COUNTRY = {
+    ".MI": "IT", ".DE": "DE", ".F": "DE", ".PA": "FR", ".AS": "NL",
+    ".BR": "BE", ".L": "UK", ".MC": "ES", ".SW": "CH", ".VX": "CH",
+    ".T": "JP", ".HK": "CN", ".SS": "CN", ".SZ": "CN", ".KS": "KR",
+    ".ST": "SE", ".CO": "DK", ".OL": "NO", ".HE": "FI", ".VI": "AT",
+    ".LS": "PT", ".AX": "AU", ".NZ": "NZ", ".TO": "CA", ".V": "CA",
+    ".IR": "IE", ".SA": "BR", ".MX": "MX",
+}
 
-    Calcola: WACC, 5 modelli di valutazione, scenari, sensitivity,
-    voto MVF /100, Confidence Score, red flags, prezzo ideale + MoS.
+
+def _country_for_tax(ticker: str, market: str) -> str:
+    """Paese di ritenuta alla fonte, dal suffisso del ticker (MVF Sez. 7)."""
+    t = (ticker or "").upper()
+    if "." in t:
+        suffix = "." + t.rsplit(".", 1)[1]
+        if suffix in _YF_SUFFIX_TO_COUNTRY:
+            return _YF_SUFFIX_TO_COUNTRY[suffix]
+    # senza suffisso: quotazione USA
+    return "US" if market in ("US", "") else market
+
+
+def apply_mvf_valuation(c, data: dict, market: str) -> None:
+    """Applica MVF v4.1 a un candidato. Modifica c in-place.
+
+    Catena v4.1:
+      STEP 0  routing di classe -> se non common, nessun voto (motore dedicato
+              non disponibile in regime S)
+      1-7     WACC, 5 modelli, scenari, sensitivity, variation, CS
+      8       Voto MVF /1000 su base 280 (metriche a bande incluse)
+      9       Red flag + GATE di qualita' G1-G6
+      10      IQI -> MoS_base, CS -> overlay, prezzo ideale
+      11      Riconciliazione Voto <-> IQI, rendimento netto Italia
     """
     info = data["info"]
     fin = data["financials"]
@@ -1237,6 +1273,26 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
     hist = data["history"]
 
     notes = []
+
+    # === STEP 0: routing di classe (MVF Sez. 2) ===
+    routing = mvf.classify_instrument(
+        c.sector, c.industry, c.name, c.ticker, info.get("quoteType"))
+    c.instrument_class = routing.instrument_class
+    c.instrument_base = routing.base
+    if not routing.engine_available:
+        # Classe rilevata ma motore dedicato non implementato in regime S.
+        # Nessun voto: il motore common userebbe metriche non pertinenti.
+        c.mvf_vote_1000 = None
+        c.mvf_engine_note = routing.notes[0] if routing.notes else ""
+        c.mvf_valuation = {
+            "mvf_version": mvf.MVF_VERSION,
+            "execution_regime": mvf.EXECUTION_REGIME,
+            "instrument_class": routing.instrument_class,
+            "base": routing.base,
+            "engine_available": False,
+            "notes": routing.notes,
+        }
+        return
 
     # === STEP 1: WACC via CAPM esteso ===
     beta = info.get("beta")
@@ -1376,9 +1432,11 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
         "dcf": val.dcf_2stage_fv,
         "epv": val.epv_fv,
     }
-    wfv, model_weights = mvf.weighted_fair_value(model_fvs, sector_class)
+    wfv, model_weights, disp_info = mvf.weighted_fair_value(model_fvs, sector_class)
     val.weighted_fair_value = wfv
     val.model_weights = {k: round(v, 2) for k, v in model_weights.items()}
+    val.model_dispersion_pct = disp_info.get("dispersion_pct")
+    val.dispersion_flag = disp_info.get("flag", "")
 
     # check dispersione fair value
     clean_fvs = [v for v in [val.graham_fv, val.ddm_2stage_fv or val.ddm_1stage_fv,
@@ -1431,16 +1489,67 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
         has_quality_audit=True)
     c.confidence_score = asdict(cs)
 
-    # === STEP 8: Voto MVF /100 ===
+    # === STEP 8: Voto MVF /1000 su base 280 ===
     metrics_dict = asdict(c.metrics)
     metrics_dict["altman_z"] = c.metrics.altman_z
     metrics_dict["earnings_quality"] = c.metrics.cash_conversion_ratio
     metrics_dict["moat_score"] = c.moat_score
     metrics_dict["insider_trading"] = info.get("heldPercentInsiders", 0) or 0
     ddm_used = val.ddm_2stage_fv is not None or val.ddm_1stage_fv is not None
+
+    # Metriche a bande (MVF Sez. 3 B-bis) con i rispettivi guard
+    eps_series = _series_to_list(fin, "Diluted EPS", 5)
+    if not [v for v in eps_series if v is not None]:
+        eps_series = _series_to_list(fin, "Basic EPS", 5)
+    eps_cagr, _ = mvf.compute_cagr(eps_series)
+    ni_series = _series_to_list(fin, "Net Income", 5)
+    ni_cagr, _ = mvf.compute_cagr(ni_series)
+    ni_flat_or_down = (ni_cagr is not None and eps_cagr is not None
+                       and ni_cagr < 0.02 and eps_cagr > ni_cagr + 0.03)
+
+    shares_series = _series_to_list(bs, "Ordinary Shares Number", 5)
+    fcf_ps_series = []
+    for i, f in enumerate(fcf_series):
+        if (i < len(shares_series) and shares_series[i]
+                and shares_series[i] > 0 and f is not None):
+            fcf_ps_series.append(f / shares_series[i])
+        else:
+            fcf_ps_series.append(None)
+    fcf_ps_cagr, _ = mvf.compute_cagr(fcf_ps_series)
+    fcf_agg_cagr, _ = mvf.compute_cagr(fcf_series)
+    fcf_agg_flat = (fcf_agg_cagr is not None and fcf_ps_cagr is not None
+                    and fcf_agg_cagr < 0.02 and fcf_ps_cagr > fcf_agg_cagr + 0.03)
+
+    pe_hist_median = None
+    fwd_pe = info.get("forwardPE")
+    trail_pe = c.pe_ratio
+    if trail_pe and fwd_pe and fwd_pe > 0:
+        pe_hist_median = (trail_pe + fwd_pe) / 2  # proxy grezzo, regime S
+    pe_peer = getattr(c, "sector_median_pe", None)
+    deteriorating = bool(
+        (c.metrics.net_margin is not None and c.metrics.net_margin < 0)
+        or (ni_cagr is not None and ni_cagr < -0.05))
+
+    banded = {
+        "eps_growth": mvf.eps_growth_band(eps_cagr, ni_flat_or_down),
+        "eps_growth_raw": eps_cagr,
+        "fcf_per_share_growth": mvf.fcf_per_share_growth_band(
+            fcf_ps_cagr, fcf_agg_flat),
+        "fcf_per_share_growth_raw": fcf_ps_cagr,
+        "multiple_expansion": mvf.multiple_expansion_band(
+            trail_pe, pe_hist_median, pe_peer,
+            eps_stable_or_growing=(eps_cagr is not None and eps_cagr >= 0),
+            fundamentals_deteriorating=deteriorating),
+        "multiple_expansion_raw": trail_pe,
+    }
+
+    altman_exempt = sector_class in {"bank", "insurance", "reit", "utility"}
     mvf_vote, breakdown = mvf.compute_mvf_score(
-        metrics_dict, has_div, ddm_used, c.metrics.altman_z, es_neg_2y)
-    c.mvf_vote_100 = mvf_vote
+        metrics_dict, has_div, ddm_used, c.metrics.altman_z, es_neg_2y,
+        instrument_class=routing.instrument_class,
+        altman_exempt=altman_exempt, banded_fractions=banded)
+    c.mvf_vote_1000 = mvf_vote
+    c.mvf_vote_100 = round(mvf_vote / 10, 1) if mvf_vote else None  # compat
 
     # === STEP 9: Red Flags ===
     goodwill = safe_row(bs, "Goodwill")
@@ -1478,12 +1587,71 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
                               "wc_growth_above_revenue", "share_dilution_above_3pct"]],
     }
 
-    # === STEP 10: MoS dinamica + prezzo ideale ===
-    mos = mvf.margin_of_safety_for_cs(cs.total)
+    # === STEP 9-bis: GATE DI QUALITA' G1-G6 (MVF Sez. 8-bis) ===
+    ebitda = safe_row(fin, "EBITDA") or safe_row(fin, "Normalized EBITDA")
+    nde = (net_debt / ebitda) if (ebitda and ebitda > 0 and net_debt) else None
+    ebit = safe_row(fin, "EBIT") or safe_row(fin, "Operating Income")
+    int_cov = (abs(ebit) / abs(interest_exp)
+               if (ebit and interest_exp and interest_exp != 0) else None)
+    # secondo segnale per G5: conferma multi-segnale, mai un segnale isolato
+    second_signal = bool(rf.fcf_negative_3y or rf.net_margin_negative_2y
+                         or rf.de_above_3 or rf.economic_spread_negative_2y)
+    is_saas = "software" in (c.industry or "").lower()
+    gates = mvf.evaluate_quality_gates(
+        fcf_series=fcf_series,
+        economic_spread_history=None,
+        economic_spread=economic_spread,
+        net_debt_ebitda=nde,
+        net_debt_ebitda_rising=False,
+        interest_coverage=int_cov,
+        share_dilution_3y=share_dilution,
+        sbc_revenue=c.metrics.sbc_revenue,
+        altman_z=c.metrics.altman_z,
+        sector_class=sector_class,
+        second_signal=second_signal,
+        is_saas_growth=is_saas)
+    c.quality_gates = asdict(gates)
+
+    # === STEP 10: IQI -> MoS_base, CS -> overlay, prezzo ideale ===
+    div_years = None
+    if has_div:
+        clean_div = [v for v in _series_to_list(fin, "Net Income", 5) if v]
+        div_years = 5 if (c.metrics.dividend_growth_5y is not None) else 2
+    moat_proxy = mvf.moat_proxy_score(
+        c.metrics.operating_margin, c.metrics.roic, c.metrics.gross_margin,
+        economic_spread)
+    iqi = mvf.compute_iqi(
+        metrics_dict, c.metrics.altman_z, economic_spread, wacc, moat_proxy,
+        dividend_years=div_years,
+        has_buyback=bool(c.metrics.buyback_yield and c.metrics.buyback_yield > 0),
+        fcf_series=fcf_series, margin_series=nm_series,
+        pe_current=trail_pe, pe_historical_median=pe_hist_median,
+        pe_peer_median=pe_peer,
+        tsr_forward=(val.upside_at_current_pct / 5
+                     if val.upside_at_current_pct else None),
+        growth_expected=eps_cagr, growth_from_buyback=ni_flat_or_down,
+        interest_coverage=int_cov, net_debt_ebitda=nde,
+        altman_exempt=altman_exempt, forward_is_estimate=True)
+    c.iqi_score = asdict(iqi)
+
+    mos, mos_detail = mvf.compute_final_mos(iqi, cs, gates)
     val.margin_of_safety_pct = mos
-    if wfv and wfv > 0:
+    val.mos_base_pct = mos_detail.get("mos_base")
+    val.mos_overlay_pct = mos_detail.get("overlay")
+    val.abstain = mos_detail.get("abstain", False)
+    val.abstain_reason = mos_detail.get("reason", "")
+    val.notes.extend(mos_detail.get("notes", []))
+    if wfv and wfv > 0 and mos is not None:
         val.ideal_purchase_price = mvf.ideal_purchase_price(wfv, mos)
 
+    # === STEP 11: riconciliazione Voto <-> IQI + rendimento netto Italia ===
+    c.mvf_iqi_reconciliation = mvf.reconcile_mvf_iqi(mvf_vote, iqi.total)
+    country = _country_for_tax(c.ticker, c.market)
+    c.net_yield = asdict(mvf.compute_net_yield(
+        c.metrics.dividend_yield, country, routing.instrument_class))
+
+    val.instrument_class = routing.instrument_class
+    val.base = routing.base
     c.mvf_valuation = asdict(val)
     c.intrinsic_value = wfv
     c.ideal_purchase_price_mos = val.ideal_purchase_price
@@ -2264,6 +2432,11 @@ def output_results(cands, out_dir, top_n=30,
             "market_cap_M": round(c.market_cap_million, 0) if c.market_cap_million else None,
             "pe": round(c.pe_ratio, 2) if c.pe_ratio else None,
             "composite_score": c.composite_score,
+            "mvf_vote_1000": c.mvf_vote_1000,
+            "instrument_class": c.instrument_class,
+            "iqi_100": (c.iqi_score or {}).get("total"),
+            "gate_attivi": ",".join((c.quality_gates or {}).get("active", [])),
+            "netto_italia": (c.net_yield or {}).get("net_italy"),
             "tags": ",".join(c.strategy_tags),
             "warnings": c.warning_count,
             "div_yield": round(c.metrics.dividend_yield, 4) if c.metrics.dividend_yield else None,
@@ -2335,10 +2508,18 @@ def output_results(cands, out_dir, top_n=30,
             "dcf_upside_pct": c.dcf_upside_pct,
             "filiera_tag": c.filiera_tag,
             "earnings_acceleration": c.earnings_acceleration,
-            # MVF v3.0
+            # MVF v4.1
+            "instrument_class": c.instrument_class,
+            "instrument_base": c.instrument_base,
+            "mvf_vote_1000": c.mvf_vote_1000,
             "mvf_vote_100": c.mvf_vote_100,
+            "mvf_engine_note": c.mvf_engine_note,
             "mvf_valuation": c.mvf_valuation,
             "mvf_red_flags": c.mvf_red_flags,
+            "quality_gates": c.quality_gates,
+            "iqi_score": c.iqi_score,
+            "mvf_iqi_reconciliation": c.mvf_iqi_reconciliation,
+            "net_yield": c.net_yield,
             "confidence_score": c.confidence_score,
             "variation_5y": c.variation_5y,
             "intrinsic_value": c.intrinsic_value,

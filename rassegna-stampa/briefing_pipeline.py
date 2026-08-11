@@ -349,10 +349,33 @@ def build_system_prompt() -> str:
 
 
 def _mvf_synthesis(c: dict) -> dict:
-    """Estrai solo i 5 campi richiesti per il briefing MVF v3.0:
-    voto finale, valore intrinseco, valore relativo, dividendi, prezzo ideale + MoS."""
+    """Estrai i campi richiesti per il briefing — MVF v4.1.
+
+    I 5 valori storici (voto, valore intrinseco, valore relativo, dividendi,
+    prezzo ideale + MoS) piu' i campi nuovi della v4.1: IQI, gate di qualita',
+    riconciliazione Voto<->IQI e rendimento netto Italia.
+    """
     val = c.get("mvf_valuation") or {}
     metrics = c.get("metrics") or {}
+    iqi = c.get("iqi_score") or {}
+    gates = c.get("quality_gates") or {}
+    cs = c.get("confidence_score") or {}
+    ny = c.get("net_yield") or {}
+
+    # Classe rilevata ma motore dedicato non disponibile: nessun voto emesso
+    if val.get("engine_available") is False:
+        return {
+            "ticker": c.get("ticker"), "name": c.get("name"),
+            "sector": c.get("sector"), "industry": c.get("industry"),
+            "price": c.get("price"), "currency": c.get("currency"),
+            "instrument_class": val.get("instrument_class"),
+            "base": val.get("base"),
+            "voto_mvf_1000": None,
+            "analisi_non_disponibile": (
+                f"Classe '{val.get('instrument_class')}' rilevata: motore dedicato "
+                f"non disponibile in regime screening. Nessun voto emesso."),
+        }
+
     return {
         "ticker": c.get("ticker"),
         "name": c.get("name"),
@@ -361,9 +384,36 @@ def _mvf_synthesis(c: dict) -> dict:
         "price": c.get("price"),
         "currency": c.get("currency"),
         "filiera": c.get("filiera_tag"),
-        # 1. VOTO FINALE
-        "voto_mvf_100": c.get("mvf_vote_100"),
-        "confidence_score_100": (c.get("confidence_score") or {}).get("total"),
+        # Identita' e versionamento (Sez. 11F)
+        "mvf_version": val.get("mvf_version"),
+        "instrument_class": val.get("instrument_class"),
+        "base": val.get("base"),
+        # 1. VOTO FINALE — ora su 1000
+        "voto_mvf_1000": c.get("mvf_vote_1000"),
+        "voto_mvf_100": c.get("mvf_vote_100"),   # compat display
+        "confidence_score_100": cs.get("total"),
+        "confidence_reading": cs.get("reading"),
+        "source_tag": cs.get("source_tag"),
+        # 1-bis. IQI e catena del margine di sicurezza (v4.1)
+        "iqi_100": iqi.get("total"),
+        "iqi_blocco_a": iqi.get("blocco_a"),
+        "iqi_blocco_b": iqi.get("blocco_b"),
+        "dividend_tier": iqi.get("dividend_tier"),
+        "riconciliazione_mvf_iqi": c.get("mvf_iqi_reconciliation"),
+        # 1-ter. Gate di qualita' — NO-BUY strutturale
+        "gate_attivi": gates.get("active", []),
+        "gate_non_valutabili": gates.get("not_evaluable", []),
+        "astensione": val.get("abstain", False),
+        "motivo_astensione": val.get("abstain_reason", ""),
+        # 4-bis. Rendimento netto post-imposte (Sez. 7)
+        "rendimento_netto": {
+            "lordo": ny.get("gross_yield"),
+            "ritenuta_estera": ny.get("withholding_rate"),
+            "netto_italia": ny.get("net_italy"),
+            "drag_fiscale_totale": ny.get("effective_combined_rate"),
+            "paese": ny.get("country"),
+            "caso_speciale": ny.get("special_case"),
+        },
         # 2. VALORE INTRINSECO (media ponderata 5 modelli)
         "valore_intrinseco": c.get("intrinsic_value"),
         "modelli_fair_value": {

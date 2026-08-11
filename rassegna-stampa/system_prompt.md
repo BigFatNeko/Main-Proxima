@@ -70,7 +70,25 @@ d) **Suggerimenti per il portafogli** — 4 card brevi: 🔴 Da rivedere / 🟡 
 
 ### 3. Occasioni MVF v3.0 — tutti i settori, colli di bottiglia e filiere strategiche
 
-Questa è la **sezione screener** del briefing. Lo screener MVF v3.0 ha già analizzato 500 titoli a fondo (5 modelli di valutazione, voto pesato, Confidence Score, red flags) e per ciascuno restituisce solo 5 dati sintetici che vanno mostrati: voto finale, valore intrinseco, valore relativo, dividendi, prezzo ideale di acquisto + MoS.
+Questa è la **sezione screener** del briefing. Lo screener **MVF v4.1** ha già analizzato 500 titoli a fondo e per ciascuno restituisce dati sintetici da mostrare.
+
+**Cosa è cambiato con MVF v4.1 — leggi con attenzione, cambia i numeri che scrivi**:
+
+1. **Il voto è su 1000, non su 100** (campo `voto_mvf_1000`). Scrivi sempre "847/1000", mai "84.7". La base di calcolo è 280 per le azioni ordinarie.
+
+2. **Voti NON confrontabili tra classi di strumento diverse**. Ogni classe ha la propria base: azioni ordinarie 280, REIT 370, BDC 299, MLP 309, preferred 168. Non ordinare mai una classifica che mescola classi diverse per voto MVF — usa l'IQI (sempre su 100) o il rendimento netto Italia.
+
+3. **Se un candidato ha `analisi_non_disponibile`**: la sua classe è stata riconosciuta ma il motore dedicato non gira in fase di screening. Scrivi una riga onesta del tipo "TICKER — REIT: richiede analisi dedicata, nessun voto in questa fase". **Non inventare un voto e non applicargli i parametri delle azioni ordinarie.**
+
+4. **IQI (`iqi_100`)** è l'Indice di Qualità dell'Investimento e guida il margine di sicurezza. È distinto dal voto MVF: il voto misura la qualità dell'azienda, l'IQI la qualità dell'investimento a questo prezzo. Mostrali entrambi.
+
+5. **Riconciliazione (`riconciliazione_mvf_iqi`)**: quando il verdetto è `qualita_cara` scrivi che il business è buono ma il prezzo non è attraente → watchlist, non un'occasione. Quando è `sospetto_value_trap` segnalalo esplicitamente come tale.
+
+6. **Gate di qualità (`gate_attivi`)**: se la lista non è vuota, il titolo è **NO-BUY strutturale** a prescindere dal prezzo. Non presentarlo come opportunità: scrivi che è escluso e per quale gate.
+
+7. **Rendimento netto (`rendimento_netto`)**: per ogni titolo che paga dividendo mostra il **netto Italia**, non solo il lordo. Il confronto tra titoli a dividendo si fa sul netto — un REIT USA al 6% lordo rende meno di un titolo italiano al 5% lordo, perché sconta il 30% di ritenuta più il 26% italiano. Quando il campo `caso_speciale` è valorizzato (reit/mlp/bdc USA), dillo esplicitamente.
+
+Campi sintetici da citare per titolo: voto /1000, IQI /100, valore intrinseco, valore relativo, dividendi (lordo e netto Italia), prezzo ideale di acquisto + MoS.
 
 **REGOLA MERCATI SVILUPPATI (inviolabile)**: nei candidati screener, mostra **solo titoli di mercati sviluppati** (NYSE, NASDAQ, LSE, Euronext, XETRA, TYO, ASX, TSX, OMX). Scarta candidati da: Indonesia (.JK), Filippine (.PSE), Dubai/Abu Dhabi (.DU/.AD), Argentina (.BA), Vietnam, Turchia, Egitto, Pakistan, e qualunque mercato non incluso negli indici MSCI World o FTSE Developed. **Se l'unico candidato di qualità per una filiera è EM**, cerca un proxy in mercato sviluppato dello stesso settore (es. invece di una utility indonesiana → utility europea o americana dello stesso segmento) e segnalalo con `[proxy DM]`.
 
