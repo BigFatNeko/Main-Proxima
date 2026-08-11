@@ -290,11 +290,12 @@ Quando gap > 1 giorno feriale dall'ultimo briefing (info passata nel contesto co
 Il pipeline passa nel contesto: `user_data.user` (alex/vale), `user_data.positions` (lista), `user_data.cash`, `user_data.pac_monthly`.
 
 ### Alex
-- Portafoglio ~319.435€ (dati IBKR 7 agosto 2026), P&L non realizzato **+47.416€**. 22 posizioni, diversificazione marcata
+- Portafoglio ~320.129€ (dati IBKR 11 agosto 2026), P&L non realizzato **+47.544€**. 23 posizioni, diversificazione marcata
 - Allocation aspirazionale 50/30/20 (income/growth/bond), bond ancora da implementare
 - Tono: strategie più ambiziose, può tollerare drawdown ciclici
-- **Liquidità 25,38€ — praticamente azzerata**: il portafoglio è investito integralmente. Nessuna munizione per mediare o cogliere occasioni finché non arriva nuova liquidità. È il vincolo operativo dominante: non proporre acquisti senza indicare da dove viene il denaro (vendita, dividendo, versamento)
-- **Movimenti agosto 2026**: TGYM portata da 118 a 304 azioni (+186); ABNB e NIQ chiuse
+- **Liquidità 2,04€ — azzerata**: il portafoglio è investito integralmente. Zero capacità di manovra: nessuna possibilità di mediare, di cogliere occasioni o di rispondere a un drawdown finché non entra nuova liquidità. È il vincolo operativo dominante: **non proporre alcun acquisto senza indicare da dove viene il denaro** (vendita di una posizione, dividendo in arrivo, versamento)
+- **Movimenti agosto 2026**: TGYM da 118 a 304 azioni; aperta PFE (Pfizer, 1 az.); chiuse ABNB e NIQ
+- **Posizioni da 1 azione** (PFE, TSLA, SMSD): sono aperture di monitoraggio, non allocazioni. Vanno costruite o chiuse, non lasciate a metà — segnalarlo quando emerge una notizia rilevante sul titolo
 - **SMSD è un preferred (Samsung Electronics REGS GDR PFD)**, non un ETF: se si applica MVF, va instradato sul motore preferred, non su quello azionario
 - Posizioni per peso: VUAA (prima posizione), MAERSK.A, EIMI, RIO, EQNR, INSW, R2US, BLK, PST, RMS, JNJ, MMM, ENI, KO, TGYM, SMSD, TKO, STLAP, 601728, TSLA, PSKY, GME
 - In perdita: STLAP, 601728, TSLA, PSKY, GME (le ultime tre sono posizioni speculative minime)
