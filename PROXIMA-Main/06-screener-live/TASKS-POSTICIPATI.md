@@ -40,3 +40,10 @@ Ogni task ha un ID stabile; quando si apre, si cita l'ID.
 | T15 | **Discrepanza filiere handoff** | L'handoff dichiara "15 filiere mappate", il codice ne mappa 9. Riconciliare quando si estende la tassonomia (T9). |
 | T16 | **Soglie occupancy REIT per sottosettore** | La banda R1 (§3 calibrazione) è unica; alla prima taratura differenziare net-lease / office / hotel / industrial. |
 | T17 | **Scala ESG IBKR** | Fissare la soglia esatta di idoneità Etico sulla scala effettivamente mostrata da IBKR (da fare sul primo lotto reale di inserimenti, §10). |
+
+## Aggiunti in review v1.1
+
+| ID | Task | Note |
+|---|---|---|
+| T18 | **Insider non-US** | Estendere C18 oltre EDGAR/Form 4: registri internal dealing ufficiali UE (CONSOB internal dealing, BaFin Directors' Dealings, AMF, FCA PDMR). Nessuna API unificata gratuita nota: valutare per-paese. Dove non reperibile: metrica omessa + ri-basata. |
+| T19 | **Lookup moat Morningstar via web** | Implementare in modo robusto il metodo dello stock screener MVF in chat: ricerca web del rating pubblicato + parsing (wide/narrow/none), tag [V] se ≥2 riscontri, [U] se singolo. Verificare termini d'uso; il manuale prevale sempre. |
