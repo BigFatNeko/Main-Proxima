@@ -284,8 +284,9 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale), `user_data.positio
 ### Vale
 - **Vale è un uomo** — usa il genere maschile in tutta la narrativa italiana (es. "analizzato", "investito", "preoccupato", "soddisfatto" etc.)
 - Portafogli più piccolo, posizioni più contenute, tilt income + alcune scommesse speculative
-- Portafoglio totale ~6.510€ (titoli ~5.920 + liquidità 588), aggiornato 4 agosto 2026. P&L non realizzato +448€
-- 588,30€ liquidità (EUR 96.76 + GBP 92.90 + USD 442.76) — overlay reserve quasi completa, mancano ~12€ al target 600€
+- Portafoglio totale ~6.556€ (titoli ~6.123 + liquidità 433), aggiornato 7 agosto 2026. P&L non realizzato +471€
+- 432,88€ liquidità (EUR 96.76 + GBP 92.90 + USD 262.46) — è la overlay reserve residua dopo il primo scaglione
+- **OVERLAY ATTIVATO 7 agosto**: MITT è scesa del 13% in una seduta a seguito di un'acquisizione. Eseguito il primo scaglione (-7%): +29 azioni per 180,30 USD (~155€), posizione portata da 37 a 66 azioni, costo medio sceso a 6,83. Restano disponibili gli scaglioni -14% (150€) e -21% (300€). **Da monitorare**: se MITT scende ancora, il secondo scaglione è armato
 - INSW venduto interamente a 85.3 il 29/05/2026 senza incassare il dividendo
 - WEN (Wendy's, 59 az.) venduto interamente a ~9.40 USD — posizione chiusa, non citarla più
 - PAC giugno deployato: CS.PA (AXA, 20 az.) e CMCSA (Comcast, 15 az.)
@@ -300,8 +301,8 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale), `user_data.positio
   - La reserve non va consumata per trading speculativo né per nuovo DCA ordinario
   - **PAC agosto 2026 già deployato**: SAN.PA portata da 1 a 5 azioni (+4 az., ~302€), il resto è confluito in liquidità completando quasi la reserve
 - Tono: piano di accumulo strutturato, attenzione concentrazioni
-- **Concentrazione da monitorare**: CS (AXA) ~15%, WKL ~12%, 601728 ~10%, CSA/ACN ~10% del portafoglio. Le prime quattro pesano ~47%.
-- **Posizione più in perdita**: STLAP (Stellantis) −163€ su 484€ di costo (−34%). È la sola perdita rilevante del portafoglio.
+- **Concentrazione da monitorare**: CS (AXA) ~14%, WKL ~11%, 601728 ~10%, ACN ~9% del portafoglio. Le prime quattro pesano ~44%.
+- **Posizione più in perdita**: STLAP (Stellantis) −165€ su 484€ di costo (−34%). È la sola perdita rilevante; MITT è ora −30€ dopo la mediazione.
 - Posizioni note: CS.PA (AXA), WKL.AS (Wolters Kluwer), ACN (Accenture), ENI, IMAE, MO, 601728, IJPA, CMCSA, MITT, SAN (Sanofi), NKLR, SGMT, STLAP
 
 ### Posizioni overlap (entrambi)
