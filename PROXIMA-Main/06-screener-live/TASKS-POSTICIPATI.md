@@ -47,3 +47,10 @@ Ogni task ha un ID stabile; quando si apre, si cita l'ID.
 |---|---|---|
 | T18 | **Insider non-US** | Estendere C18 oltre EDGAR/Form 4: registri internal dealing ufficiali UE (CONSOB internal dealing, BaFin Directors' Dealings, AMF, FCA PDMR). Nessuna API unificata gratuita nota: valutare per-paese. Dove non reperibile: metrica omessa + ri-basata. |
 | T19 | **Lookup moat Morningstar via web** | Implementare in modo robusto il metodo dello stock screener MVF in chat: ricerca web del rating pubblicato + parsing (wide/narrow/none), tag [V] se ≥2 riscontri, [U] se singolo. Verificare termini d'uso; il manuale prevale sempre. |
+
+## Aggiunti durante il collaudo bozza 1
+
+| ID | Task | Note |
+|---|---|---|
+| T20 | **Aggiustamento per stock split** | I dati EDGAR delle azioni (share count) NON sono rettificati per split; yfinance sì. Su WMT lo split 3:1 (feb 2024) fa leggere una "diluizione 23%/anno" falsa, che intacca C7 (FCF/share growth), C22 (buyback) e genera un red flag errato → deprime il voto. Serve leggere la serie split da EDGAR (StockholdersEquityNoteStockSplitConversionRatio o i prezzi rettificati di stockanalysis) e normalizzare la serie azioni. Priorità alta: falsa i per-share di ogni titolo che ha fatto split nel periodo. |
+| T21 | **Correttivo settoriale — universo vero** | Il correttivo (percentile vs peer) è tanto più giusto quanto più l'universo è ampio e ben classificato. In bozza 1 i peer sono una lista curata (config.SECTOR_PEERS); a regime devono venire dall'universo completo MSCI World+KR+TW+Cina. |
