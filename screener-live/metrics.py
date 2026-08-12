@@ -47,6 +47,41 @@ def _series_cagr(serie: list, min_years: int = 3) -> tuple[float | None, int]:
     return _cagr(vals[0], vals[n], n), n
 
 
+def _split_factors(shares: list) -> list[float]:
+    """Fattori cumulativi per normalizzare la serie azioni (piu' recente per
+    prima) su un'unica base, correggendo gli stock split (T20).
+
+    EDGAR non rettifica il numero di azioni per gli split; yfinance si'. Uno
+    split appare come salto improvviso (es. 3:1 -> +200% in un anno), che i
+    cambi organici (buyback/emissioni) non producono mai. Rileva il salto e
+    riporta gli anni precedenti alla base corrente. Su serie gia' rettificate
+    (yfinance) nessun salto -> fattori tutti 1 (no-op).
+    """
+    n = len(shares)
+    factors = [1.0] * n
+    if n < 2:
+        return factors
+    common = [2.0, 3.0, 4.0, 1.5, 5.0, 6.0, 10.0]
+    cum = 1.0
+    for i in range(1, n):                 # da recente (0) verso vecchio
+        newer, older = shares[i - 1], shares[i]
+        if newer and older and older > 0:
+            r = newer / older             # >1 split diretto, <1 reverse split
+            f = None
+            if r >= 1.4:
+                cand = min(common, key=lambda c: abs(c - r))
+                if abs(cand - r) / cand <= 0.08:
+                    f = cand
+            elif r <= 0.71:
+                cand = min(common, key=lambda c: abs(c - 1 / r))
+                if abs(cand - 1 / r) / cand <= 0.08:
+                    f = 1 / cand
+            if f:
+                cum *= f
+        factors[i] = cum
+    return factors
+
+
 def _annual_dividends(div_series: dict[str, float]) -> dict[int, float]:
     out: dict[int, float] = {}
     for d, v in div_series.items():
@@ -146,12 +181,18 @@ def compute_metrics(raw: dict, validation: dict) -> dict:
     put("C5", fm[0] if fm else None, fm, tag_for("revenue", "cfo", "capex"))
 
     # --- crescita per azione (C6, C7) ------------------------------------
-    eps = raw["diluted_eps"]
+    # Normalizza azioni ed EPS per gli stock split (T20): azioni su base
+    # corrente, EPS scala all'inverso. Cosi' i per-azione sono coerenti.
+    split_f = _split_factors(raw["shares"])
+    ctx["split_adjusted"] = any(abs(f - 1.0) > 0.01 for f in split_f)
+    shares = [(s * f) if s is not None else None
+              for s, f in zip(raw["shares"], split_f)]
+    eps = [(e / f) if e is not None else None
+           for e, f in zip(raw["diluted_eps"], split_f)]
     eps_cagr, _ = _series_cagr(eps)
     ni_cagr, _ = _series_cagr(ni)
     put("C6", eps_cagr, eps, tag_for("net_income"),
         {"ni_cagr": ni_cagr})
-    shares = raw["shares"]
     fcfps = [(f / s) if (f is not None and s not in (None, 0)) else None
              for f, s in zip(fcf, shares)]
     fcfps_cagr, _ = _series_cagr(fcfps)
