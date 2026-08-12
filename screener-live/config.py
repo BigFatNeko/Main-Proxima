@@ -114,3 +114,20 @@ EMERGENTI_MVF_MIN = 500
 # Banco di prova (calibrazione §14)
 TEST_SET = ["KO", "JNJ", "ENI.MI", "MO", "MCD", "FRT", "TGT", "WMT", "SPGI",
             "SPCE", "LULU"]
+
+# Peer di settore per il correttivo settoriale (usati solo per le mediane,
+# non mostrati). US large cap con buona copertura dei settori del test.
+SECTOR_PEERS = [
+    # Consumer Defensive / staples
+    "PG", "PEP", "COST", "KR", "CL", "GIS", "KMB",
+    # Consumer Cyclical / retail
+    "HD", "LOW", "NKE", "SBUX", "TJX", "ROST",
+    # Healthcare
+    "PFE", "MRK", "ABBV", "LLY", "ABT",
+    # Financial (peer di SPGI)
+    "MCO", "V", "MA",
+    # Technology
+    "MSFT", "AAPL", "ORCL",
+    # Discount retail (peer di WMT/TGT)
+    "DG", "DLTR", "BJ",
+]

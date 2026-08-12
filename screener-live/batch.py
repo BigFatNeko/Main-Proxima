@@ -29,6 +29,7 @@ import iqi as iqimod
 import metrics as metricsmod
 import packages as pkgmod
 import scoring
+import sector_stats
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
                     datefmt="%H:%M:%S")
@@ -45,19 +46,19 @@ def _moat_overrides() -> dict:
     return json.load(open(p)) if os.path.exists(p) else {}
 
 
-def screen_one(ticker: str, source: str = "auto") -> dict | None:
+def analyze_one(ticker: str, source: str = "auto") -> dict | None:
+    """Fase 1: fetch + metriche + classe. NON fa scoring (serve prima
+    calcolare le statistiche di settore sull'universo)."""
     raw = None
     if source in ("auto", "yfinance"):
         raw = fetchers.fetch_yf(ticker)
     if raw is None and source in ("auto", "edgar"):
-        # fallback [P]-primario: EDGAR + stockanalysis (solo US-listed)
         raw = fetch_us.build_raw_us(ticker)
         if raw is not None:
             log.info("  %s via EDGAR+stockanalysis (yfinance non disponibile)", ticker)
     if raw is None:
         return None
     if raw.get("_source", "").startswith("edgar"):
-        # gia' primario: la cross-validation e' con se stesso -> tag [P]
         validation = {"tags": {}, "agree_ratio": 1.0, "statement_trust": "P"}
     else:
         edgar = fetchers.fetch_edgar(ticker)
@@ -67,20 +68,22 @@ def screen_one(ticker: str, source: str = "auto") -> dict | None:
     moat = _moat_overrides().get(ticker.upper())
     if moat:
         m["C26"] = {"value": moat, "series": [], "tag": "V"}
+    if klass == "reit":
+        m["ctx"]["altman_exempt"] = True
+        m["C4"] = {"value": None, "series": [], "tag": "U"}  # informativa nei REIT
+    return {"ticker": ticker, "m": m, "klass": klass, "validation": validation}
 
+
+def score_one(analysis: dict) -> dict:
+    """Fase 2: scoring completo (ctx puo' gia' contenere le stat di settore)."""
+    ticker, m = analysis["ticker"], analysis["m"]
+    klass, validation = analysis["klass"], analysis["validation"]
     if klass in ("bdc", "mlp", "preferred"):
         return {"ticker": ticker, "classe": klass, "status": "classe non "
                 "implementata in bozza 1 (motori dedicati in arrivo)",
                 "score": {}, "iqi": {}, "cs": {}, "gates": [], "flags":
                 {"critical": [], "warning": []}, "packages": {"tags": [],
                 "badges": [], "notes": []}}
-
-    # bozza 1: il motore REIT completo (base 370) richiede AFFO/occupancy da
-    # IR; si usa il motore common SENZA Net Margin e Altman (esenti da spec
-    # 9B) accettando copertura bassa dichiarata.
-    if klass == "reit":
-        m["ctx"]["altman_exempt"] = True
-        m["C4"] = {"value": None, "series": [], "tag": "U"}  # informativa nei REIT
 
     fv_res = iqimod.fair_value(m)          # imposta ddm_applied prima dei pesi
     score = scoring.score_common(m)
@@ -146,23 +149,50 @@ def main():
     ap.add_argument("--json", action="store_true", help="stampa json completo")
     ap.add_argument("--source", choices=["auto", "yfinance", "edgar"],
                     default="auto", help="fonte dati (edgar = solo US, no Yahoo)")
+    ap.add_argument("--no-peers", action="store_true",
+                    help="salta i peer di settore (niente correttivo settoriale)")
     args = ap.parse_args()
     tickers = config.TEST_SET if args.test else (args.tickers or [])
     if not tickers:
         ap.error("indica --tickers o --test")
 
+    # universo da analizzare = titoli richiesti + peer di settore (solo per
+    # le mediane; i peer non vengono mostrati ne' salvati)
+    peers = [] if args.no_peers else [p for p in config.SECTOR_PEERS if p not in tickers]
+    universe = list(dict.fromkeys(tickers + peers))
+
+    # --- PASSO 1: metriche di tutto l'universo -----------------------------
+    log.info("Passo 1/2: metriche (%d titoli, di cui %d peer)", len(universe), len(peers))
+    analyses: dict[str, dict] = {}
+    for t in universe:
+        try:
+            a = analyze_one(t, source=args.source)
+        except Exception as e:
+            log.exception("errore analisi %s: %s", t, e)
+            a = None
+        if a is not None:
+            analyses[t] = a
+
+    # --- statistiche di settore su tutto l'universo ------------------------
+    stats = sector_stats.collect(
+        [{"sector": a["m"]["ctx"].get("sector"), "metrics": a["m"]}
+         for a in analyses.values()])
+
+    # --- PASSO 2: scoring dei soli titoli richiesti ------------------------
+    log.info("Passo 2/2: scoring")
     conn = dbmod.open_db()
-    sid = dbmod.new_snapshot(conn, note="run manuale bozza 1")
+    sid = dbmod.new_snapshot(conn, note="run bozza 1 + correttivo settoriale")
     results = []
     for t in tickers:
-        log.info("— %s", t)
-        try:
-            r = screen_one(t, source=args.source)
-        except Exception as e:
-            log.exception("errore su %s: %s", t, e)
-            r = None
-        if r is None:
+        a = analyses.get(t)
+        if a is None:
             print(f"{t:8s} DATI NON REPERIBILI (segnalato, mai inventato)")
+            continue
+        sector_stats.inject(a["m"]["ctx"], a["m"], stats)   # correttivo settoriale
+        try:
+            r = score_one(a)
+        except Exception as e:
+            log.exception("errore scoring %s: %s", t, e)
             continue
         results.append(r)
         if r.get("status") == "ok":

@@ -8,6 +8,22 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import config
+import sector_stats
+
+
+def _pctile_frac(pctile: float) -> float:
+    """Banda relativa al settore dal rango percentile (calibrazione §1):
+    top decile 1.0 / top quartile 0.8 / sopra mediana 0.6 / meta' inferiore
+    0.35 / coda 0.0. La mediana di settore vale ~0.6, non 0."""
+    if pctile >= 90:
+        return 1.0
+    if pctile >= 75:
+        return 0.8
+    if pctile >= 50:
+        return 0.6
+    if pctile >= 25:
+        return 0.35
+    return 0.0
 
 
 def step_up(v, bands):
@@ -325,16 +341,29 @@ def score_common(m: dict) -> dict:
         if lvl is None:
             omitted.append((d.mid, w, "riferimento settoriale mancante"))
             continue
+        # CORRETTIVO SETTORIALE (Q1: premiare chi sovraperforma il settore;
+        # spec Sez. 4). Per le metriche sector-dependent, chi e' alto rispetto
+        # al proprio settore non viene punito dalla soglia assoluta: si prende
+        # il massimo tra banda assoluta e banda relativa al percentile.
+        sector_rel = 0.0
+        pctile = ctx.get(f"sector_pctile_{d.mid}")
+        if d.mid in sector_stats.SECTOR_RELATIVE and pctile is not None:
+            sector_rel = _pctile_frac(pctile)
+        base_lvl = max(lvl, sector_rel)
         trend = _trend_mod(entry.get("series", []), d.higher_is_better) \
             if d.trend_active else 0.0
-        bonus = 0.10 if ctx.get(f"sector_pctile_{d.mid}", 0) >= 80 else 0.0
-        frac = max(0.0, min(1.0, lvl + trend + bonus))
+        # bonus residuo solo per le metriche NON sector-relative gia' in top quintile
+        bonus = 0.10 if (d.mid not in sector_stats.SECTOR_RELATIVE
+                         and (pctile or 0) >= 80) else 0.0
+        frac = max(0.0, min(1.0, base_lvl + trend + bonus))
         pts = w * frac
         raw_pts += pts
         scored_w += w
         detail.append({"id": d.mid, "name": d.name, "weight": w,
                        "value": round(v, 3) if isinstance(v, (int, float)) else v,
-                       "level": lvl, "trend": trend, "bonus": bonus,
+                       "level": round(lvl, 2), "sector_rel": round(sector_rel, 2),
+                       "sector_pctile": round(pctile) if pctile is not None else None,
+                       "trend": trend, "bonus": bonus,
                        "points": round(pts, 1), "tag": entry.get("tag", "U")})
     coverage = scored_w / base if base else 0.0
     vote = (raw_pts / scored_w * 1000) if scored_w else None
