@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config
 import db as dbmod
 import fetchers
+import fetch_us
 import gates as gatesmod
 import iqi as iqimod
 import metrics as metricsmod
@@ -44,12 +45,23 @@ def _moat_overrides() -> dict:
     return json.load(open(p)) if os.path.exists(p) else {}
 
 
-def screen_one(ticker: str) -> dict | None:
-    raw = fetchers.fetch_yf(ticker)
+def screen_one(ticker: str, source: str = "auto") -> dict | None:
+    raw = None
+    if source in ("auto", "yfinance"):
+        raw = fetchers.fetch_yf(ticker)
+    if raw is None and source in ("auto", "edgar"):
+        # fallback [P]-primario: EDGAR + stockanalysis (solo US-listed)
+        raw = fetch_us.build_raw_us(ticker)
+        if raw is not None:
+            log.info("  %s via EDGAR+stockanalysis (yfinance non disponibile)", ticker)
     if raw is None:
         return None
-    edgar = fetchers.fetch_edgar(ticker)
-    validation = fetchers.cross_validate(raw, edgar)
+    if raw.get("_source", "").startswith("edgar"):
+        # gia' primario: la cross-validation e' con se stesso -> tag [P]
+        validation = {"tags": {}, "agree_ratio": 1.0, "statement_trust": "P"}
+    else:
+        edgar = fetchers.fetch_edgar(ticker)
+        validation = fetchers.cross_validate(raw, edgar)
     m = metricsmod.compute_metrics(raw, validation)
     klass = metricsmod.detect_class(raw["info"], _class_overrides())
     moat = _moat_overrides().get(ticker.upper())
@@ -132,6 +144,8 @@ def main():
     ap.add_argument("--tickers", nargs="+", help="ticker da analizzare")
     ap.add_argument("--test", action="store_true", help="banco di prova §14")
     ap.add_argument("--json", action="store_true", help="stampa json completo")
+    ap.add_argument("--source", choices=["auto", "yfinance", "edgar"],
+                    default="auto", help="fonte dati (edgar = solo US, no Yahoo)")
     args = ap.parse_args()
     tickers = config.TEST_SET if args.test else (args.tickers or [])
     if not tickers:
@@ -143,7 +157,7 @@ def main():
     for t in tickers:
         log.info("— %s", t)
         try:
-            r = screen_one(t)
+            r = screen_one(t, source=args.source)
         except Exception as e:
             log.exception("errore su %s: %s", t, e)
             r = None

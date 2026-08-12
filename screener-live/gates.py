@@ -31,10 +31,12 @@ def evaluate_gates(m: dict) -> list[dict]:
             gates.append({"id": "G1", "desc": "FCF negativo in tutti gli ultimi "
                           f"{len(fcf)} FY (distruzione di cassa strutturale)"})
 
-    # G2 - distruzione di valore: ROIC - WACC < 0 per >= 4 anni
+    # G2 - distruzione di valore: ROIC - WACC < 0 per >= 4 anni.
+    # Per REIT/BDC/MLP la spec usa l'accretion spread (non ancora reperibile in
+    # bozza 1): il ROIC contabile e' privo di senso -> G2 non valutabile, skip.
     roic = _clean(ctx.get("roic_series", []))
     wacc_pct = ctx.get("wacc", 0.09) * 100
-    if len(roic) >= 4 and all(r < wacc_pct for r in roic[:4]):
+    if not leveraged and len(roic) >= 4 and all(r < wacc_pct for r in roic[:4]):
         gates.append({"id": "G2", "desc": "ROIC sotto il WACC per >=4 anni "
                       f"(ROIC ult. {roic[0]:.1f}% vs WACC {wacc_pct:.1f}%)"})
 
@@ -89,10 +91,11 @@ def evaluate_red_flags(m: dict) -> dict[str, list[str]]:
         critical.append(f"Debt/Equity {de:.1f} oltre 3")
     if len(nm_serie) >= 3 and sum(1 for v in nm_serie[:3] if v < 0) >= 2:
         critical.append("Margine netto negativo in 2+ degli ultimi 3 esercizi")
-    spread = m.get("C8", {}).get("spread")
     roic = _clean(ctx.get("roic_series", []))
     wacc_pct = ctx.get("wacc", 0.09) * 100
-    if len(roic) >= 2 and all(r < wacc_pct for r in roic[:2]):
+    ind_rf = (ctx.get("industry", "") + " " + ctx.get("sector", "")).lower()
+    lev_rf = any(k in ind_rf for k in config.LEVERAGED_BY_DESIGN)
+    if not lev_rf and len(roic) >= 2 and all(r < wacc_pct for r in roic[:2]):
         critical.append("ROIC sotto il WACC da 2+ anni (distruzione di valore)")
     gw, eq = ctx.get("goodwill"), ctx.get("equity0")
     if gw and eq and eq > 0 and gw / eq > 0.5:

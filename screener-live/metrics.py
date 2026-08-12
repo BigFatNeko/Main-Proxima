@@ -62,7 +62,7 @@ def detect_class(info: dict, overrides: dict) -> str:
     ind = (info.get("industry") or "").lower()
     sec = (info.get("sector") or "").lower()
     name = (info.get("shortName") or info.get("longName") or "").lower()
-    if "reit" in ind or "reit" in sec:
+    if "reit" in ind or "reit" in sec or "real estate investment trust" in ind:
         return "reit"
     if "midstream" in ind and (" lp" in name or "partners" in name):
         return "mlp"

@@ -252,6 +252,16 @@ def fair_value(m: dict) -> dict:
     else:
         weights = {"graham": .20, "ddm": .30, "dcf": .35, "epv": .15}
     avail = {k: v for k, v in models.items() if v and v > 0}
+    # SANITY: scarta i modelli implausibili (>5x o <0.2x il prezzo corrente):
+    # DDM/EPV possono esplodere con r-g piccolo o equity negativo. Un fair
+    # value assurdo produrrebbe prezzi ideali e badge OCCASIONE falsi.
+    price = ctx.get("price")
+    outliers = []
+    if price and price > 0:
+        kept = {k: v for k, v in avail.items() if 0.2 * price <= v <= 5 * price}
+        outliers = [k for k in avail if k not in kept]
+        if kept:
+            avail = kept
     wsum = sum(weights.get(k, 0) for k in avail)
     fv = sum(v * weights.get(k, 0) for k, v in avail.items()) / wsum if wsum else None
     disp = None
@@ -259,7 +269,7 @@ def fair_value(m: dict) -> dict:
         disp = statistics.pstdev(avail.values()) / statistics.mean(avail.values())
     return {"fv": fv, "models": {k: round(v, 2) for k, v in avail.items()},
             "dispersion": round(disp, 2) if disp is not None else None,
-            "ddm_applied": ddm_applied}
+            "outliers_scartati": outliers, "ddm_applied": ddm_applied}
 
 
 def mos_chain(iqi: int | None, cs: int) -> dict:

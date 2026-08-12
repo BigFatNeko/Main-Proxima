@@ -67,7 +67,7 @@ def new_snapshot(conn: sqlite3.Connection, note: str = "") -> str:
 def save_result(conn: sqlite3.Connection, sid: str, r: dict) -> None:
     conn.execute(
         "INSERT OR REPLACE INTO results VALUES "
-        "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (sid, r["ticker"], r["classe"], "S", config.MVF_VERSION,
          r["score"].get("base_original"), r["score"].get("base_effective"),
          r["score"].get("regime_pesi"), r["score"].get("vote"),
