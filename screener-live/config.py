@@ -115,6 +115,25 @@ EMERGENTI_MVF_MIN = 500
 TEST_SET = ["KO", "JNJ", "ENI.MI", "MO", "MCD", "FRT", "TGT", "WMT", "SPGI",
             "SPCE", "LULU"]
 
+# Universo US large-cap (bozza 1, gira su EDGAR senza Yahoo). A regime sara'
+# sostituito dall'universo MSCI World + KR/TW/Cina (T21).
+UNIVERSE_US = [
+    # Consumer Defensive
+    "KO", "PG", "PEP", "MO", "PM", "COST", "WMT", "KR", "CL", "GIS", "KMB", "MDLZ",
+    # Consumer Cyclical / retail
+    "MCD", "HD", "LOW", "NKE", "SBUX", "TJX", "ROST", "TGT", "LULU", "DG", "DLTR",
+    # Healthcare
+    "JNJ", "UNH", "LLY", "MRK", "ABBV", "PFE", "ABT", "TMO", "DHR",
+    # Technology / comms
+    "MSFT", "AAPL", "NVDA", "GOOGL", "META", "ORCL", "ADBE", "CRM", "CSCO",
+    # Financials / data
+    "SPGI", "MCO", "V", "MA", "JPM",
+    # Industrials / energy
+    "CAT", "HON", "DE", "XOM", "CVX",
+    # REIT + caso limite
+    "FRT", "SPCE",
+]
+
 # Peer di settore per il correttivo settoriale (usati solo per le mediane,
 # non mostrati). US large cap con buona copertura dei settori del test.
 SECTOR_PEERS = [

@@ -146,15 +146,22 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tickers", nargs="+", help="ticker da analizzare")
     ap.add_argument("--test", action="store_true", help="banco di prova §14")
+    ap.add_argument("--universe-us", action="store_true",
+                    help="screena l'universo US large-cap (config.UNIVERSE_US)")
     ap.add_argument("--json", action="store_true", help="stampa json completo")
     ap.add_argument("--source", choices=["auto", "yfinance", "edgar"],
                     default="auto", help="fonte dati (edgar = solo US, no Yahoo)")
     ap.add_argument("--no-peers", action="store_true",
                     help="salta i peer di settore (niente correttivo settoriale)")
     args = ap.parse_args()
-    tickers = config.TEST_SET if args.test else (args.tickers or [])
+    if args.universe_us:
+        tickers = config.UNIVERSE_US
+    elif args.test:
+        tickers = config.TEST_SET
+    else:
+        tickers = args.tickers or []
     if not tickers:
-        ap.error("indica --tickers o --test")
+        ap.error("indica --tickers, --test o --universe-us")
 
     # universo da analizzare = titoli richiesti + peer di settore (solo per
     # le mediane; i peer non vengono mostrati ne' salvati)
