@@ -24,6 +24,7 @@ import config
 import db as dbmod
 import fetchers
 import fetch_us
+import fetch_tv
 import gates as gatesmod
 import iqi as iqimod
 import metrics as metricsmod
@@ -46,6 +47,34 @@ def _moat_overrides() -> dict:
     return json.load(open(p)) if os.path.exists(p) else {}
 
 
+def _apply_tv_direct(m: dict, raw: dict) -> None:
+    """Inietta le metriche che TradingView fornisce gia' pronte e che la serie
+    a 1 anno non puo' produrre (crescita, ROIC/ROE/ROA correnti). Tag [U]."""
+    d = raw.get("_tv_direct")
+    if not d:
+        return
+    ctx = m["ctx"]
+    def setm(mid, val, extra=None):
+        if val is None:
+            return
+        e = {"value": val, "series": [], "tag": "U"}
+        if extra:
+            e.update(extra)
+        m[mid] = e
+    if d.get("C6") is not None:
+        setm("C6", d["C6"], {"ni_cagr": None})
+    if d.get("C8_roic") is not None:
+        wacc = ctx.get("wacc", 0.09) * 100
+        setm("C8", d["C8_roic"], {"spread": d["C8_roic"] - wacc})
+        ctx["roic_series"] = [d["C8_roic"]]
+    setm("C9", d.get("C9_roe"))
+    setm("C10", d.get("C10_roa"))
+    if d.get("C19_yield") is not None:
+        setm("C19", d["C19_yield"], {"fcf_payout": None})
+    if d.get("C20_payout") is not None:
+        setm("C20", d["C20_payout"], {"fcf_payout": None})
+
+
 def analyze_one(ticker: str, source: str = "auto") -> dict | None:
     """Fase 1: fetch + metriche + classe. NON fa scoring (serve prima
     calcolare le statistiche di settore sull'universo)."""
@@ -56,14 +85,23 @@ def analyze_one(ticker: str, source: str = "auto") -> dict | None:
         raw = fetch_us.build_raw_us(ticker)
         if raw is not None:
             log.info("  %s via EDGAR+stockanalysis (yfinance non disponibile)", ticker)
+    if raw is None and source in ("auto", "edgar", "tv"):
+        # non-US: TradingView (aggregatore globale). Snapshot parziale.
+        raw = fetch_tv.fetch_tv(ticker)
+        if raw is not None:
+            log.info("  %s via TradingView (non-US, snapshot parziale [U])", ticker)
     if raw is None:
         return None
     if raw.get("_source", "").startswith("edgar"):
         validation = {"tags": {}, "agree_ratio": 1.0, "statement_trust": "P"}
+    elif raw.get("_source") == "tradingview":
+        # aggregatore singolo -> [U] (spec 6-bis C). Con yfinance -> [V].
+        validation = {"tags": {}, "agree_ratio": None, "statement_trust": "U"}
     else:
         edgar = fetchers.fetch_edgar(ticker)
         validation = fetchers.cross_validate(raw, edgar)
     m = metricsmod.compute_metrics(raw, validation)
+    _apply_tv_direct(m, raw)
     klass = metricsmod.detect_class(raw["info"], _class_overrides())
     moat = _moat_overrides().get(ticker.upper())
     if moat:
@@ -149,8 +187,8 @@ def main():
     ap.add_argument("--universe-us", action="store_true",
                     help="screena l'universo US large-cap (config.UNIVERSE_US)")
     ap.add_argument("--json", action="store_true", help="stampa json completo")
-    ap.add_argument("--source", choices=["auto", "yfinance", "edgar"],
-                    default="auto", help="fonte dati (edgar = solo US, no Yahoo)")
+    ap.add_argument("--source", choices=["auto", "yfinance", "edgar", "tv"],
+                    default="auto", help="fonte dati (edgar=solo US no Yahoo; tv=TradingView non-US)")
     ap.add_argument("--no-peers", action="store_true",
                     help="salta i peer di settore (niente correttivo settoriale)")
     args = ap.parse_args()

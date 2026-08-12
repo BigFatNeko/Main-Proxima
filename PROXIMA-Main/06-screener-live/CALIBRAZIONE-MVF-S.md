@@ -331,20 +331,38 @@ estera quotata a New York · H-share: azione cinese quotata a Hong Kong ·
 FY: anno fiscale completato · TTM: ultimi 12 mesi (VIETATO dalla spec: solo
 FY completati).
 
-| Mercati | Fonte primaria | Tag | Profondità | Cross-validation |
-|---|---|---|---|---|
-| USA + ADR | SEC EDGAR XBRL | [P] | Trimestrale | yfinance |
-| Giappone | EDINET API v2 | [P] | Trimestrale | yfinance |
-| Corea | DART/OpenDART | [P] | Trimestrale | yfinance |
-| Taiwan | MOPS | [P] | Trimestrale | yfinance |
-| UE | ESEF (filings.xbrl.org + OAM) | [P] | **Annuale** | yfinance (trimestrali) |
-| UK | ESEF/NSM + Companies House | [P] | Annuale | yfinance |
-| CH, Canada, Australia, HK, Singapore, NZ, Israele | Bilancio annuale ufficiale PDF (estrazione assistita, cache annuale) | [V] | Annuale | yfinance |
-| Prezzi (tutti) | yfinance con retry/backoff | — | — | SLA live = task T4 |
+**`✎ REVIEW` — Il DIP è multi-fonte, non anti-yfinance.** yfinance è una fonte
+**legittima**; il punto è che va **validata** da almeno un'altra fonte
+indipendente (TradingView, stockanalysis, EDGAR). Un dato è `[V]` quando ≥2
+aggregatori concordano dopo normalizzazione, `[U]` con fonte singola o
+conflitto, `[P]` solo da deposito ufficiale. Nessuna fonte è "cattiva" a
+priori; conta la concordanza.
 
-Regole:
-- Tagging DIP `DA SPEC` (Sez. 6-bis): [P] solo ufficiale; [V] ≥2 fonti
-  concordi dopo normalizzazione (tolleranze spec); [U] singola o conflitto.
+Stato di implementazione (bozza 1). Tre percorsi cablati e verificati:
+
+| Percorso | Copertura | Fonti | Tag | Profondità | Stato |
+|---|---|---|---|---|---|
+| **EDGAR + stockanalysis** | USA + ADR | SEC EDGAR XBRL (fondamentali) + stockanalysis (prezzi) | **[P]** | serie multi-anno | ✅ cablato |
+| **yfinance** | globale | yfinance, cross-validato con EDGAR/TradingView | [V]/[U] | serie multi-anno | ✅ codice (qui rate-limited; ok su VPS) |
+| **TradingView** | globale (IT/DE/FR/UK/CH/JP/KR/TW/HK…) | scanner TradingView | **[U]** | **snapshot corrente** | ✅ cablato — non-US |
+
+- **Non-US via TradingView = snapshot parziale dichiarato.** TradingView dà i
+  fondamentali CORRENTI (margini, ROE/ROIC/ROA, leva, yield, P/E, crescita YoY)
+  ma non le serie storiche complete → copertura 50-70% dichiarata, e tag `[U]`
+  (fonte singola) → CS-S basso. È coerente con la spec (fuori dal perimetro SEC
+  la profondità degrada per costruzione). Verificato: ENI/ASML/Nestlé/Toyota/
+  Samsung/TSMC/LVMH/Shell producono un MVF-S parziale con caveat visibili.
+- **Promozione a [V] sul VPS.** Quando yfinance è raggiungibile (produzione),
+  fa da seconda fonte: yfinance ∩ TradingView concordi → `[V]`, e le serie
+  storiche di yfinance alzano la copertura. La macchina di cross-validation
+  (`fetchers.cross_validate`) è già generalizzabile a questo.
+- **Prossimo salto di qualità (T22):** fonti ufficiali non-US (EDINET JP,
+  DART KR, MOPS TW, ESEF UE) → tag `[P]` e profondità multi-anno anche fuori
+  dagli USA. Grande lavoro, per-paese.
+
+Regole di tagging (invariate, `DA SPEC` Sez. 6-bis):
+- [P] solo ufficiale; [V] ≥2 fonti concordi dopo normalizzazione (tolleranze
+  spec); [U] singola o conflitto.
 - `✎ REVIEW` **Promozione [U] → [V]**: un dato annuale da fonte singola
   (sicura o meno) è promosso a [V] se **(a)** confermato da ≥2 altre
   piattaforme dopo normalizzazione, **oppure (b)** ricostruibile dalle
