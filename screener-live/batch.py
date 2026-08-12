@@ -25,6 +25,7 @@ import db as dbmod
 import fetchers
 import fetch_us
 import fetch_tv
+import fetch_esef
 import gates as gatesmod
 import iqi as iqimod
 import metrics as metricsmod
@@ -85,14 +86,22 @@ def analyze_one(ticker: str, source: str = "auto") -> dict | None:
         raw = fetch_us.build_raw_us(ticker)
         if raw is not None:
             log.info("  %s via EDGAR+stockanalysis (yfinance non disponibile)", ticker)
+    if raw is None and source in ("auto", "edgar", "esef"):
+        # UE: ESEF (fonte ufficiale [P] multi-anno) + mercato TradingView
+        raw = fetch_esef.fetch_esef(ticker)
+        if raw is not None:
+            log.info("  %s via ESEF [P] + TradingView (UE, multi-anno)", ticker)
     if raw is None and source in ("auto", "edgar", "tv"):
-        # non-US: TradingView (aggregatore globale). Snapshot parziale.
+        # altri non-US: TradingView (aggregatore globale). Snapshot parziale.
         raw = fetch_tv.fetch_tv(ticker)
         if raw is not None:
             log.info("  %s via TradingView (non-US, snapshot parziale [U])", ticker)
     if raw is None:
         return None
     if raw.get("_source", "").startswith("edgar"):
+        validation = {"tags": {}, "agree_ratio": 1.0, "statement_trust": "P"}
+    elif raw.get("_source", "").startswith("esef"):
+        # fondamentali da deposito ufficiale ESEF -> [P]
         validation = {"tags": {}, "agree_ratio": 1.0, "statement_trust": "P"}
     elif raw.get("_source") == "tradingview":
         # aggregatore singolo -> [U] (spec 6-bis C). Con yfinance -> [V].
@@ -187,7 +196,7 @@ def main():
     ap.add_argument("--universe-us", action="store_true",
                     help="screena l'universo US large-cap (config.UNIVERSE_US)")
     ap.add_argument("--json", action="store_true", help="stampa json completo")
-    ap.add_argument("--source", choices=["auto", "yfinance", "edgar", "tv"],
+    ap.add_argument("--source", choices=["auto", "yfinance", "edgar", "tv", "esef"],
                     default="auto", help="fonte dati (edgar=solo US no Yahoo; tv=TradingView non-US)")
     ap.add_argument("--no-peers", action="store_true",
                     help="salta i peer di settore (niente correttivo settoriale)")

@@ -343,8 +343,19 @@ Stato di implementazione (bozza 1). Tre percorsi cablati e verificati:
 | Percorso | Copertura | Fonti | Tag | Profondità | Stato |
 |---|---|---|---|---|---|
 | **EDGAR + stockanalysis** | USA + ADR | SEC EDGAR XBRL (fondamentali) + stockanalysis (prezzi) | **[P]** | serie multi-anno | ✅ cablato |
+| **ESEF + TradingView** | UE (dove indicizzata) | filings.xbrl.org xBRL-JSON (fondamentali IFRS) + TradingView (mercato) | **[P]** | serie multi-anno | ✅ cablato (T22) |
 | **yfinance** | globale | yfinance, cross-validato con EDGAR/TradingView | [V]/[U] | serie multi-anno | ✅ codice (qui rate-limited; ok su VPS) |
-| **TradingView** | globale (IT/DE/FR/UK/CH/JP/KR/TW/HK…) | scanner TradingView | **[U]** | **snapshot corrente** | ✅ cablato — non-US |
+| **TradingView** | globale (IT/DE/FR/UK/CH/JP/KR/TW/HK…) | scanner TradingView | **[U]** | **snapshot corrente** | ✅ cablato — non-US non-ESEF |
+
+- **ESEF (T22) — fatto per i nomi coperti.** Catena: ticker → LEI (GLEIF) →
+  depositi ESEF (filings.xbrl.org) → fatti IFRS multi-anno. I fondamentali
+  diventano **[P]** e il CS-S sale nettamente. Verificato: **ENI CS-S 38→79,
+  ASML 37→81** rispetto allo snapshot TradingView. I dati di mercato (prezzo,
+  azioni, dividendo) restano da TradingView e si innestano.
+  ⚠ **Copertura del repository incompleta**: filings.xbrl.org indicizza bene
+  l'Italia e alcuni paesi, meno Germania/Francia (SAP, LVMH: 0 depositi
+  trovati) → per quei nomi fall-back automatico a TradingView [U]. Ampliare
+  LEI/paesi e aggiungere gli OAM nazionali = **T22b**.
 
 - **Non-US via TradingView = snapshot parziale dichiarato.** TradingView dà i
   fondamentali CORRENTI (margini, ROE/ROIC/ROA, leva, yield, P/E, crescita YoY)
