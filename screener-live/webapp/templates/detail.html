@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ r.ticker }} · Proxima Screener</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+{% macro num(v, dec=1, suf='') -%}
+  {%- if v is none -%}<span style="color:var(--muted)">—</span>
+  {%- elif v is number -%}{{ '%.*f'|format(dec, v) }}{{ suf }}
+  {%- else -%}{{ v }}{%- endif -%}
+{%- endmacro %}
+
+<header class="top">
+  <div class="wrap"><div class="bar">
+    <div class="brand"><span class="star">✦</span>
+      <div><h1 class="serif">Proxima · Screener Live</h1><div class="sub">Scheda titolo — Regime S</div></div></div>
+    <nav><a href="{{ url_for('dashboard') }}">← Tutti i titoli</a><a href="{{ url_for('logout') }}">Esci</a></nav>
+  </div></div>
+</header>
+
+<main class="wrap">
+  <div class="dhead">
+    <div>
+      <div class="tk mono">{{ r.ticker }}</div>
+      <div class="nm">{{ r.name }} · {{ r.sector or r.industry }}{% if r.country %} · {{ r.country }}{% endif %}</div>
+    </div>
+    <div>
+      <span class="chip cls">{{ r.classe }}</span>
+      {% for t in r.packages.tags if t != 'all' %}<span class="chip pkg">{{ t.replace('_candidato','').replace('_',' ') }}</span>{% endfor %}
+      {% for b in r.packages.badges %}<span class="chip gold">{{ b }}</span>{% endfor %}
+    </div>
+  </div>
+
+  {% if r.gates %}
+  <div class="verdict" style="border-color:var(--crit);background:var(--crit-soft)">
+    <div class="vitem"><div class="k" style="color:var(--crit)">Stato</div>
+      <div class="v" style="color:var(--crit);font-size:16px">NON INVESTIBILE — GATE {{ r.gates|map(attribute='id')|join(', ') }}</div></div>
+    <div style="font-size:12.5px;color:var(--ink)">
+      {% for g in r.gates %}<div>• {{ g.desc }}</div>{% endfor %}</div>
+  </div>
+  {% endif %}
+
+  <div class="verdict">
+    <div class="vitem"><div class="k">Voto MVF-S</div><div class="v mono">{{ r.score.vote or 'n/d' }}<small>/1000</small></div></div>
+    <div class="vitem"><div class="k">IQI-S</div><div class="v mono">{{ r.iqi.iqi or 'n/d' }}<small>/100</small></div></div>
+    <div class="vitem"><div class="k">CS-S</div><div class="v mono">{{ r.cs.cs }}<small>/100</small> <span style="font-size:12px;color:var(--muted)">{{ r.cs.lettura }}</span></div></div>
+    <div class="vitem"><div class="k">Copertura</div><div class="v mono">{{ (r.score.coverage*100)|round|int }}<small>%</small></div></div>
+    <div class="vitem"><div class="k">Δ MVF↔IQI</div><div class="v mono">{{ '%+.0f'|format(r.delta_mvf_iqi) if r.delta_mvf_iqi is not none else '—' }}</div></div>
+    {% if r.netto and r.netto.netto_italia is not none %}
+    <div class="vitem"><div class="k">Netto Italia</div><div class="v mono">{{ num(r.netto.netto_italia,1,'%') }}</div></div>{% endif %}
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h3>Prezzo e valore (indicativo — Regime S)</h3>
+      <table style="width:100%;font-size:13px"><tbody>
+        <tr><td>Prezzo di mercato</td><td class="num mono">{{ num(r.price,2) }}</td></tr>
+        <tr><td>Fair value medio</td><td class="num mono">{{ num(r.fair_value,2) }}</td></tr>
+        <tr><td>Margine di sicurezza</td><td class="num mono">{{ (r.mos*100)|round|int ~ '%' if r.mos is not none else r.mos_stato }}</td></tr>
+        <tr><td><b>Prezzo ideale d'acquisto</b></td><td class="num mono"><b>{{ num(r.prezzo_ideale,2) }}</b></td></tr>
+      </tbody></table>
+      {% if r.fv_models %}<div style="margin-top:8px;font-size:11.5px;color:var(--muted)">
+        Modelli: {% for k,v in r.fv_models.items() %}{{ k }} {{ '%.1f'|format(v) }}{{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}
+    </div>
+    <div class="panel">
+      <h3>Rendimento netto (persona fisica IT)</h3>
+      {% if r.netto and r.netto.lordo is defined %}
+      <table style="width:100%;font-size:13px"><tbody>
+        <tr><td>Yield lordo</td><td class="num mono">{{ num(r.netto.lordo,2,'%') }}</td></tr>
+        <tr><td>Ritenuta estera ({{ (r.netto.w_home*100)|round|int }}%)</td><td class="num mono">→ {{ num(r.netto.netto_home,2,'%') }}</td></tr>
+        <tr><td>Imposta IT 26%</td><td class="num mono">→ <b>{{ num(r.netto.netto_italia,2,'%') }}</b></td></tr>
+        <tr><td>Drag fiscale totale</td><td class="num mono" style="color:var(--warn)">−{{ num(r.netto.drag_totale,2,'%') }}</td></tr>
+      </tbody></table>
+      {% else %}<div style="color:var(--muted);font-size:13px">Non distribuisce dividendo.</div>{% endif %}
+    </div>
+  </div>
+
+  {% if r.flags.critical or r.flags.warning %}
+  <div class="grid2">
+    <div class="panel"><h3 style="color:var(--crit)">Red flag critici</h3>
+      {% if r.flags.critical %}{% for f in r.flags.critical %}<div class="flag c">● {{ f }}</div>{% endfor %}
+      {% else %}<div style="color:var(--good);font-size:13px">Nessuno.</div>{% endif %}</div>
+    <div class="panel"><h3 style="color:var(--warn)">Attenzione</h3>
+      {% if r.flags.warning %}{% for f in r.flags.warning %}<div class="flag w">● {{ f }}</div>{% endfor %}
+      {% else %}<div style="color:var(--good);font-size:13px">Nessuno.</div>{% endif %}</div>
+  </div>
+  {% endif %}
+
+  <h2 class="sec">Scomposizione del voto — {{ r.score.detail|length }} metriche · base {{ r.score.base_effective }}/{{ r.score.base_original }} · regime pesi «{{ r.score.regime_pesi }}»</h2>
+  <div style="overflow-x:auto">
+  <table class="tbl">
+    <thead><tr><th>Metrica</th><th class="num">Valore</th><th>Fonte</th><th class="num">Peso</th><th>Contributo</th><th class="num">Punti</th></tr></thead>
+    <tbody>
+    {% for d in r.score.detail %}
+      <tr>
+        <td><span class="mono" style="color:var(--muted)">{{ d.id }}</span> {{ d.name }}</td>
+        <td class="num mono">{{ num(d.value,2) }}</td>
+        <td><span class="tag-{{ d.tag }}">[{{ d.tag }}]</span></td>
+        <td class="num mono">{{ d.weight }}</td>
+        <td><span class="mbar"><i style="width:{{ (d.points/d.weight*100) if d.weight else 0 }}%"></i></span></td>
+        <td class="num mono">{{ '%.1f'|format(d.points) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if r.score.omitted %}
+  <div style="margin-top:10px;font-size:12.5px;color:var(--muted)">
+    <b>Metriche omesse e ri-basate:</b>
+    {% for o in r.score.omitted %}{{ o.id }} ({{ o.reason }}, peso {{ o.weight }}){{ ' · ' if not loop.last }}{% endfor %}</div>
+  {% endif %}
+
+  <footer>
+    Composizione dati: <span class="tag-P">[P] {{ r.cs.composizione.P }}%</span> ·
+    <span class="tag-V">[V] {{ r.cs.composizione.V }}%</span> ·
+    <span class="tag-U">[U] {{ r.cs.composizione.U }}%</span>.
+    Blocco A (solidità) {{ r.iqi.blocco_a }} · Blocco B (prospettive/reddito) {{ r.iqi.blocco_b }} · tier «{{ r.iqi.tier_dividendo }}».
+    {% if r.score.altman_penalty %} Penalità Altman-Z −{{ (r.score.altman_penalty*100)|round|int }}%.{% endif %}
+    <br>Output di Regime S: prezzi ideali <b>indicativi</b>; il target difendibile e la scheda A4 nascono in Regime A.
+  </footer>
+</main>
+</body>
+</html>

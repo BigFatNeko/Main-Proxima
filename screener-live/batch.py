@@ -82,16 +82,16 @@ def analyze_one(ticker: str, source: str = "auto") -> dict | None:
     raw = None
     if source in ("auto", "yfinance"):
         raw = fetchers.fetch_yf(ticker)
-    if raw is None and source in ("auto", "edgar"):
+    if raw is None and source in ("auto", "edgar", "free"):
         raw = fetch_us.build_raw_us(ticker)
         if raw is not None:
             log.info("  %s via EDGAR+stockanalysis (yfinance non disponibile)", ticker)
-    if raw is None and source in ("auto", "edgar", "esef"):
+    if raw is None and source in ("auto", "edgar", "esef", "free"):
         # UE: ESEF (fonte ufficiale [P] multi-anno) + mercato TradingView
         raw = fetch_esef.fetch_esef(ticker)
         if raw is not None:
             log.info("  %s via ESEF [P] + TradingView (UE, multi-anno)", ticker)
-    if raw is None and source in ("auto", "edgar", "tv"):
+    if raw is None and source in ("auto", "edgar", "tv", "free"):
         # altri non-US: TradingView (aggregatore globale). Snapshot parziale.
         raw = fetch_tv.fetch_tv(ticker)
         if raw is not None:
@@ -195,13 +195,17 @@ def main():
     ap.add_argument("--test", action="store_true", help="banco di prova §14")
     ap.add_argument("--universe-us", action="store_true",
                     help="screena l'universo US large-cap (config.UNIVERSE_US)")
+    ap.add_argument("--universe-global", action="store_true",
+                    help="universo globale US+UE+Asia (config.UNIVERSE_GLOBAL)")
     ap.add_argument("--json", action="store_true", help="stampa json completo")
-    ap.add_argument("--source", choices=["auto", "yfinance", "edgar", "tv", "esef"],
+    ap.add_argument("--source", choices=["auto", "yfinance", "edgar", "tv", "esef", "free"],
                     default="auto", help="fonte dati (edgar=solo US no Yahoo; tv=TradingView non-US)")
     ap.add_argument("--no-peers", action="store_true",
                     help="salta i peer di settore (niente correttivo settoriale)")
     args = ap.parse_args()
-    if args.universe_us:
+    if getattr(args, "universe_global", False):
+        tickers = config.UNIVERSE_GLOBAL
+    elif args.universe_us:
         tickers = config.UNIVERSE_US
     elif args.test:
         tickers = config.TEST_SET

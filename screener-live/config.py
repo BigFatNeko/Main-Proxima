@@ -134,6 +134,13 @@ UNIVERSE_US = [
     "FRT", "SPCE",
 ]
 
+# Universo globale (US via EDGAR + UE via ESEF + resto via TradingView).
+UNIVERSE_GLOBAL = UNIVERSE_US + [
+    "ENI.MI", "ENEL.MI", "ISP.MI", "RACE.MI", "ASML.AS",   # UE (ESEF dove coperta)
+    "SAP.DE", "MC.PA", "OR.PA", "NESN.SW", "SHEL.L",       # UE/UK (TV fallback)
+    "7203.T", "005930.KS", "2330.TW",                       # JP/KR/TW (TV snapshot)
+]
+
 # Peer di settore per il correttivo settoriale (usati solo per le mediane,
 # non mostrati). US large cap con buona copertura dei settori del test.
 SECTOR_PEERS = [
