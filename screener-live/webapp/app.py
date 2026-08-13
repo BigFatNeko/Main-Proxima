@@ -23,7 +23,8 @@ from flask import (Flask, g, jsonify, redirect, render_template, request,
                    session, url_for, abort)
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.environ.get("PROXIMA_DB", os.path.join(BASE, "..", "output", "screener.db"))
+DB_PATH = os.path.normpath(os.environ.get(
+    "PROXIMA_DB", os.path.join(BASE, "..", "output", "screener.db")))
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-CAMBIARE-in-produzione")
@@ -78,10 +79,20 @@ def _close(_):
         d.close()
 
 
+def db_ready() -> bool:
+    """Il DB esiste? (batch.py non ancora eseguito -> nessun file)."""
+    return os.path.exists(DB_PATH)
+
+
 def latest_snapshot():
-    row = db().execute(
-        "SELECT snapshot_id, created_at, engine, mvf_version FROM snapshots "
-        "ORDER BY snapshot_id DESC LIMIT 1").fetchone()
+    if not db_ready():
+        return None
+    try:
+        row = db().execute(
+            "SELECT snapshot_id, created_at, engine, mvf_version FROM snapshots "
+            "ORDER BY snapshot_id DESC LIMIT 1").fetchone()
+    except sqlite3.Error:
+        return None
     return dict(row) if row else None
 
 
@@ -90,7 +101,8 @@ def latest_snapshot():
 @login_required
 def dashboard():
     snap = latest_snapshot()
-    return render_template("dashboard.html", snap=snap)
+    return render_template("dashboard.html", snap=snap, db_path=DB_PATH,
+                           db_ready=db_ready())
 
 
 @app.route("/ticker/<ticker>")
@@ -98,7 +110,7 @@ def dashboard():
 def ticker_detail(ticker):
     snap = latest_snapshot()
     if not snap:
-        abort(404)
+        return redirect(url_for("dashboard"))
     row = db().execute(
         "SELECT payload FROM results WHERE snapshot_id=? AND ticker=?",
         (snap["snapshot_id"], ticker)).fetchone()
@@ -114,7 +126,8 @@ def ticker_detail(ticker):
 def api_results():
     snap = latest_snapshot()
     if not snap:
-        return jsonify({"snapshot": None, "results": []})
+        return jsonify({"snapshot": None, "results": [],
+                        "hint": "Nessuno snapshot: esegui batch.py"})
     rows = db().execute(
         "SELECT payload FROM results WHERE snapshot_id=? ORDER BY voto DESC",
         (snap["snapshot_id"],)).fetchall()
