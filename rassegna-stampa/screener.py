@@ -97,48 +97,89 @@ TV_MARKETS = {
     "EU": ["italy", "germany", "france", "spain", "netherlands",
            "switzerland", "uk", "sweden", "denmark", "norway",
            "finland", "belgium", "ireland", "austria", "portugal",
-           "poland", "turkey", "greece", "hungary", "czech_republic"],
-    "ASIA": ["japan", "china", "hong_kong", "korea", "india",
+           "poland", "turkey", "greece", "hungary", "czech"],
+    "ASIA": ["japan", "china", "hongkong", "korea", "india",
              "singapore", "taiwan", "australia", "indonesia",
-             "malaysia", "thailand", "vietnam", "philippines", "new_zealand"],
+             "malaysia", "thailand", "vietnam", "philippines", "newzealand"],
     "LATAM": ["brazil", "mexico", "chile", "colombia", "argentina"],
-    "AFRICA_ME": ["south_africa", "saudi_arabia", "israel", "uae"],
+    "AFRICA_ME": ["rsa", "ksa", "israel", "uae"],
 }
 TV_MARKETS["GLOBAL"] = (TV_MARKETS["US"] + TV_MARKETS["EU"] + TV_MARKETS["ASIA"]
                         + TV_MARKETS["LATAM"] + TV_MARKETS["AFRICA_ME"])
 
 # TradingView exchange prefix → yfinance suffix
+#
+# I prefissi qui sotto sono quelli che TradingView emette davvero, verificati
+# interrogando ogni mercato. Diversi valori storici non sono mai comparsi in
+# una risposta TV (BIT per Milano, TYO per Tokyo, WSE per Varsavia, BVMF per
+# San Paolo...): tv_to_yf_ticker() li scartava con return None e l'intero
+# mercato spariva senza un solo messaggio di log.
 TV_TO_YF_SUFFIX = {
-    "BIT": ".MI", "XETR": ".DE", "FWB": ".F",
-    "EURONEXT": ".PA", "AMEX": "", "NYSE": "", "NASDAQ": "",
-    "LSE": ".L", "BME": ".MC", "AMS": ".AS",
-    "EBS": ".SW", "SWX": ".SW",
-    "TYO": ".T", "HKEX": ".HK", "KRX": ".KS",
-    "NSE": ".NS", "BSE": ".BO", "SSE": ".SS", "SZSE": ".SZ",
-    "SGX": ".SI", "ASX": ".AX",
-    "OMXSTO": ".ST", "OMXCOP": ".CO", "OMXHEX": ".HE",
-    "OSL": ".OL", "WBO": ".VI", "ELI": ".LS", "BVMF": ".SA",
-    # EM / frontier additions
-    "WSE": ".WA",     # Poland Warsaw
-    "BIST": ".IS",    # Turkey Istanbul
-    "BMV": ".MX",     # Mexico
-    "JSE": ".JO",     # South Africa
-    "TASE": ".TA",    # Israel
-    "TADAWUL": ".SR", # Saudi Arabia
-    "NZX": ".NZ",     # New Zealand
-    "SET": ".BK",     # Thailand Bangkok
-    "IDX": ".JK",     # Indonesia
-    "PSE": ".PSE",    # Philippines
-    "HNX": ".HN",     # Vietnam Hanoi
-    "HOSE": ".VN",    # Vietnam Ho Chi Minh
-    "BCS": ".BA",     # Argentina Buenos Aires
-    "BVL": ".LM",     # Peru Lima (bonus)
-    "BCS_CL": ".SN",  # Chile Santiago
-    "COLCAP": ".CL",  # Colombia
-    "ATHEX": ".AT",   # Greece Athens
-    "BUX": ".BD",     # Hungary Budapest
-    "PSE_CZ": ".PR",  # Czech Republic Prague
-    "DFM": ".DU",     # UAE Dubai
+    # --- Nord America ---
+    "NYSE": "", "NASDAQ": "", "AMEX": "", "CBOE": "",
+    # --- Euronext: un solo prefisso per cinque paesi. Il suffisso corretto
+    #     dipende dal mercato interrogato → TV_MARKET_SUFFIX_OVERRIDE. ---
+    "EURONEXT": ".PA",
+    # --- Europa ---
+    "MIL": ".MI",       # Borsa Italiana (TV emette MIL, non BIT)
+    "XETR": ".DE", "FWB": ".F",
+    # Le piazze regionali tedesche quotano gli stessi titoli di XETRA:
+    # le si riporta su .DE e ci pensa il dedup a collassarle.
+    "GETTEX": ".DE", "TRADEGATE": ".DE", "SWB": ".DE", "MUN": ".DE",
+    "DUS": ".DE", "HAM": ".DE", "HAN": ".DE", "LS": ".DE", "LSX": ".DE",
+    "LSE": ".L",
+    "BME": ".MC",
+    "SIX": ".SW", "BX": ".SW", "EBS": ".SW", "SWX": ".SW",
+    "OMXSTO": ".ST", "OMXCOP": ".CO", "OMXHEX": ".HE", "OSL": ".OL",
+    "VIE": ".VI",       # Vienna (TV emette VIE, non WBO)
+    "GPW": ".WA",       # Varsavia (TV emette GPW, non WSE)
+    "BET": ".BD",       # Budapest (TV emette BET, non BUX)
+    "PSECZ": ".PR",     # Praga (TV emette PSECZ, non PSE_CZ)
+    "ATHEX": ".AT",     # Atene
+    "BIST": ".IS",      # Istanbul
+    # --- Asia-Pacifico ---
+    "TSE": ".T",        # Tokyo (TV emette TSE, non TYO)
+    "HKEX": ".HK",
+    "KRX": ".KS",
+    "NSE": ".NS", "BSE": ".BO",
+    "SSE": ".SS", "SZSE": ".SZ",
+    "SGX": ".SI",
+    "TWSE": ".TW", "TPEX": ".TWO",   # Taiwan: assenti in precedenza
+    "ASX": ".AX", "NZX": ".NZ",
+    "IDX": ".JK",
+    "MYX": ".KL",       # Kuala Lumpur: assente in precedenza
+    "SET": ".BK",       # Bangkok
+    "HOSE": ".VN", "HNX": ".HN",
+    "PSE": ".PS",       # Filippine (era ".PSE", suffisso inesistente)
+    # --- America Latina ---
+    "BMFBOVESPA": ".SA",  # San Paolo (TV emette BMFBOVESPA, non BVMF)
+    "BMV": ".MX", "BIVA": ".MX",
+    "BCS": ".SN",       # Santiago del Cile (era ".BA" = Buenos Aires)
+    "BCBA": ".BA",      # Buenos Aires (TV emette BCBA)
+    "BVC": ".CL",       # Bogotà (TV emette BVC, non COLCAP)
+    "BVL": ".LM",       # Lima
+    # --- Africa / Medio Oriente ---
+    "JSE": ".JO",       # Johannesburg
+    "TADAWUL": ".SR",   # Riyadh
+    "TASE": ".TA",      # Tel Aviv
+    "ADX": ".AD",       # Abu Dhabi (DFM→".DU" era Düsseldorf)
+}
+
+# Venue senza copertura yfinance utilizzabile: scartati di proposito, non per
+# mappa mancante. EUROTLX quota obbligazioni e certificati, LSIN sono ADR
+# internazionali su LSE, UPCOM è il mercato OTC vietnamita, DFM (Dubai) non ha
+# un suffisso Yahoo proprio — il ".DU" usato in passato è Düsseldorf.
+TV_SKIP_PREFIXES = {"OTC", "EUROTLX", "LSIN", "UPCOM", "DFM"}
+
+# EURONEXT usa lo stesso prefisso per cinque paesi. Senza questa tabella un
+# titolo belga diventava NOS.PA e yfinance rispondeva 404: nei log di
+# produzione si vedono decine di .PA inesistenti (UMI.PA, WDP.PA, VPK.PA).
+TV_MARKET_SUFFIX_OVERRIDE = {
+    ("EURONEXT", "france"):      ".PA",
+    ("EURONEXT", "netherlands"): ".AS",
+    ("EURONEXT", "belgium"):     ".BR",
+    ("EURONEXT", "portugal"):    ".LS",
+    ("EURONEXT", "ireland"):     ".IR",
 }
 
 SPECIAL_SECTORS = {
@@ -387,20 +428,44 @@ class SpecialCandidate:
 # SEZIONE 3 — UNIVERSE AUTO-BUILDER (zero file)
 # =============================================================================
 
-def tv_to_yf_ticker(tv_ticker: str) -> Optional[str]:
-    """Converti 'BIT:ENI' -> 'ENI.MI', 'NASDAQ:NKLR' -> 'NKLR'."""
+def tv_to_yf_ticker(tv_ticker: str, market: Optional[str] = None,
+                     dropped: Optional[dict] = None) -> Optional[str]:
+    """Converti 'MIL:ENI' -> 'ENI.MI', 'NASDAQ:NKLR' -> 'NKLR'.
+
+    `market` disambigua i prefissi condivisi da più paesi (EURONEXT), dove il
+    suffisso yfinance dipende dalla piazza e non dal ticker.
+
+    `dropped` è un contatore opzionale {prefisso: n}: chi chiama può passarlo
+    per sapere QUALI prefissi sta perdendo. Senza, un prefisso non mappato è
+    indistinguibile da un mercato che non ha risposto.
+    """
     if ":" not in tv_ticker:
         return tv_ticker
     exchange, symbol = tv_ticker.split(":", 1)
-    suffix = TV_TO_YF_SUFFIX.get(exchange.upper())
+    exchange = exchange.upper()
+    if exchange in TV_SKIP_PREFIXES:
+        return None
+    suffix = None
+    if market:
+        suffix = TV_MARKET_SUFFIX_OVERRIDE.get((exchange, market))
     if suffix is None:
+        suffix = TV_TO_YF_SUFFIX.get(exchange)
+    if suffix is None:
+        if dropped is not None:
+            dropped[exchange] = dropped.get(exchange, 0) + 1
         return None
     return f"{symbol}{suffix}" if suffix else symbol
 
 
 def _query_one_market(market: str, min_mcap_m: int, min_price: float,
-                       limit: int, sector_filter: Optional[str]) -> list[dict]:
-    """Query TV per un singolo mercato con pre-filtri qualità. Ritorna lista di row-dict.
+                       limit: int, sector_filter: Optional[str]
+                       ) -> tuple[list[dict], dict, Optional[str]]:
+    """Query TV per un singolo mercato con pre-filtri qualità.
+
+    Ritorna (righe, prefissi_scartati, errore). I due valori in coda servono a
+    distinguere i tre modi in cui un mercato può rendere zero righe: query in
+    errore, risposta vuota, oppure risposta piena di ticker con un prefisso
+    borsa che non sappiamo convertire. Prima erano indistinguibili.
 
     Pre-filtri TV (riducono significativamente l'universo prima di toccare yfinance):
     - PE > 0 AND PE < 80  → esclude loss-making e mega-growth costosi
@@ -408,6 +473,7 @@ def _query_one_market(market: str, min_mcap_m: int, min_price: float,
     Questo porta l'universo da ~2500 a ~200-300 ticker dove yfinance non viene saturato.
     """
     rows: list[dict] = []
+    dropped: dict = {}
     try:
         q = (Query()
              .set_markets(market)
@@ -427,9 +493,9 @@ def _query_one_market(market: str, min_mcap_m: int, min_price: float,
             q = q.where(Column("sector") == sector_filter)
         _count, df = q.get_scanner_data()
         if df is None or df.empty:
-            return rows
+            return rows, dropped, None
         for _, row in df.iterrows():
-            yf_tkr = tv_to_yf_ticker(row["ticker"])
+            yf_tkr = tv_to_yf_ticker(row["ticker"], market=market, dropped=dropped)
             if yf_tkr is None:
                 continue
             rows.append({
@@ -439,8 +505,8 @@ def _query_one_market(market: str, min_mcap_m: int, min_price: float,
                 "div_yield": row.get("dividends_yield") or 0,
             })
     except Exception as e:
-        log.debug("TV query fallita market=%s: %s", market, e)
-    return rows
+        return rows, dropped, f"{type(e).__name__}: {str(e)[:80]}"
+    return rows, dropped, None
 
 
 def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
@@ -470,16 +536,39 @@ def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
                           limit_per_market, sector_filter): mkt
                 for mkt in markets}
         ok, fail = 0, 0
+        errori: list[str] = []
+        mercati_a_zero: list[str] = []
+        prefissi_persi: dict = {}
         for fut in as_completed(futs):
-            rows = fut.result()
+            mkt = futs[fut]
+            rows, dropped, err = fut.result()
+            for pref, n in dropped.items():
+                prefissi_persi[pref] = prefissi_persi.get(pref, 0) + n
             if rows:
                 all_rows.extend(rows)
                 ok += 1
             else:
                 fail += 1
+                if err:
+                    errori.append(f"{mkt} ({err})")
+                else:
+                    mercati_a_zero.append(mkt)
 
     log.info("TV: %d mercati OK, %d falliti, %d righe totali pre-dedup",
              ok, fail, len(all_rows))
+    # Un mercato che rende zero righe è un buco nell'universo: va detto a
+    # voce alta, e va detto PERCHÉ. Con i soli conteggi, 16 mercati morti per
+    # prefisso non mappato hanno convissuto per mesi con un log dall'aria sana.
+    if errori:
+        log.warning("TV mercati in errore (%d): %s", len(errori), ", ".join(sorted(errori)))
+    if mercati_a_zero:
+        log.warning("TV mercati a zero righe (%d): %s",
+                    len(mercati_a_zero), ", ".join(sorted(mercati_a_zero)))
+    if prefissi_persi:
+        persi = sorted(prefissi_persi.items(), key=lambda kv: kv[1], reverse=True)
+        log.warning("TV prefissi borsa non convertiti (%d ticker persi): %s",
+                    sum(prefissi_persi.values()),
+                    ", ".join(f"{p}={n}" for p, n in persi))
 
     # Deduplica
     seen: set[str] = set()
@@ -570,7 +659,7 @@ def build_speculative_universe_tv(region: str = "GLOBAL") -> list[str]:
             if df is None or df.empty:
                 return rows
             for _, row in df.iterrows():
-                yf_tkr = tv_to_yf_ticker(row["ticker"])
+                yf_tkr = tv_to_yf_ticker(row["ticker"], market=mkt)
                 if yf_tkr is None:
                     continue
                 rows.append({
@@ -2347,7 +2436,7 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
                 return []
             tickers = []
             for _, row in df.iterrows():
-                yf_tkr = tv_to_yf_ticker(row["ticker"])
+                yf_tkr = tv_to_yf_ticker(row["ticker"], market=mkt)
                 if yf_tkr is None:
                     failed.append(row["ticker"])
                     continue

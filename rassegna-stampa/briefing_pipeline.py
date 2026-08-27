@@ -447,15 +447,22 @@ def _mvf_synthesis(c: dict) -> dict:
     }
 
 
+# Feed verificati uno per uno. I precedenti erano in gran parte morti: i due
+# feeds.reuters.com sono dismessi da anni, il vecchio endpoint CNBC risponde
+# 403, quelli di Il Sole 24 Ore e MilanoFinanza 404. Restavano tre fonti vive
+# su otto, e nessuna italiana.
 NEWS_FEEDS: list[dict] = [
-    {"label": "Reuters Business",    "url": "https://feeds.reuters.com/reuters/businessNews",           "lang": "en"},
-    {"label": "Reuters Markets",     "url": "https://feeds.reuters.com/reuters/marketsNews",            "lang": "en"},
-    {"label": "MarketWatch",         "url": "https://feeds.marketwatch.com/marketwatch/topstories/",    "lang": "en"},
-    {"label": "CNBC Finance",        "url": "https://www.cnbc.com/id/10001147/device/rss/rss.html",     "lang": "en"},
-    {"label": "Il Sole 24 Ore",      "url": "https://www.ilsole24ore.com/rss/finanza-e-mercati.xml",   "lang": "it"},
-    {"label": "MilanoFinanza",       "url": "https://www.milanofinanza.it/rss/mf-rss-news.xml",        "lang": "it"},
-    {"label": "ECB Press Releases",  "url": "https://www.ecb.europa.eu/rss/press.html",                "lang": "en"},
+    {"label": "MarketWatch",         "url": "https://feeds.marketwatch.com/marketwatch/topstories/",   "lang": "en"},
     {"label": "FT Markets",          "url": "https://www.ft.com/markets?format=rss",                   "lang": "en"},
+    {"label": "Bloomberg Markets",   "url": "https://feeds.bloomberg.com/markets/news.rss",            "lang": "en"},
+    {"label": "Yahoo Finance",       "url": "https://finance.yahoo.com/news/rssindex",                 "lang": "en"},
+    {"label": "CNBC Top News",       "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114", "lang": "en"},
+    {"label": "ECB Press Releases",  "url": "https://www.ecb.europa.eu/rss/press.html",                "lang": "en"},
+    {"label": "Fed Press Releases",  "url": "https://www.federalreserve.gov/feeds/press_all.xml",      "lang": "en"},
+    {"label": "Il Sole 24 Ore",      "url": "https://www.ilsole24ore.com/rss/finanza.xml",             "lang": "it"},
+    {"label": "Il Sole — Economia",  "url": "https://www.ilsole24ore.com/rss/economia.xml",            "lang": "it"},
+    {"label": "ANSA Economia",       "url": "https://www.ansa.it/sito/notizie/economia/economia_rss.xml", "lang": "it"},
+    {"label": "Repubblica Economia", "url": "https://www.repubblica.it/rss/economia/rss2.0.xml",       "lang": "it"},
 ]
 
 _RSS_NS = {"atom": "http://www.w3.org/2005/Atom"}
@@ -463,7 +470,14 @@ _RSS_UA = {"User-Agent": "Mozilla/5.0 (compatible; ProximaBot/1.0)"}
 
 
 def _txt(item, tag: str, default: str = "") -> str:
-    el = item.find(tag) or item.find(f"atom:{tag}", _RSS_NS)
+    # Attenzione all'`or`: un Element di ElementTree senza figli è FALSY, quindi
+    # `item.find(tag) or item.find(f"atom:{tag}")` scartava il tag RSS trovato e
+    # ripiegava sul namespace atom, che sui feed RSS non esiste. Risultato: _txt
+    # tornava sempre "", ogni articolo veniva saltato da `if not title` e il
+    # briefing girava con zero notizie senza un solo errore.
+    el = item.find(tag)
+    if el is None:
+        el = item.find(f"atom:{tag}", _RSS_NS)
     return (el.text or "").strip() if el is not None else default
 
 
@@ -483,7 +497,7 @@ def _fetch_one_feed(feed: dict, max_per_feed: int, cutoff: datetime) -> list[dic
     try:
         resp = _requests.get(feed["url"], timeout=10, headers=_RSS_UA)
         if resp.status_code != 200:
-            log.debug("RSS %s: HTTP %s", feed["label"], resp.status_code)
+            log.warning("RSS %s: HTTP %s", feed["label"], resp.status_code)
             return []
         root = ET.fromstring(resp.content)
         items = root.findall(".//item") or root.findall(".//atom:entry", _RSS_NS)
@@ -506,7 +520,7 @@ def _fetch_one_feed(feed: dict, max_per_feed: int, cutoff: datetime) -> list[dic
             })
         return result
     except Exception as e:
-        log.debug("RSS %s err: %s", feed["label"], e)
+        log.warning("RSS %s err: %s: %s", feed["label"], type(e).__name__, str(e)[:80])
         return []
 
 
@@ -521,8 +535,15 @@ def fetch_news_rss(max_per_feed: int = 8, max_age_hours: int = 36) -> list[dict]
         for fut in as_completed(futs):
             all_items.extend(fut.result())
     all_items.sort(key=lambda x: x["published"], reverse=True)
-    log.info("News RSS: %d articoli da %d feed", len(all_items),
-             len({i["source"] for i in all_items}))
+    vive = {i["source"] for i in all_items}
+    log.info("News RSS: %d articoli da %d/%d feed", len(all_items),
+             len(vive), len(NEWS_FEEDS))
+    mute = [f["label"] for f in NEWS_FEEDS if f["label"] not in vive]
+    if mute:
+        log.warning("RSS senza articoli (%d/%d): %s",
+                    len(mute), len(NEWS_FEEDS), ", ".join(mute))
+    if not all_items:
+        log.error("RSS: nessun articolo da nessun feed — il briefing girerà senza rassegna stampa.")
     return all_items
 
 
