@@ -201,12 +201,37 @@ def enrich_portfolio_prices(user_data: dict) -> dict:
                 else:
                     log.debug("Prezzo %s non disponibile: %s", tkr, e)
 
-    # Riduco workers a 4 (vs 8) per non sommergere Yahoo dopo lo screener
-    with ThreadPoolExecutor(max_workers=min(len(positions), 4)) as ex:
+    # Girando ora PRIMA dello screener la sessione è fresca: 8 thread su
+    # poche decine di posizioni non la mettono in crisi.
+    with ThreadPoolExecutor(max_workers=min(len(positions), 8)) as ex:
         list(ex.map(_fetch_price, positions))
 
     enriched = sum(1 for p in positions if "current_price" in p)
-    log.info("Portfolio prices enriched: %d/%d posizioni", enriched, len(positions))
+
+    # Rete di sicurezza: se non è arrivato nulla è quasi sempre la sessione
+    # yfinance, non i ticker. Vale un rinnovo e un secondo giro — i prezzi
+    # del portafoglio sono il dato più visibile dell'intero briefing.
+    if enriched == 0 and positions:
+        log.warning("Nessun prezzo ottenuto: rinnovo sessione yfinance e riprovo.")
+        try:
+            from yfinance.data import SingletonMeta
+            SingletonMeta._instances.clear()
+        except Exception as e:
+            log.debug("reset sessione non riuscito: %s", e)
+        _time.sleep(5)
+        with ThreadPoolExecutor(max_workers=min(len(positions), 4)) as ex:
+            list(ex.map(_fetch_price, positions))
+        enriched = sum(1 for p in positions if "current_price" in p)
+
+    if enriched == 0 and positions:
+        log.error("Portfolio prices: 0/%d posizioni — la griglia del briefing "
+                  "uscirà senza prezzi né P&L.", len(positions))
+    elif enriched < len(positions):
+        mancanti = [p["ticker"] for p in positions if "current_price" not in p]
+        log.warning("Portfolio prices: %d/%d — senza prezzo: %s",
+                    enriched, len(positions), ", ".join(mancanti))
+    else:
+        log.info("Portfolio prices enriched: %d/%d posizioni", enriched, len(positions))
     return user_data
 
 
@@ -848,6 +873,20 @@ def main():
     log.info("=== Proxima Briefing Pipeline ===")
     log.info("User: %s | Mode: %s | Region: %s", args.user, args.mode, args.region)
 
+    # I prezzi del portafoglio si prendono PRIMA dello screener, non dopo.
+    # Lo screener macina ~600 titoli e satura la sessione yfinance: quando
+    # toccava al portafoglio il crumb era già invalidato e Alex usciva con
+    # "0/23 posizioni" arricchite — cioè la griglia che apre il briefing,
+    # la prima cosa che vede, senza prezzi né P&L. Vale invece i prezzi li
+    # otteneva, perché gira dopo con la cache screener e sessione fresca:
+    # è stato quel contrasto a identificare la causa.
+    user_data = load_portfolio(args.user)
+    log.info("Portfolio %s: %d posizioni, cash=%.0f, pac=%.0f",
+             args.user, len(user_data["positions"]),
+             user_data["cash"], user_data["pac_monthly"])
+    if not args.dry_run:
+        user_data = enrich_portfolio_prices(user_data)
+
     screener_data = {"candidates": []}
     if not args.skip_screener and not args.dry_run:
         sp = run_screener(region=args.region, strategy="all")
@@ -861,13 +900,6 @@ def main():
             log.info("Riuso screener output esistente: %s", existing)
     elif args.dry_run:
         log.info("DRY RUN: skip screener")
-
-    user_data = load_portfolio(args.user)
-    log.info("Portfolio %s: %d posizioni, cash=%.0f, pac=%.0f",
-             args.user, len(user_data["positions"]),
-             user_data["cash"], user_data["pac_monthly"])
-    if not args.dry_run:
-        user_data = enrich_portfolio_prices(user_data)
 
     todo = load_todo()
     previous = load_previous_briefings(args.user)

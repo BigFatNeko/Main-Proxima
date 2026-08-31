@@ -1850,43 +1850,64 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
 # SEZIONE 8 — PIPELINE
 # =============================================================================
 
-def _refresh_yfinance_session() -> None:
+def _refresh_yfinance_session(attempts: int = 3) -> bool:
     """Forza un nuovo crumb Yahoo Finance per evitare errori 401.
 
-    Il crumb (cookie di sessione) viene invalidato dopo molte richieste
-    parallele. yfinance lo cachea a livello di modulo — per resettarlo
-    bisogna cancellare gli attributi interni del CrumbManager o del session
-    manager. Come fallback, forza yf.download() che inizializza sempre
-    una sessione pulita.
+    Il crumb (token di sessione) si invalida dopo molte richieste parallele e
+    da quel momento OGNI chiamata risponde 401 Unauthorized. yfinance non lo
+    rigenera da solo: lo tiene in un singleton YfData, quindi finché quel
+    singleton vive la sessione resta morta per tutto il processo.
+
+    La versione precedente azzerava attributi su yfinance.utils e
+    yfinance.base che in 0.2.x non esistono più: non resettava nulla, non
+    verificava nulla e loggava l'esito a debug. Il risultato è che Tier 2 e
+    Tier 3 giravano su una sessione morta e rendevano zero candidati su
+    centinaia di ticker, senza che nel log comparisse una causa.
+
+    Qui si distrugge il singleton, si verifica che la sessione nuova risponda
+    davvero, e si ritorna l'esito al chiamante.
     """
     import time
-    time.sleep(3)
-    try:
-        # Tentativo 1: reset interno CrumbManager (yfinance 0.2.x)
-        import yfinance.utils as yf_utils
-        for attr in ("_crumb", "_crumb_timestamp", "_CRUMB",
-                     "_cookies", "_session"):
-            if hasattr(yf_utils, attr):
-                try:
-                    setattr(yf_utils, attr, None)
-                except Exception:
-                    pass
-        # Tentativo 2: reset via yf.base
-        import yfinance.base as yf_base
-        for attr in ("_crumb", "_session", "session"):
-            if hasattr(yf_base, attr):
-                try:
-                    setattr(yf_base, attr, None)
-                except Exception:
-                    pass
-    except Exception:
-        pass
-    try:
-        # Trigger fresh session: yf.download forza sempre un nuovo handshake
-        yf.download("AAPL", period="1d", progress=False, auto_adjust=True)
-        log.info("yfinance session refreshed OK (download handshake)")
-    except Exception as e:
-        log.debug("yfinance session refresh warning: %s", e)
+    for tentativo in range(1, attempts + 1):
+        try:
+            from yfinance.data import YfData, SingletonMeta
+            # Azzera lo stato della sessione corrente...
+            try:
+                d = YfData()
+                for attr in ("_crumb", "_cookie", "_logged_in"):
+                    if hasattr(d, attr):
+                        setattr(d, attr, None)
+            except Exception:
+                pass
+            # ...e rimuovi il singleton, così la prossima chiamata ne
+            # costruisce uno pulito con cookie e crumb nuovi.
+            try:
+                SingletonMeta._instances.clear()
+            except Exception:
+                pass
+        except Exception as e:
+            log.debug("reset singleton yfinance non riuscito: %s", e)
+
+        # Backoff crescente: Yahoo rifiuta l'handshake se lo si richiede
+        # subito dopo una raffica di 401.
+        time.sleep(3 * tentativo)
+
+        # Verifica reale: senza questa, "refreshed OK" non significava nulla.
+        try:
+            probe = yf.Ticker("AAPL").history(period="1d")
+            if probe is not None and not probe.empty:
+                log.info("yfinance: sessione rinnovata e verificata (tentativo %d/%d)",
+                         tentativo, attempts)
+                return True
+            log.warning("yfinance: handshake senza dati (tentativo %d/%d)",
+                        tentativo, attempts)
+        except Exception as e:
+            log.warning("yfinance: rinnovo sessione fallito (tentativo %d/%d): %s",
+                        tentativo, attempts, str(e)[:100])
+
+    log.error("yfinance: sessione NON recuperata dopo %d tentativi — "
+              "i tier successivi gireranno su una sessione morta.", attempts)
+    return False
 
 
 def screen_ticker(ticker):
@@ -2796,39 +2817,58 @@ def main():
 
     # Refresh sessione yfinance tra i tier per evitare 401 Unauthorized
     # (il crumb Yahoo Finance si invalida dopo molte richieste parallele)
-    _refresh_yfinance_session()
+    sessione_ok = _refresh_yfinance_session()
 
     # ---- Tier 2: Speculative / Catalyst Universe ----
     spec_cands: list[SpeculativeCandidate] = []
     tier2_set: set[str] = set()
     if not args.no_speculative:
         log.info("=== TIER 2: Speculative/Catalyst Universe ===")
-        spec_tickers = build_speculative_universe_tv(region=args.region)
+        if not sessione_ok:
+            # Senza sessione, macinare 800 ticker produce 800 errori 401 e
+            # zero candidati: meglio dirlo e non sprecare due minuti.
+            log.error("Tier 2 SALTATO: sessione yfinance non disponibile.")
+            spec_tickers = []
+        else:
+            spec_tickers = build_speculative_universe_tv(region=args.region)
         if spec_tickers:
             spec_tickers_new = [t for t in spec_tickers if t not in tier1_set]
             log.info("Tier 2: %d ticker nuovi (esclusi %d già in Tier 1)",
                      len(spec_tickers_new), len(spec_tickers) - len(spec_tickers_new))
+            # 15 thread erano la causa, non la cura: la raffica parallela
+            # reinvalidava il crumb appena rinnovato. 6 è sostenibile.
             spec_cands = screen_speculative_universe(spec_tickers_new, top_n=args.top_speculative,
-                                                      max_workers=15)
+                                                      max_workers=6)
             tier2_set = {sc.ticker for sc in spec_cands}
             log.info("Tier 2 candidati: %d", len(spec_cands))
-        else:
+            if not spec_cands:
+                log.warning("Tier 2: %d ticker analizzati, 0 candidati — "
+                            "verificare se è selettività dei filtri o sessione degradata.",
+                            len(spec_tickers_new))
+        elif sessione_ok:
             log.warning("Tier 2 universe vuoto.")
 
-    _refresh_yfinance_session()
+    sessione_ok = _refresh_yfinance_session()
 
     # ---- Tier 3: Special Situations ----
     special_cands: list[SpecialCandidate] = []
     if not args.no_special:
         log.info("=== TIER 3: Special Situations (deep value + fallen angels) ===")
-        sp_buckets = build_special_situations_tv(region=args.region)
+        if not sessione_ok:
+            log.error("Tier 3 SALTATO: sessione yfinance non disponibile.")
+            sp_buckets = {}
+        else:
+            sp_buckets = build_special_situations_tv(region=args.region)
         if any(sp_buckets.values()):
             special_cands = screen_special_situations(
                 sp_buckets, tier1_set, tier2_set, top_n=args.top_special,
-                max_workers=15,
+                max_workers=6,
             )
             log.info("Tier 3 special situations: %d", len(special_cands))
-        else:
+            if not special_cands:
+                log.warning("Tier 3: bucket popolati ma 0 candidati — "
+                            "verificare se è selettività dei filtri o sessione degradata.")
+        elif sessione_ok:
             log.warning("Tier 3 universe vuoto.")
 
     # ---- Filiere strategiche (screener dedicato) ----
