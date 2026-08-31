@@ -33,14 +33,15 @@ passato — **SIM** e **agente collegato di SIM** (art. 31-ter TUF) — sono
 
 La pipeline di rassegna stampa / briefing è **in produzione e in uso quotidiano**.
 
-- Il codice "vivo" sta sul branch **`claude/financial-briefing-pipeline-aVCmh`**.
+- Il codice "vivo" sta in **`rassegna-stampa/`**, su `main`. Sorgente unica:
+  la vecchia copia in `PROXIMA-Main/04-briefing/pipeline/` è stata rimossa
+  perché era ferma a MVF v3.0 e induceva in errore chi la leggeva.
 - Gira via **`.github/workflows/briefing.yml`** (cron mattutino, lun–sab). Un cron
   GitHub Actions parte **solo dal branch di default** → `briefing.yml` deve
-  restare sul branch di default, e il branch della pipeline non va cancellato.
-- `PROXIMA-Main/04-briefing/pipeline/` è una **copia per centralizzazione**:
-  modificarla **non** cambia l'output live.
-- Prima di toccare il workflow o il branch del briefing, leggi
-  `PROXIMA-Main/04-briefing/README.md`.
+  restare su `main`.
+- Il workflow non è più inchiodato a un branch: fa checkout del ref da cui
+  parte e ripubblica sullo stesso (`GITHUB_REF_NAME`).
+- Prima di toccare il workflow, leggi `PROXIMA-Main/04-briefing/README.md`.
 
 ## Convenzioni
 
