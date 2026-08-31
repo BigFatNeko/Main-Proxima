@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>Proxima Daily — Vale</title>
+  <style>
+    :root {
+      --bg:       #f5f4f0;
+      --bg-card:  #ffffff;
+      --bg-2:     #eeece6;
+      --text:     #1a1a18;
+      --text-2:   #555550;
+      --text-3:   #96948e;
+      --border:   #d6d4cc;
+      --border-s: #e8e6de;
+      --link:     #1a5ba8;
+      --up-bg:    #e6f3e8;
+      --up:       #1a7a3e;
+      --dn-bg:    #fce8e7;
+      --dn:       #b02020;
+      --warn-bg:  #fdf3d8;
+      --warn:     #8a6400;
+      --pill-r:   #fce8e7;
+      --pill-r-t: #b02020;
+      --pill-g:   #e6f3e8;
+      --pill-g-t: #1a7a3e;
+      --pill-y:   #fdf3d8;
+      --pill-y-t: #8a6400;
+      --pill-b:   #e3edf8;
+      --pill-b-t: #1a5ba8;
+      --serif: "Source Serif Pro","Crimson Pro",Georgia,serif;
+      --sans:  -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+      --mono:  ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    }
+    /* dark mode intentionally disabled — briefing is always light/newspaper style */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .paper {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 1.5rem 1.5rem 4rem;
+    }
+
+    /* ── MASTHEAD ── */
+    .masthead {
+      text-align: center;
+      border-top: 3px solid var(--text);
+      border-bottom: 1px solid var(--border);
+      padding: 1.2rem 0 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+    .masthead h1 {
+      font-family: var(--serif);
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      line-height: 1;
+      margin-bottom: 5px;
+    }
+    .masthead .sub {
+      font-size: 10.5px;
+      color: var(--text-3);
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+    }
+
+    /* ── MARKET STRIP ── */
+    .market-strip {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 1.2rem;
+    }
+    .mchip {
+      flex: 1 1 90px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-s);
+      border-radius: 10px;
+      padding: 8px 10px;
+      text-align: center;
+      min-width: 80px;
+    }
+    .mchip.up  { background: var(--up-bg);  border-color: rgba(26,122,62,.25); }
+    .mchip.dn  { background: var(--dn-bg);  border-color: rgba(176,32,32,.25); }
+    .mchip-lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-2); margin-bottom: 2px; font-weight: 600; }
+    .mchip-val { font-size: 15px; font-weight: 700; }
+    .mchip-chg { font-size: 12.5px; font-weight: 600; margin-top: 2px; }
+    .mchip.up  .mchip-chg { color: var(--up); }
+    .mchip.dn  .mchip-chg { color: var(--dn); }
+    .mchip     .mchip-chg { color: var(--text-3); }
+
+    /* ── PORTFOLIO GRID ── */
+    .port-section { margin-bottom: 1.4rem; }
+    .section-label {
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-3);
+      margin-bottom: 6px;
+    }
+    .port-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 8px;
+    }
+    .pcard {
+      background: var(--bg-card);
+      border: 1px solid var(--border-s);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .pcard.cash-card { border-style: dashed; }
+    .pcard-ticker { font-size: 13px; font-weight: 700; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+    .pcard-meta  { font-size: 11px; color: var(--text-2); margin-top: 2px; }
+    .pcard-price { font-size: 14px; font-weight: 700; margin-top: 6px; color: var(--text); }
+    .pcard-mval  { font-size: 11.5px; color: var(--text-2); margin-top: 1px; }
+    .pcard-nodata { font-size: 11px; color: var(--text-3); margin-top: 6px; }
+
+    /* ── ARTICLE ── */
+    article h2 {
+      font-family: var(--serif);
+      font-size: 21px;
+      font-weight: 700;
+      margin: 2rem 0 .7rem;
+      padding-bottom: 5px;
+      border-bottom: 1px solid var(--border);
+    }
+    article h2:first-of-type { margin-top: .3rem; }
+    article h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 1.3rem 0 .4rem;
+      line-height: 1.35;
+    }
+    article p { margin: 0 0 .75rem; font-size: 14.5px; line-height: 1.65; }
+    article a { color: var(--link); text-decoration: none; }
+    article a:hover { text-decoration: underline; }
+    article ul, article ol { margin: .4rem 0 .9rem; padding-left: 1.5rem; }
+    article li { margin: .25rem 0; font-size: 14.5px; line-height: 1.6; }
+
+    /* Blockquote — "Perché ti riguarda" box */
+    article blockquote {
+      margin: .7rem 0 1.1rem;
+      padding: .7rem 1rem;
+      background: var(--bg-2);
+      border-left: 3px solid var(--border);
+      border-radius: 0 8px 8px 0;
+      font-size: 13.5px;
+      color: var(--text-2);
+    }
+    article blockquote strong { color: var(--text); }
+    article blockquote p { margin: .2rem 0; font-size: 13.5px; }
+    article blockquote ul { margin: .3rem 0 0; padding-left: 1.1rem; }
+    article blockquote li { font-size: 13px; margin: .15rem 0; }
+
+    /* Tables — use proper HTML tables, NOT code blocks */
+    article table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: .8rem 0 1.2rem;
+      font-size: 13px;
+      border: 1px solid var(--border-s);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    article table th {
+      background: var(--bg-2);
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--text-2);
+      font-weight: 600;
+      padding: 7px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    article table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border-s);
+      line-height: 1.45;
+    }
+    article table tr:last-child td { border-bottom: none; }
+    article table tr:hover td { background: var(--bg-2); }
+
+    /* Code */
+    article code {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: var(--bg-2);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--text-2);
+    }
+    article pre {
+      background: var(--bg-2);
+      padding: .8rem 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 12px;
+      margin: .5rem 0 1rem;
+    }
+    article hr {
+      border: none;
+      border-top: 1px solid var(--border-s);
+      margin: 1.8rem 0;
+    }
+    article strong { font-weight: 600; }
+    article em { font-style: italic; color: var(--text-2); }
+
+    /* Pill semantici nel testo: 🔴🟡🟢🔵 */
+    .pill {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 1px 7px;
+      border-radius: 20px;
+      vertical-align: middle;
+    }
+    .pill-r { background: var(--pill-r); color: var(--pill-r-t); }
+    .pill-g { background: var(--pill-g); color: var(--pill-g-t); }
+    .pill-y { background: var(--pill-y); color: var(--pill-y-t); }
+    .pill-b { background: var(--pill-b); color: var(--pill-b-t); }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      font-size: 10.5px;
+      color: var(--text-3);
+      margin-top: 2.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-s);
+      font-style: italic;
+    }
+
+    /* Print */
+    @media print {
+      body, .paper { background: #fff; color: #000; }
+      .market-strip, .port-section { display: none; }
+      .paper { max-width: 100%; padding: 0; }
+      a::after { content: " [" attr(href) "]"; font-size: 9pt; color: #555; }
+    }
+
+    /* Mobile */
+    @media (max-width: 560px) {
+      .paper { padding: 1rem .9rem 3rem; }
+      .masthead h1 { font-size: 28px; }
+      .port-grid { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); }
+      article table { font-size: 12px; }
+      article table th, article table td { padding: 5px 7px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="paper">
+
+    <!-- ── MASTHEAD ── -->
+    <div class="masthead">
+      <h1>Proxima Daily</h1>
+      <div class="sub">Sabato 25 Luglio 2026 &middot; Vale &middot; weekend</div>
+    </div>
+
+    <!-- ── MARKET STRIP ── -->
+    
+    <div class="market-strip">
+      
+        
+        
+      <div class="mchip up">
+        <div class="mchip-lbl">S&P 500</div>
+        
+        <div class="mchip-val">7411.98</div>
+        
+        
+        <div class="mchip-chg">+0.05%</div>
+        
+      </div>
+      
+        
+        
+      <div class="mchip up">
+        <div class="mchip-lbl">FTSE MIB</div>
+        
+        <div class="mchip-val">51802.00</div>
+        
+        
+        <div class="mchip-chg">+0.95%</div>
+        
+      </div>
+      
+        
+        
+      <div class="mchip dn">
+        <div class="mchip-lbl">Nikkei</div>
+        
+        <div class="mchip-val">64611.15</div>
+        
+        
+        <div class="mchip-chg">-2.73%</div>
+        
+      </div>
+      
+        
+        
+      <div class="mchip dn">
+        <div class="mchip-lbl">Brent</div>
+        
+        <div class="mchip-val">96.78</div>
+        
+        
+        <div class="mchip-chg">-3.88%</div>
+        
+      </div>
+      
+        
+        
+      <div class="mchip dn">
+        <div class="mchip-lbl">EUR/USD</div>
+        
+        <div class="mchip-val">1.14</div>
+        
+        
+        <div class="mchip-chg">-0.26%</div>
+        
+      </div>
+      
+        
+        
+      <div class="mchip dn">
+        <div class="mchip-lbl">10Y UST</div>
+        
+        <div class="mchip-val">4.68</div>
+        
+        
+        <div class="mchip-chg">-0.51%</div>
+        
+      </div>
+      
+    </div>
+    
+
+    <!-- ── PORTFOLIO GRID ── -->
+    
+    
+    
+    <div class="port-section">
+      <div class="section-label">Portafoglio · 13 posizioni · Cash 668 EUR</div>
+      <div class="port-grid">
+        
+        <div class="pcard">
+          <div class="pcard-ticker">ENI</div>
+          <div class="pcard-meta">14 az. · EUR</div>
+          
+          <div class="pcard-price">22.96</div>
+          <div class="pcard-mval">≈ 321 EUR</div>
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">MITT</div>
+          <div class="pcard-meta">37 az. · USD</div>
+          
+          <div class="pcard-price">7.23</div>
+          <div class="pcard-mval">≈ 268 USD</div>
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">MO</div>
+          <div class="pcard-meta">2 az. · USD</div>
+          
+          <div class="pcard-price">72.99</div>
+          <div class="pcard-mval">≈ 146 USD</div>
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">IJPA</div>
+          <div class="pcard-meta">7 az. · EUR</div>
+          
+          <div class="pcard-nodata">prezzo n/d</div>
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">IMAE</div>
+          <div class="pcard-meta">5 az. · EUR</div>
+          
+          <div class="pcard-nodata">prezzo n/d</div>
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">601728</div>
+          <div class="pcard-meta">100 az. · CNY</div>
+          
+          <div class="pcard-price">6.16</div>
+          <div class="pcard-mval">≈ 616 CNY</div>
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">NKLR</div>
+          <div class="pcard-meta">3 az. · USD</div>
+          
+          <div class="pcard-price">5.05</div>
+          <div class="pcard-mval">≈ 15 USD</div>
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">SAN</div>
+          <div class="pcard-meta">1 az. · EUR</div>
+          
+          <div class="pcard-price">76.03</div>
+          <div class="pcard-mval">≈ 76 EUR</div>
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">SGMT</div>
+          <div class="pcard-meta">26 az. · USD</div>
+          
+          <div class="pcard-price">7.07</div>
+          <div class="pcard-mval">≈ 184 USD</div>
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">STLAP</div>
+          <div class="pcard-meta">67 az. · EUR</div>
+          
+          <div class="pcard-price">5.01</div>
+          <div class="pcard-mval">≈ 336 EUR</div>
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">WEN</div>
+          <div class="pcard-meta">59 az. · USD</div>
+          
+          <div class="pcard-price">6.99</div>
+          <div class="pcard-mval">≈ 412 USD</div>
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">CS</div>
+          <div class="pcard-meta">20 az. · EUR</div>
+          
+          <div class="pcard-price">44.83</div>
+          <div class="pcard-mval">≈ 897 EUR</div>
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">CMCSA</div>
+          <div class="pcard-meta">15 az. · USD</div>
+          
+          <div class="pcard-price">22.30</div>
+          <div class="pcard-mval">≈ 334 USD</div>
+          
+        </div>
+        
+        
+        <div class="pcard cash-card">
+          <div class="pcard-ticker">CASH</div>
+          <div class="pcard-meta">liquidità</div>
+          <div class="pcard-price">668</div>
+          <div class="pcard-mval">EUR</div>
+        </div>
+        
+      </div>
+    </div>
+    
+
+    <!-- ── ARTICLE (markdown → HTML) ── -->
+    <article>
+      <h1>Proxima Daily — Buongiorno Vale</h1>
+<p><strong>2026-07-25 · Vale · Weekend</strong></p>
+<h2>In breve</h2>
+<ol>
+<li>S&amp;P 500 sui massimi a 7.412, ma rotazione settoriale profonda: energy e healthcare guidano, tech e consumer discretionary in ritardo — il tuo portafoglio income ne beneficia</li>
+<li>Brent crolla -3.9% a $96.78 in settimana: pressione su ENI nel breve, ma yield petrolifero resta il tuo pilastro — nessuna azione</li>
+<li>Nikkei -2.7% venerdì con yen forte: IJPA soffre, ma il Giappone resta la macro-trade strutturale dell'anno — PAC agosto da decidere</li>
+</ol>
+<hr />
+<h2>1. Mercati &amp; Portfolio Vale</h2>
+<h3>Strip mercato (chiusura venerdì 25 luglio)</h3>
+<table>
+<thead>
+<tr>
+<th>Indice</th>
+<th>Valore</th>
+<th>Δ% giornaliero</th>
+<th>Trend 1M</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>S&amp;P 500</td>
+<td>7.412</td>
+<td>+0.05%</td>
+<td>+0.73%</td>
+</tr>
+<tr>
+<td>FTSE MIB</td>
+<td>51.802</td>
+<td>+0.95%</td>
+<td>+2.19%</td>
+</tr>
+<tr>
+<td>Nikkei 225</td>
+<td>64.611</td>
+<td>-2.73%</td>
+<td>-6.60%</td>
+</tr>
+<tr>
+<td>Brent</td>
+<td>$96.78</td>
+<td>-3.88%</td>
+<td>+31.24%</td>
+</tr>
+<tr>
+<td>EUR/USD</td>
+<td>1.14</td>
+<td>-0.26%</td>
+<td>+0.19%</td>
+</tr>
+<tr>
+<td>10Y UST</td>
+<td>4.68%</td>
+<td>-0.51%</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Due dati da tenere a mente: il 10Y UST a 4.68% è sceso in settimana (il macro feed indica 6.29 come variazione mensile del rendimento — i bond lunghi hanno venduto pesantemente nel mese). Il VIX a 18.58 segnala complacenza relativa, non stress. Lo yield curve 10y-2y a +0.87% è in territorio positivo da mesi: la recessione-che-non-arriva è il tema dominante del 2026.</p>
+<h3>Le tue posizioni — regola DELTA</h3>
+<p><strong>CS.PA (AXA SA)</strong> <code>income</code> — Posizione più grande in portafoglio (€896). Settore finance è leader 1M negli USA e l'Europa segue con EuroStoxx +1.12%. AXA beneficia del repricing assicurativo post-catastrofi naturali primo semestre. <strong>Decisione: Hold. PAC completato a giugno, lascia comporre.</strong></p>
+<p><strong>STLAP.PA (Stellantis)</strong> — Il titolo è a €5.01, livelli critici. Il settore consumer discretionary è laggard globale. Nessuna news catalizzatrice questa settimana. La ristrutturazione prosegue ma il mercato non premia. <strong>Decisione: Hold forzato. Non mediare — la concentrazione è già alta (€335, 8% del portafoglio). Attendi earnings Q2 per rivalutare.</strong></p>
+<p><strong>WEN (Wendy's)</strong> — $6.99, in osservazione. Consumer staples/QSR sotto pressione generalizzata. Il titolo è flat. Nessuna news. <strong>Decisione: Hold. In osservazione.</strong></p>
+<p><strong>ENI.MI</strong> — €22.96. Brent crollato -3.9% venerdì, ma +31% nel mese. ENI è resiliente grazie a politica dividendo generosa (prossimo stacco ottobre). <strong>Decisione: Hold income.</strong></p>
+<p><strong>MITT (TPG Mortgage)</strong> — $7.23. Il settore finance USA è leader. I mortgage REIT beneficiano dello spread di curva positivo (+0.87%). <strong>Decisione: Hold income. Monitora earnings Q2 quando escono.</strong></p>
+<p><strong>CMCSA (Comcast)</strong> — $22.30. Media/telecom sotto pressione, ma il titolo è stabile. Acquistato a giugno come PAC. <strong>Decisione: Hold. Accumulo potenziale se scende sotto $20.</strong></p>
+<p><strong>MO (Altria)</strong> — $72.99. Consumer staples laggard nel mese ma MO è difensivo puro. Yield attraente. <strong>Decisione: Hold income. Candidato ideale per prossimo PAC se non trovi meglio.</strong></p>
+<p><strong>SAN.PA (Sanofi)</strong> — €76.03. Healthcare è co-leader settoriale. Sanofi beneficia della rotazione. Solo 1 azione — posizione da costruire. <strong>Decisione: Hold. Candidato forte per PAC agosto.</strong></p>
+<p><strong>601728.SS (China Telecom)</strong> — ¥6.16. Cina +6.86% nel mese, miglior regione globale. China Telecom cavalca il rally. <strong>Decisione: Hold. Non aggiungere — già la tua seconda posizione per valore (€616 equiv.).</strong></p>
+<p><strong>IJPA.MI (ETF Japan)</strong> — Nikkei -6.6% nel mese, -2.73% venerdì. Yen forte pesa sugli esportatori. <strong>Decisione: Hold. Il drawdown potrebbe avvicinare il livello -7% per attivare la overlay reserve (150€). Calcola il tuo watermark e monitora lunedì.</strong></p>
+<p><strong>IMAE.MI (ETF Europa EMU)</strong> — EuroStoxx +1.12% mese, Italia +2.19%. Solido. <strong>Decisione: Hold.</strong></p>
+<p><strong>NKLR (Terra Innovatum)</strong> <code>speculativo</code> — $5.05. Nessun aggiornamento. In osservazione a lungo termine.</p>
+<p><strong>SGMT (Sagimet Biosciences)</strong> <code>speculativo</code> — $7.07. Nessun aggiornamento. In osservazione a lungo termine.</p>
+<blockquote>
+<p><strong>COSA SAPERE</strong><br />
+Liquidità disponibile: €668 (EUR 470.65 + GBP 92.90 + USD 104.12)<br />
+PAC agosto: €400 da allocare (300€ DCA income + 100€ riserva trading)<br />
+Riserva trading accumulata: da verificare — se ≥300€, è il mese dell'acquisto trading<br />
+Overlay reserve (600€): intatta. IJPA vicino al trigger -7% — preparati</p>
+</blockquote>
+<h3>Mercato in generale</h3>
+<h3>Rotazione settoriale profonda: energy, healthcare e finance dominano</h3>
+<p>La settimana ha confermato un cambio di leadership netto. Energy, healthcare e finanziari guidano negli USA (e per estensione in Europa), mentre tech, consumer discretionary e consumer staples restano indietro. Non è un sell-off tech — è un repricing relativo che favorisce i settori value/income. Il Brent a quasi $97 nonostante il calo di venerdì (-3.9%) resta su livelli altissimi (+31% mese). Il rame +6.34% nel mese segnala che la domanda industriale globale tiene.</p>
+<blockquote>
+<p><strong>Perché ti riguarda:</strong><br />
+- Il tuo portafoglio è naturalmente esposto a energy (ENI), finance (CS.PA, MITT) e healthcare (SAN.PA) — sei dalla parte giusta della rotazione<br />
+- La debolezza tech non ti impatta direttamente — nessuna posizione growth pura<br />
+- Brent forte = ENI solida, ma attenzione ai cali bruschi come venerdì<br />
+- Il rame forte conferma la tesi Cina: 601728 ne beneficia indirettamente</p>
+</blockquote>
+<h3>Cina rally silenzioso: +6.86% nel mese, nessuno ne parla</h3>
+<p>Mentre tutti guardano l'AI trade americano e il sell-off Nikkei, la Cina è la miglior regione globale del mese. Shanghai composite in rally sostenuto da stimoli monetari PBoC e dati PMI manifatturiero sopra attese. I titoli telecom/infrastruttura come China Telecom cavalcano la domanda interna di 5G e cloud governativo.</p>
+<blockquote>
+<p><strong>Perché ti riguarda:</strong><br />
+- 601728.SS è già la tua seconda posizione per valore — il rally la gonfia<br />
+- Non aggiungere: concentrazione Cina già elevata per un portafoglio piccolo<br />
+- Se il rally continua, considera un take-profit parziale sopra ¥7 per riequilibrare</p>
+</blockquote>
+<h3>Corea in caduta libera: -17.39% nel mese</h3>
+<p>Il mercato coreano è il peggior performer globale. La crisi dei semiconduttori di memoria (DRAM oversupply), il won debole e tensioni geopolitiche con la Cina pesano. Samsung e SK Hynix trascinano il KOSPI. Per te è rilevante solo come segnale contrarian sulle batterie/EV supply chain.</p>
+<blockquote>
+<p><strong>Perché ti riguarda:</strong><br />
+- Non hai esposizione diretta alla Corea — bene<br />
+- Batterie e litio coreani in saldo: potenziale opportunità futura per screener<br />
+- La debolezza coreana pesa anche su STLAP indirettamente (supply chain auto)</p>
+</blockquote>
+<h3>Suggerimenti per il portafoglio</h3>
+<p>🔴 <strong>Da rivedere</strong>: STLAP.PA — a €5.01 è in territorio critico. Non mediare (già 8% del portafoglio), ma prepara mentalmente il livello di stop-loss. Se scende sotto €4.50 senza catalisi, la posizione diventa puro dead money.</p>
+<p>🟡 <strong>Da monitorare</strong>: IJPA.MI — Nikkei -6.6% mese. Se il tuo watermark è recente, potresti essere vicino al trigger -7% per la overlay reserve (150€). Controlla il punto di ingresso originale e calcola.</p>
+<p>🟢 <strong>PAC agosto</strong>: SAN.PA (Sanofi) è il candidato ideale per i 300€ DCA income. Healthcare leader settoriale, yield in crescita, solo 1 azione in portafoglio. Seconda scelta: MO (Altria) per rafforzare income tobacco.</p>
+<p>🔵 <strong>Cash management</strong>: €668 liquidi. Con PAC agosto (400€) ne resteranno ~268€. La overlay reserve (600€) deve restare intatta per i drawdown. Non usare cash per trade speculativi.</p>
+<hr />
+<h2>2. Macro &amp; Geopolitica</h2>
+<h3>Treasury 10Y USA: il rendimento sale nel mese ma scende nell'ultima seduta</h3>
+<p>Il 10Y UST ha chiuso venerdì a 4.68% (-0.51% giornaliero), ma nel mese il rendimento è salito significativamente (variazione mensile +6.29 basis points nel macro context). Il mercato obbligazionario USA resta in tensione: l'offerta di Treasury è massiccia (deficit fiscale), la domanda estera calante. Il 2Y a 3.12% conferma che il mercato prezza tagli Fed nel 2027, non nel 2026.</p>
+<blockquote>
+<p><strong>Perché ti riguarda:</strong><br />
+- MITT (mortgage REIT) beneficia dello steepening della curva (spread 10y-2y a +0.87%) — più margine di interesse netto<br />
+- Nessun taglio Fed imminente = i tuoi dividendi income restano competitivi vs bond<br />
+- Se consideri la componente Income Lab per il PAC, i rendimenti bond IG restano interessanti come diversificazione</p>
+</blockquote>
+<h3>Dollar Index in calo, EUR/USD a 1.14</h3>
+<p>Il dollaro si indebolisce (-0.14% nel mese). L'euro forte penalizza leggermente le tue posizioni USD convertite in EUR (MO, WEN, CMCSA, MITT), ma la differenza è marginale su un portafoglio piccolo. L'oro +1.94% nel mese conferma il flight-to-quality strutturale.</p>
+<blockquote>
+<p><strong>Perché ti riguarda:</strong><br />
+- Le posizioni USD perdono qualcosa in conversione, ma il dividendo compensa<br />
+- Oro forte = i gold miner nello screener MVF diventano interessanti (vedi sezione 3)<br />
+- Per Proxima: il tema "protezione inflazione" è content marketing perfetto — l'italiano medio non sa come coprirsi</p>
+</blockquote>
+<h3>India -3.24% nel mese: monsone e tensioni commerciali</h3>
+<p>Il mercato indiano corregge dopo un primo semestre forte. I monsoni deboli impattano il settore agricolo, e le tensioni commerciali India-UE sul carbon border adjustment rallentano gli esportatori. Nifty in correzione, ma il trend strutturale resta intatto (demografia, digitalizzazione, shift manifatturiero da Cina).</p>
+<blockquote>
+<p><strong>Perché ti riguarda:</strong><br />
+- ITC (candidato screener MVF, tobacco indiano con yield 5.7%) diventa più interessante con la correzione — ma è mercato EM, non acquistabile per la regola mercati sviluppati del tuo portafoglio<br />
+- L'India resta un tema da ETF per il futuro se Proxima decide di includerlo nei modelli</p>
+</blockquote>
+<hr />
+<h2>3. Occasioni MVF v3.0 — tutti i settori, colli di bottiglia e filiere strategiche</h2>
+<h3>Energia — Brent a $97, ma il vero bottleneck è nei servizi</h3>
+<p>Il Brent ha toccato livelli che non si vedevano da mesi (+31% nel mese), spinto dai tagli OPEC+ prolungati e dalla domanda estiva. Ma il collo di bottiglia reale non è il greggio: sono i servizi oil &amp; gas (navi metaniere, impianti GNL, manutenzione piattaforme). La capacità di costruzione di nuovi impianti LNG è satura fino al 2028. Gaztransport &amp; Technigaz (GTT) — monopolista di fatto nella tecnologia di contenimento per metaniere LNG — è il proxy perfetto.</p>
+<p><strong>Candidati screener:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Voto /100</th>
+<th>V. intrinseco</th>
+<th>V. relativo (PE/EV-EBITDA)</th>
+<th>Dividendo</th>
+<th>Prezzo ideale (MoS)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GTT.PA</td>
+<td>Gaztransport &amp; Technigaz</td>
+<td>82</td>
+<td>€658.61</td>
+<td>13.1x / 13.1x</td>
+<td>5.06% yield, payout 70%</td>
+<td>€329.30 (50% MoS)</td>
+</tr>
+<tr>
+<td>600938.SS</td>
+<td>CNOOC Ltd (Shanghai)</td>
+<td>69.3</td>
+<td>¥1.214,86</td>
+<td>5.3x / 5.3x</td>
+<td>3.59% yield, payout 49%</td>
+<td>¥607.43 (50% MoS)</td>
+</tr>
+</tbody>
+</table>
+<p>GTT è il gioiello di questa scansione: voto 82/100, yield superiore al 5%, e il prezzo attuale (€195) è il 59% sotto il valore intrinseco stimato. Il prezzo ideale d'acquisto con 50% di margine di sicurezza è €329 — siamo già sotto. Confidence score al 55.7% riflette la ciclicità del settore LNG, ma il monopolio tecnologico di GTT riduce il rischio strutturale. CNOOC è un play EM cinese — forte ma non per il tuo portafoglio.</p>
+<p><strong>Verdetto filiera</strong>: direzionale — GTT.PA è il candidato più forte dell'intero screener. Valuta per PAC o acquisto singolo se la riserva trading raggiunge €300.</p>
+<hr />
+<h3>Gold Miners — oro a massimi, i produttori restano a sconto</h3>
+<p>Oro +1.94% nel mese, trend rialzista strutturale (inflazione persistente, de-dollarizzazione banche centrali, rischio geopolitico). I gold miner offrono leva sull'oro con dividend yield crescenti. Newmont è il più grande produttore al mondo; DPM Metals è mid-cap australiano con valutazione più compressa.</p>
+<p><strong>Candidati screener:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Voto /100</th>
+<th>V. intrinseco</th>
+<th>V. relativo (PE/EV-EBITDA)</th>
+<th>Dividendo</th>
+<th>Prezzo ideale (MoS)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NEM.AX</td>
+<td>Newmont Corp (ASX)</td>
+<td>73.6</td>
+<td>A$170.28</td>
+<td>8.2x / 8.2x</td>
+<td>1.1% yield, payout 13%, CAGR 5y +21.4%</td>
+<td>A$85.14 (50% MoS)</td>
+</tr>
+<tr>
+<td>DPM.AX</td>
+<td>DPM Metals (ASX)</td>
+<td>75.7</td>
+<td>A$58.06</td>
+<td>14.9x / 14.9x</td>
+<td>0.46% yield</td>
+<td>A$29.03 (50% MoS)</td>
+</tr>
+</tbody>
+</table>
+<p>Newmont è interessante per il profilo dividend growth: payout bassissimo (13%) con crescita dividendo +21% CAGR 5 anni. Se l'oro resta sopra $2.500/oz, il dividendo ha spazio per raddoppiare. DPM ha voto più alto ma confidence bassa (48.9%) e yield irrilevante. Entrambi quotati ASX — mercato sviluppato, accessibile.</p>
+<p><strong>Verdetto filiera</strong>: saldo reale — NEM.AX per dividend growth, non per yield immediato. Meglio come complemento a un portafoglio income già costruito.</p>
+<hr />
+<h3>Healthcare &amp; Pharma — settore leader, due candidati europei</h3>
+<p>Healthcare co-guida la rotazione settoriale globale. L'invecchiamento demografico, i farmaci GLP-1 (obesity/diabetes) e il pricing power farmaceutico spingono il settore. Novo Nordisk resta il titolo più discusso al mondo; Orion Oyj è il play finlandese meno noto con fondamentali solidi.</p>
+<p><strong>Candidati screener:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Voto /100</th>
+<th>V. intrinseco</th>
+<th>V. relativo (PE/EV-EBITDA)</th>
+<th>Dividendo</th>
+<th>Prezzo ideale (MoS)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NOV.DE</td>
+<td>Novo Nordisk (Xetra)</td>
+<td>67.6</td>
+<td>€1.502,59</td>
+<td>1.7x / 1.7x</td>
+<td>4.98% yield, payout 43%, CAGR 5y +11.2%</td>
+<td>€901.55 (40% MoS)</td>
+</tr>
+<tr>
+<td>ORNBV.HE</td>
+<td>Orion Oyj (Helsinki)</td>
+<td>67.6</td>
+<td>€341.70</td>
+<td>14.1x / 14.1x</td>
+<td>2.28% yield, payout 41%</td>
+<td>€170.85 (50% MoS)</td>
+</tr>
+</tbody>
+</table>
+<p>Novo Nordisk a €43 (prezzo Xetra ADR) mostra un PE di 1.7x che sembra anomalo — probabilmente un dato per azione ADR che riflette un frazionamento. Il valore intrinseco a €1.502 suggerisce un upside massiccio (34x). La confidence è alta (72.6%). Yield quasi 5% con payout sostenibile al 43% e crescita dividendo +11% annuo: profilo income + growth raro.</p>
+<p>Orion Oyj è più convenzionale: pharma nordico difensivo con buyback yield 11% (restituisce capitale aggressivamente). Voto identico a Novo (67.6) ma confidence inferiore.</p>
+<p><strong>Verdetto filiera</strong>: direzionale — SAN.PA (già in portafoglio) è il tuo play healthcare. Se vuoi diversificare nel settore, NOV.DE merita approfondimento — ma verifica il prezzo ADR reale prima di qualsiasi decisione.</p>
+<hr />
+<h3>Shipping marittimo — container e tanker in consolidamento</h3>
+<p>Il commercio globale si sta normalizzando post-rerouting Mar Rosso, ma le rate di nolo container restano elevate. MPCC (MPC Container Ships) è il pure play norvegese su feeder container — navi più piccole, mercato meno ciclico dei Panamax.</p>
+<p><strong>Candidati screener:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Voto /100</th>
+<th>V. intrinseco</th>
+<th>V. relativo (PE/EV-EBITDA)</th>
+<th>Dividendo</th>
+<th>Prezzo ideale (MoS)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MPCC.OL</td>
+<td>MPC Container Ships</td>
+<td>71.5</td>
+<td>NOK 28.23</td>
+<td>41.3x / 41.3x</td>
+<td>6.28% yield, payout 47%</td>
+<td>NOK 14.12 (50% MoS)</td>
+</tr>
+</tbody>
+</table>
+<p>MPCC offre yield del 6.28% ma il PE a 41x è elevato — riflette un ciclo di utili in discesa dopo il picco 2022-2024. La crescita dividendo è negativa (-44.7% CAGR 5y): sta normalizzando da livelli insostenibili. Il prezzo ideale (NOK 14.12) è il 43% sotto il prezzo attuale (24.87) — non siamo nel range d'acquisto.</p>
+<p>Dai dati TradingView, altri candidati sviluppati:</p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Market Cap</th>
+<th>PE</th>
+<th>Div. Yield</th>
+<th>Rel. Vol</th>
+<th>Upside analisti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NASDAQ:SBLK</td>
+<td>Star Bulk Carriers</td>
+<td>$3.2B</td>
+<td>22.4x</td>
+<td>3.8% (nota: dato screener 379% probabilmente anomalo)</td>
+<td>2.2x</td>
+<td>+20%</td>
+</tr>
+<tr>
+<td>OMXSTO:HAFNIO</td>
+<td>Hafnia (tanker)</td>
+<td>SEK 36.8B</td>
+<td>8.2x</td>
+<td>9.5%</td>
+<td>0.5x</td>
+<td>+22%</td>
+</tr>
+</tbody>
+</table>
+<p>Hafnia è il tanker play scandinavo con yield straordinario (9.5%) e PE compresso (8.2x). Mercato sviluppato (OMX Stockholm). Merita watchlist.</p>
+<p><strong>Verdetto filiera</strong>: aspetta — MPCC sopra prezzo ideale, Hafnia interessante ma ciclico. Filiera da rivisitare se le rate tanker restano alte.</p>
+<hr />
+<h3>Semiconduttori — il bottleneck dell'era AI, ma prezzi tesi</h3>
+<p>La domanda di chip AI (GPU, HBM, chip custom) resta insaziabile. Ma i prezzi dei titoli semiconduttori riflettono già molto ottimismo. I candidati screener sono tutti [TV] senza analisi MVF profonda.</p>
+<p><strong>Candidati screener (mercati sviluppati):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Market Cap</th>
+<th>PE</th>
+<th>Div. Yield</th>
+<th>Rel. Vol</th>
+<th>Upside analisti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SIX:ASML</td>
+<td>ASML Holding</td>
+<td>$560.6B</td>
+<td>57.9x</td>
+<td>(dato DY anomalo)</td>
+<td>2.2x</td>
+<td>+29%</td>
+</tr>
+<tr>
+<td>MIL:1APH</td>
+<td>Amphenol (MIL)</td>
+<td>$170.3B</td>
+<td>45.2x</td>
+<td>—</td>
+<td>3.8x</td>
+<td>+22%</td>
+</tr>
+</tbody>
+</table>
+<p>ASML è il monopolista della litografia EUV — senza le sue macchine, TSMC e Samsung non producono chip sotto i 7nm. PE a 58x è caro ma il moat è assoluto. L'upside analisti (+29%) suggerisce che il consensus vede ancora spazio. Amphenol è il play connettori/infrastruttura (data center, EV, difesa) — meno sexy ma più diversificato.</p>
+<p><strong>Verdetto filiera</strong>: aspetta — multipli elevati. Per un portafoglio income come il tuo, i semi non sono prioritari. Monitora per riserva trading se correggono.</p>
+<hr />
+<h3>Difesa — spesa NATO in accelerazione strutturale</h3>
+<p>L'Europa sta armandosi: la spesa difesa NATO è passata dal 2% al 2.5-3% del PIL come target. I titoli difesa europei hanno corso molto, ma il ciclo di ordini è pluriennale (5-10 anni di visibilità).</p>
+<p><strong>Candidati screener (mercati sviluppati):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Market Cap</th>
+<th>PE</th>
+<th>Div. Yield</th>
+<th>Rel. Vol</th>
+<th>Upside analisti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BX:LOM</td>
+<td>Leonardo (Bruxelles)</td>
+<td>$107.1B</td>
+<td>21.1x</td>
+<td>—</td>
+<td>2.4x</td>
+<td>+10%</td>
+</tr>
+<tr>
+<td>MIL:1NOC</td>
+<td>Northrop Grumman (MIL)</td>
+<td>$66.6B</td>
+<td>17.2x</td>
+<td>—</td>
+<td>6.6x</td>
+<td>+20%</td>
+</tr>
+<tr>
+<td>OTC:FINMF</td>
+<td>Fincantieri (OTC)</td>
+<td>$33.9B</td>
+<td>23.6x</td>
+<td>0%</td>
+<td>7.6x</td>
+<td>+32%</td>
+</tr>
+</tbody>
+</table>
+<p>Leonardo (LOM) è il campione italiano della difesa — ordini record, backlog in crescita, ma upside analisti limitato (+10%). Northrop Grumman è il play USA puro su sistemi avanzati (B-21, ICBM). Fincantieri è il cantiere navale militare italiano — PE 23.6x ma crescita ordini esponenziale.</p>
+<p><strong>Verdetto filiera</strong>: direzionale — Leonardo è già "prezzato giusto" secondo gli analisti. Northrop (+20% upside) è più interessante per value. Non urgente per il tuo portafoglio income.</p>
+<hr />
+<h3>Consumer Staples — il rifugio income per eccellenza</h3>
+<p>Il settore è laggard nel mese (paradossalmente), il che crea opportunità per chi cerca yield difensivo. British American Tobacco (BTI) è il fratello maggiore del tuo MO (Altria).</p>
+<p><strong>Candidati screener (mercati sviluppati):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Market Cap</th>
+<th>PE</th>
+<th>Div. Yield</th>
+<th>Rel. Vol</th>
+<th>Upside analisti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NYSE:BTI</td>
+<td>British American Tobacco</td>
+<td>$128.7B</td>
+<td>13.3x</td>
+<td>5.5%</td>
+<td>0.7x</td>
+<td>+18%</td>
+</tr>
+</tbody>
+</table>
+<p>BTI offre yield 5.5%, PE compresso (13.3x) e upside analisti +18%. Complementare a MO (USA) per diversificazione geografica tobacco. Mercato sviluppato (NYSE). Volume relativo basso (0.7x) — nessun hype, esattamente quello che vuoi per income.</p>
+<p><strong>Verdetto filiera</strong>: saldo reale — BTI è un candidato forte per PAC income. Valuta come alternativa/complemento a MO per il DCA mensile.</p>
+<hr />
+<h3>Gestione rifiuti — infrastruttura essenziale, crescita secolare</h3>
+<p>Rifiuti = cash flow prevedibile + pricing power (i comuni devono pagare). I candidati giapponesi dominano lo screener.</p>
+<p><strong>Candidati screener (mercati sviluppati):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Market Cap</th>
+<th>PE</th>
+<th>Div. Yield</th>
+<th>Rel. Vol</th>
+<th>Upside analisti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TSE:1980</td>
+<td>Daiseki Co. (Tokyo)</td>
+<td>¥355.8B</td>
+<td>12.7x</td>
+<td>—</td>
+<td>2.2x</td>
+<td>+52%</td>
+</tr>
+<tr>
+<td>TSE:1950</td>
+<td>Nihon Densetsu Kogyo (Tokyo)</td>
+<td>¥253.6B</td>
+<td>13.2x</td>
+<td>—</td>
+<td>2.1x</td>
+<td>+28%</td>
+</tr>
+</tbody>
+</table>
+<p>Daiseki è il leader giapponese nel trattamento rifiuti industriali — PE 12.7x con upside analisti +52%. Nihon Densetsu è simile con upside +28%. Entrambi TSE (mercato sviluppato). I DY mostrati nel feed (323%, 311%) sono chiaramente anomali — da verificare prima di qualsiasi azione.</p>
+<p><strong>Verdetto filiera</strong>: direzionale — settore interessante ma richiede approfondimento sui dati reali. Giappone già presente via IJPA nel tuo portafoglio.</p>
+<hr />
+<h3>Infrastrutture idriche — water scarcity come megatrend</h3>
+<p>La scarsità d'acqua è il collo di bottiglia del XXI secolo. Siccità, agricoltura intensiva, urbanizzazione: la domanda di infrastruttura idrica cresce del 6-8% annuo. Filiera poco seguita, bassa copertura analisti.</p>
+<p><strong>Candidati screener (mercati sviluppati):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Market Cap</th>
+<th>PE</th>
+<th>Div. Yield</th>
+<th>Rel. Vol</th>
+<th>Upside analisti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NASDAQ:ARTNA</td>
+<td>Artesian Resources</td>
+<td>$0.4B</td>
+<td>15.2x</td>
+<td>3.8%</td>
+<td>1.6x</td>
+<td>+25%</td>
+</tr>
+<tr>
+<td>OTC:VEOEY</td>
+<td>Veolia (ADR)</td>
+<td>$30.6B</td>
+<td>22.2x</td>
+<td>3.2%</td>
+<td>0.2x</td>
+<td>+10%</td>
+</tr>
+</tbody>
+</table>
+<p>Artesian Resources è una micro-cap americana (utility idrica regolamentata Delaware) — yield 3.8%, PE ragionevole (15.2x), upside +25%. Veolia è il gigante francese dell'acqua — più caro (22.2x) ma moat globale assoluto.</p>
+<p><strong>Verdetto filiera</strong>: direzionale — ARTNA è troppo piccola per liquidità retail, Veolia è il play istituzionale. Per Proxima: il tema "investire nell'acqua" è content marketing eccellente.</p>
+<hr />
+<h3>Packaging &amp; Foreste — il mondo fisico non sparisce</h3>
+<p>Packaging sostenibile e lumber sono settori anticiclici con domanda strutturale. E-commerce = più cartone, sempre. La filiera è poco analizzata e offre value nascosto.</p>
+<p><strong>Candidati screener (mercati sviluppati):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Market Cap</th>
+<th>PE</th>
+<th>Div. Yield</th>
+<th>Rel. Vol</th>
+<th>Upside analisti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OMXSTO:INWI</td>
+<td>Inwido (Stockholm)</td>
+<td>SEK 9.5B</td>
+<td>18.1x</td>
+<td>3.3%</td>
+<td>0.5x</td>
+<td>+27%</td>
+</tr>
+<tr>
+<td>TSE:1377</td>
+<td>Sakata INX (Tokyo)</td>
+<td>¥186.1B</td>
+<td>15.5x</td>
+<td>—</td>
+<td>0.5x</td>
+<td>+41%</td>
+</tr>
+</tbody>
+</table>
+<p>Inwido è il leader scandinavo di finestre e packaging (PE 18x, yield 3.3%, upside +27%). Sakata INX è il produttore giapponese di inchiostri per packaging — nicchia con upside +41%.</p>
+<p><strong>Verdetto filiera</strong>: aspetta — interessante come diversificazione futura, non urgente.</p>
+<hr />
+<h3>Siderurgia &amp; Metalli speciali — rame +6.3% nel mese racconta una storia</h3>
+<p>Rame e metalli industriali in rally. La transizione energetica richiede 3-5x più rame, alluminio e acciaio speciale dei cicli precedenti. La Corea (principale produttore acciaio/metalli) è in crisi (-17.4%), il che crea potenziale value trap o opportunità.</p>
+<p><strong>Candidati screener</strong>: i principali sono tutti mercato EM coreano o cinese (KRX, SZSE). Per la regola mercati sviluppati, nessun candidato diretto è eleggibile. Proxy DM:</p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Market Cap</th>
+<th>PE</th>
+<th>Div. Yield</th>
+<th>Rel. Vol</th>
+<th>Upside analisti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TSE:2768</td>
+<td>Sojitz Corp (Tokyo) [proxy DM]</td>
+<td>¥1.042,7B</td>
+<td>10.9x</td>
+<td>3.3%</td>
+<td>0.7x</td>
+<td>+21%</td>
+</tr>
+</tbody>
+</table>
+<p>Sojitz è un trading house giapponese con forte esposizione metalli/minerali — non un pure play siderurgico ma il miglior proxy in mercato sviluppato.</p>
+<p><strong>Verdetto filiera</strong>: aspetta — i veri play sono EM. Monitora per correzioni su proxy DM.</p>
+<hr />
+<h3>Batterie &amp; Litio — Corea in saldo, ma attenzione</h3>
+<p>La filiera batterie è dominata dalla Corea del Sud (-17.4% nel mese). I candidati principali (KRX:090460, KRX:356860) sono EM coreani — non eleggibili.</p>
+<p>Proxy DM disponibili:</p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Market Cap</th>
+<th>PE</th>
+<th>Div. Yield</th>
+<th>Rel. Vol</th>
+<th>Upside analisti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MIL:1APH</td>
+<td>Amphenol (connettori EV/batterie)</td>
+<td>$170.3B</td>
+<td>45.2x</td>
+<td>—</td>
+<td>3.8x</td>
+<td>+22%</td>
+</tr>
+</tbody>
+</table>
+<p>Amphenol è già citato nei semiconduttori — play trasversale connettori per EV, data center, difesa. Non un pure play batterie.</p>
+<p><strong>Verdetto filiera</strong>: aspetta — il vero value è in Corea (EM). Filiera da rivisitare quando il KOSPI si stabilizza.</p>
+<hr />
+<h3>Retail specializzato (extra-filiera) — Jumbo S.A.</h3>
+<p>Jumbo S.A. (Grecia) è un retailer specializzato con fondamentali eccezionali che il screener ha intercettato fuori dalle filiere precaricate.</p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Voto /100</th>
+<th>V. intrinseco</th>
+<th>V. relativo (PE/EV-EBITDA)</th>
+<th>Dividendo</th>
+<th>Prezzo ideale (MoS)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BELA.AT</td>
+<td>Jumbo S.A.</td>
+<td>66.3</td>
+<td>€172.48</td>
+<td>6.1x / 6.1x</td>
+<td>3.05% yield, payout 21%, CAGR 5y +9.3%</td>
+<td>€86.24 (50% MoS)</td>
+</tr>
+</tbody>
+</table>
+<p>Jumbo è il Walmart greco: retailer discount con PE 6.1x, FCF yield 8.4%, payout bassissimo (21%) e crescita dividendo +9.3% annuo. Il prezzo attuale (€22.98) è drasticamente sotto il valore intrinseco (€172.48) — upside teorico 6.5x. La discrepanza è enorme e merita verifica (possibile distorsione da frazionamento azionario o dati non normalizzati). Quotato ad Atene — mercato sviluppato (FTSE Developed).</p>
+<p><strong>Verdetto</strong>: potenzialmente interessante se i dati sono confermati. Da approfondire.</p>
+<hr />
+<h3>Aeroporti &amp; Infrastrutture (extra-filiera) — Aena</h3>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Voto /100</th>
+<th>V. intrinseco</th>
+<th>V. relativo (PE/EV-EBITDA)</th>
+<th>Dividendo</th>
+<th>Prezzo ideale (MoS)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AENA.MC</td>
+<td>Aena S.M.E.</td>
+<td>64.9</td>
+<td>€32.87</td>
+<td>11.9x / 11.9x</td>
+<td>4.16% yield, payout 68%, CAGR 5y +10.9%</td>
+<td>€16.43 (50% MoS)</td>
+</tr>
+</tbody>
+</table>
+<p>Aena gestisce il monopolio degli aeroporti spagnoli (+ partecipazioni internazionali). Yield 4.16%, payout sostenibile, dividend growth +10.9% annuo. Prezzo attuale (€26.70) sopra il prezzo ideale (€16.43) — non è a sconto con il margine di sicurezza richiesto.</p>
+<p><strong>Verdetto</strong>: watchlist — aspettare un drawdown a €20 o meno.</p>
+<hr />
+<h2>3b. Income Lab — costruzione portafoglio high income / high yield / dividend growth</h2>
+<h3>A) High Yield (rendimento cedolare immediato &gt;4%)</h3>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Settore</th>
+<th>Div. Yield</th>
+<th>Payout %</th>
+<th>Ex-div prossimo</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GTT.PA</td>
+<td>Gaztransport &amp; Technigaz</td>
+<td>Energy services</td>
+<td>5.06%</td>
+<td>70%</td>
+<td>~dic 2026 (annuale)</td>
+<td>Monopolista LNG, voto MVF 82/100 — top pick screener</td>
+</tr>
+<tr>
+<td>NYSE:BTI</td>
+<td>British American Tobacco</td>
+<td>Tobacco</td>
+<td>5.5%</td>
+<td>~65% (fonte: KB)</td>
+<td>~set 2026 (trimestrale)</td>
+<td>Complemento a MO, PE 13x, upside +18%</td>
+</tr>
+<tr>
+<td>NOV.DE</td>
+<td>Novo Nordisk (Xetra)</td>
+<td>Healthcare</td>
+<td>4.98%</td>
+<td>43%</td>
+<td>~mar 2027 (fonte: KB)</td>
+<td>Dividend growth +11% CAGR — ibrido yield/growth</td>
+</tr>
+<tr>
+<td>OMXSTO:HAFNIO</td>
+<td>Hafnia</td>
+<td>Tanker shipping</td>
+<td>9.5%</td>
+<td>~80% (fonte: KB)</td>
+<td>~ago 2026 (fonte: KB)</td>
+<td>Yield eccezionale ma ciclico — solo per tolleranti al rischio</td>
+</tr>
+<tr>
+<td>AENA.MC</td>
+<td>Aena</td>
+<td>Aeroporti</td>
+<td>4.16%</td>
+<td>68%</td>
+<td>~lug 2026 (annuale, fonte: KB)</td>
+<td>Monopolio aeroportuale spagnolo</td>
+</tr>
+</tbody>
+</table>
+<h3>B) Dividend Growth (crescita dividendo &gt;6% CAGR 5y, yield anche modesto)</h3>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Settore</th>
+<th>Yield attuale</th>
+<th>Div. CAGR 5y</th>
+<th>Consecutive years growth</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NEM.AX</td>
+<td>Newmont Corp</td>
+<td>Gold mining</td>
+<td>1.1%</td>
+<td>+21.4%</td>
+<td>~5 (fonte: KB)</td>
+<td>Payout 13% = enorme spazio di crescita</td>
+</tr>
+<tr>
+<td>NOV.DE</td>
+<td>Novo Nordisk</td>
+<td>Healthcare</td>
+<td>4.98%</td>
+<td>+11.2%</td>
+<td>~20 (fonte: KB)</td>
+<td>Raro: yield alto + growth alto</td>
+</tr>
+<tr>
+<td>AENA.MC</td>
+<td>Aena</td>
+<td>Aeroporti</td>
+<td>4.16%</td>
+<td>+10.9%</td>
+<td>~4 post-Covid</td>
+<td>Recovery dividend + crescita strutturale</td>
+</tr>
+<tr>
+<td>BELA.AT</td>
+<td>Jumbo S.A.</td>
+<td>Retail</td>
+<td>3.05%</td>
+<td>+9.3%</td>
+<td>Da verificare</td>
+<td>Payout 21% — spazio enorme per crescita</td>
+</tr>
+</tbody>
+</table>
+<h3>C) High Income alternativo — strumenti non-equity</h3>
+<table>
+<thead>
+<tr>
+<th>Strumento</th>
+<th>Tipo</th>
+<th>Yield / Cedola</th>
+<th>Scadenza / Duration</th>
+<th>Liquidità</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>iShares € HY Corp Bond (IHYG)</td>
+<td>ETF obbligazionario HY EUR</td>
+<td>~5.5% (fonte: KB)</td>
+<td>Duration ~3.5 anni</td>
+<td>Alta (Euronext/Xetra)</td>
+<td>Diversificazione income vs equity; spread IG compresso (-2.57% mese) favorisce HY</td>
+</tr>
+<tr>
+<td>JEPI (JPMorgan Equity Premium Income)</td>
+<td>Covered call ETF USD</td>
+<td>~7.5% (fonte: KB)</td>
+<td>N/A</td>
+<td>Alta (NYSE)</td>
+<td>Income da opzioni + S&amp;P 500 base — non disponibile in EUR, valuta equivalente UCITS</td>
+</tr>
+<tr>
+<td>Vanguard € Govt Bond 1-5Y (VGEA)</td>
+<td>ETF govt bond EUR</td>
+<td>~3.2% (fonte: KB)</td>
+<td>Duration ~2.8 anni</td>
+<td>Alta</td>
+<td>Cash parking con rendimento — alternativa alla liquidità ferma</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Idea PAC del mese</strong>: <strong>SAN.PA (Sanofi)</strong> — healthcare leader settoriale, già in portafoglio con 1 sola azione, yield ~3.5%, dividend growth solido, PE ragionevole (~13x). Perfetto per il DCA income da €300 di agosto. Seconda scelta: <strong>BTI</strong> per raddoppiare l'esposizione tobacco income con diversificazione geografica (UK vs USA/MO).</p>
+<hr />
+<h2>4. Fintech globale</h2>
+<h3>Revolut ottiene la licenza bancaria UK — finalmente</h3>
+<p>Revolut ha ottenuto la licenza bancaria completa dalla Prudential Regulation Authority britannica, dopo oltre tre anni di revisione. Con la licenza, Revolut può offrire depositi protetti FSCS, prestiti diretti e prodotti di risparmio nel Regno Unito. La valutazione implicita supera i $45 miliardi. Il CEO Storonsky ha dichiarato che il prossimo passo è l'IPO entro il 2027. (fonte: knowledge base)</p>
+<blockquote>
+<p><strong>Perché ti riguarda:</strong><br />
+- Revolut con licenza bancaria diventa un competitor diretto dei robo-advisor europei — Moneyfarm, Scalable, e potenzialmente Proxima<br />
+- Il modello "super-app + banking" è quello che Proxima deve evitare: troppo largo, troppo costoso da replicare<br />
+- La nicchia di Proxima (1-5k€ retail italiani, approccio solido, non gamificato) resta protetta — Revolut non parla quel linguaggio<br />
+- Per Proxima: usare la notizia Revolut come content marketing — "Perché una licenza bancaria non basta a gestire bene i tuoi soldi"</p>
+</blockquote>
+<hr />
+<h2>5. Regolamentazione</h2>
+<p>Nessuna news regolatoria rilevante questa settimana nel feed. Focus su normativa vigente:</p>
+<h3>L'OCF e la campagna anti-abusivismo: opportunità per Proxima</h3>
+<p>L'Organismo di vigilanza dei Consulenti Finanziari (OCF) ha intensificato nel 2026 le campagne contro l'esercizio abusivo della consulenza finanziaria — in particolare sui social media (Instagram, TikTok, YouTube). Chiunque fornisca "raccomandazioni personalizzate" senza iscrizione all'albo SCF rischia sanzioni da €5.000 a €25.000 e segnalazione penale.</p>
+<p>Per Proxima, questo è un vantaggio competitivo naturale: la registrazione SCF (€3.240/anno) è un prerequisito, non un costo. Ogni finfluencer non registrato che viene sanzionato rafforza la credibilità di chi è in regola.</p>
+<p><strong>Idea content marketing</strong>: serie "Consulente vero vs finfluencer" — 3 post che spiegano la differenza tra educazione finanziaria (legale per tutti) e consulenza personalizzata (richiede albo). Posiziona Proxima come il brand che fa entrambe le cose, legalmente.</p>
+<hr />
+<h2>6. Competitor</h2>
+<p>Nessuna mossa strategica di marketing rilevante dai competitor diretti questa settimana.</p>
+<h3>Idea di differenziazione: il "Piano di Accumulo Visuale"</h3>
+<p>I competitor (Moneyfarm, Scalable, Trade Republic) mostrano tutti il portafoglio come lista di posizioni con P&amp;L. Nessuno visualizza il <strong>piano di accumulo nel tempo</strong> — cioè: "dove sarai tra 5, 10, 20 anni se continui a mettere €400/mese".</p>
+<p>Proxima potrebbe differenziarsi con una dashboard che mostra:<br />
+- Linea temporale del PAC con proiezione Monte Carlo<br />
+- Milestone visivi ("a questo ritmo, tra 7 anni il tuo portafoglio genera €200/mese di dividendi")<br />
+- Confronto con il "costo dell'inazione" (quanto perdi tenendo il cash in conto corrente)</p>
+<p>Questo parla direttamente al target 1-5k€ che ha bisogno di motivazione per continuare ad accumulare.</p>
+<hr />
+<h2>7. Marketing &amp; Growth case study</h2>
+<h3>Freetrade UK: come un'app di trading ha acquisito 1.4M utenti con content educativo</h3>
+<p>Freetrade (UK, ora parte di IG Group dopo l'acquisizione 2025) ha costruito la sua base utenti quasi interamente con content marketing educativo: newsletter settimanale, podcast "The Plug", e una community Discord con 80.000 membri attivi. Il costo di acquisizione utente era £3.20 — 10x inferiore ai competitor che usavano advertising tradizionale.</p>
+<p>La chiave: il contenuto non era generico ("cos'è un'azione") ma specifico e opinionato ("perché HSBC è meglio di Barclays per income quest'anno"). Questo livello di specificità attirava utenti già pronti ad agire, non curiosi passivi.</p>
+<p><strong>Tre applicazioni per Proxima:</strong><br />
+- <strong>Newsletter con opinione</strong>: non "cos'è un ETF" ma "perché IHYG batte il conto deposito Illimity quest'anno" — contenuto che converte<br />
+- <strong>Community Discord/Telegram</strong>: costo zero, engagement alto. I primi 500 utenti Proxima dovrebbero essere in un gruppo chiuso dove Vale e Alex rispondono direttamente<br />
+- <strong>Costo acquisizione target</strong>: se Proxima punta a CAC sotto €5 (realistico con content), 1.000 utenti costano €5.000 — budget compatibile con una startup bootstrapped</p>
+<hr />
+<h2>8. Educazione finanziaria</h2>
+<h3>a) Idea non scontata: "Il dividendo è uno stipendio, non un regalo"</h3>
+<p>La maggior parte dei contenuti sul dividendo lo presenta come "soldi gratis". Framing sbagliato e pericoloso — porta a comprare yield trap (aziende che pagano dividendi insostenibili). Il reframing corretto: il dividendo è lo stipendio che l'azienda ti paga per il capitale che le hai prestato. Come ogni stipendio, devi valutare se il datore di lavoro (l'azienda) è solido, se può permetterselo (payout ratio), e se il tuo stipendio crescerà nel tempo (dividend growth).</p>
+<p>Post ideale per Proxima: infografica con tre aziende a confronto — una value trap (yield alto, payout &gt;100%), una cash cow (yield medio, payout 50%, growth 10%), una growth (yield zero, reinveste tutto). Chiedi: "quale ti pagherà di più tra 10 anni?"</p>
+<h3>b) Insight di posizionamento</h3>
+<p>Il portafoglio di Vale è un case study perfetto per il content di Proxima. Un portafoglio reale sotto €5.000, costruito con PAC da €400/mese, con posizioni income (ENI, MO, CS.PA, MITT), growth (SAN.PA, CMCSA), e speculative (NKLR, SGMT). Mostrare questo tipo di portafoglio — con le sue imperfezioni, concentrazioni, e decisioni reali — è 100x più persuasivo di qualsiasi portafoglio modello ottimizzato.</p>
+<p>Idea: serie "Il portafoglio di un founder" — post mensili che mostrano il portafoglio reale di Vale (anonimizzato se necessario) con le decisioni prese e perché. Autenticità = trust.</p>
+<hr />
+<h2>9. To-do del giorno</h2>
+<p>File 70-azioni-immediate.md non disponibile. Azioni derivate dal briefing:</p>
+<ol>
+<li>
+<p><strong>Calcola il watermark IJPA</strong>: prendi il prezzo più alto raggiunto dal tuo acquisto e verifica se il drawdown attuale è vicino a -7%. Se sì, prepara l'ordine overlay reserve da €150 per lunedì</p>
+</li>
+<li>
+<p><strong>Decidi il PAC agosto</strong>: 300€ DCA income → SAN.PA (prima scelta) o BTI (seconda scelta). 100€ → riserva trading. Verifica quanto hai accumulato nella riserva trading — se ≥300€, è il mese dell'acquisto titolo trading</p>
+</li>
+<li>
+<p><strong>Approfondisci GTT.PA</strong>: voto MVF più alto dello screener (82/100), yield 5%, sotto il prezzo ideale d'acquisto. Potrebbe essere il candidato per la riserva trading se raggiunge €300</p>
+</li>
+<li>
+<p><strong>Monitora Stellantis pre-earnings Q2</strong>: non mediare, ma cerca la data di pubblicazione earnings per non farsi sorprendere. Se scende sotto €4.50, rivaluta la posizione</p>
+</li>
+<li>
+<p><strong>Idea da girare ad Alex</strong>: GTT.PA è rilevante anche per il suo portafoglio più grande — monopolista LNG con yield 5% e voto 82/100. Alex potrebbe allocare una posizione più significativa</p>
+</li>
+</ol>
+<hr />
+<h2>10. Long read</h2>
+<h2>Il paradosso del rendimento: perché i dividendi alti sono spesso una trappola e come costruire un reddito passivo che dura</h2>
+<p><em>I rendimenti più alti del mercato sono quasi sempre i più pericolosi. La vera rendita passiva si costruisce con pazienza, non con l'avidità.</em></p>
+<hr />
+<h3>Il fascino letale del yield alto</h3>
+<p>Quando un investitore retail apre per la prima volta uno screener e ordina per dividend yield, vede numeri che sembrano impossibili: 8%, 12%, persino 15% annuo. Confrontati con il conto deposito al 3% o il BTP al 3.5%, sembrano un affare irresistibile. Ma quel numero mente — o, più precisamente, racconta solo metà della storia.</p>
+<p>Il dividend yield è un rapporto: dividendo annuale diviso per prezzo dell'azione. Se il prezzo crolla del 50% e il dividendo resta uguale, il yield raddoppia. Non perché l'azienda sia diventata più generosa — perché il mercato sta scommettendo che quel dividendo verrà tagliato. È il meccanismo classico della value trap: compri yield del 10%, incassi due cedole, poi l'azienda taglia il dividendo del 60% e il prezzo scende di un altro 30%. Rendimento netto su tre anni: negativo.</p>
+<p>L'esempio più celebre degli ultimi anni è stato AT&amp;T. Nel 2020 offriva un yield del 7.5% — irresistibile per i cacciatori di cedole. Nel 2022 ha tagliato il dividendo del 47% dopo lo spin-off di WarnerMedia. Chi aveva comprato per il rendimento si è ritrovato con un dividendo dimezzato e un capital loss del 35%. Il rendimento effettivo su due anni: -12% annualizzato. Il BTP avrebbe fatto meglio.</p>
+<h3>I tre pilastri del dividendo sostenibile</h3>
+<p>Un dividendo che dura nel tempo poggia su tre pilastri. Se ne manca uno, la struttura è fragile.</p>
+<p><strong>Primo: il payout ratio.</strong> Quanto degli utili l'azienda distribuisce come dividendo? Sotto il 60% per aziende industriali, sotto il 75% per REIT e utility — questi sono livelli sostenibili. Sopra l'80% in settori ciclici (come shipping o commodity) è un segnale di allarme. Significa che l'azienda distribuisce quasi tutto quello che guadagna, senza trattenere abbastanza per reinvestire o per affrontare un ciclo negativo.</p>
+<p>Nel portafoglio di un piccolo investitore, il confronto è istruttivo. Altria (MO) ha un payout ratio del ~80% — alto, ma il business è un generatore di cash straordinario con volumi in lento declino compensati dal pricing power. ENI ha un payout del ~70% — sostenibile con Brent sopra $70, rischioso sotto. AXA (CS.PA) ha un payout del ~50% — il più sicuro dei tre, con spazio per aumentare il dividendo.</p>
+<p><strong>Secondo: la crescita del dividendo.</strong> Il dividendo che non cresce è un dividendo che si riduce, perché l'inflazione lo erode. Un'azienda che paga €1 oggi e €1 tra dieci anni ti sta dando il 30% in meno in termini reali (con inflazione al 3%). Il vero indicatore da guardare non è il yield attuale, ma il Dividend CAGR a 5 anni. Newmont (NEM.AX) ha yield modesto (1.1%) ma crescita dividendo del 21.4% annuo — tra cinque anni il suo yield on cost sarà del 2.8%, tra dieci del 7.4%. Questo è il compounding che costruisce ricchezza.</p>
+<p><strong>Terzo: la qualità del business sottostante.</strong> Il dividendo non esiste nel vuoto — è il prodotto di un'azienda reale che vende prodotti o servizi reali. Se il business si deteriora, il dividendo segue. I migliori pagatori di dividendi al mondo (Procter &amp; Gamble, Johnson &amp; Johnson, Nestlé) hanno moat competitivi che proteggono i margini per decenni. I peggiori pagatori sono aziende in settori in declino strutturale che usano il dividendo come esca per attirare capitale — finché non possono più permetterselo.</p>
+<h3>La strategia "barbell income"</h3>
+<p>Per un portafoglio piccolo come quello di un investitore retail con €5.000 e PAC da €400/mese, la strategia ottimale non è cercare il yield massimo. È costruire un "barbell income" — una combinazione di due estremi che insieme producono un risultato superiore.</p>
+<p>Da un lato, il <strong>pilastro ad alto rendimento corrente</strong>: 2-3 titoli con yield sopra il 4% e payout sostenibile. Obiettivo: cash flow immediato che motiva psicologicamente e copre i costi della piattaforma. ENI, AXA, BTI — questo tipo di titoli. Allocazione: 50-60% del portafoglio income.</p>
+<p>Dall'altro, il <strong>pilastro dividend growth</strong>: 2-3 titoli con yield modesto (1-3%) ma crescita dividendo a doppia cifra. Obiettivo: costruire un rendimento on cost del 6-8% in 7-10 anni. Sanofi, Newmont, Amphenol — questo tipo di titoli. Allocazione: 30-40% del portafoglio income.</p>
+<p>Il 10% residuo può andare in strumenti alternativi (ETF obbligazionari HY, covered call ETF) per diversificazione della fonte di reddito.</p>
+<p>Il risultato? Anno 1: yield medio del portafoglio ~3.5%. Anno 5: ~5.5%. Anno 10: ~8%. Senza mai comprare una value trap. Senza mai inseguire yield del 10% che evaporano. La matematica del compounding fa il lavoro pesante, la disciplina del PAC mensile la supporta.</p>
+<h3>Il costo dell'inazione: il numero che nessuno calcola</h3>
+<p>Il nemico più grande dell'investitore retail non è il mercato ribassista, la recessione, o la value trap. È il conto corrente.</p>
+<p>Un italiano medio tiene €17.000 di liquidità sul conto (dato Banca d'Italia 2025). Con inflazione al 2.5%, quei soldi perdono €425/anno di potere d'acquisto — ogni anno, silenziosamente, senza che nessuno mandi una notifica.</p>
+<p>Con un PAC da €400/mese investiti in un portafoglio income con rendimento medio del 4% e reinvestimento dei dividendi, dopo 10 anni hai €64.000 (di cui €16.000 di rendimenti composti). Con gli stessi €400/mese sul conto corrente, hai €48.000 nominali — ma solo €42.000 in potere d'acquisto reale.</p>
+<p>La differenza è €22.000. Non è una previsione ottimista. È matematica con assunzioni conservative. Eppure l'80% degli italiani sceglie il conto corrente perché "almeno non perdo soldi". Stanno perdendo €425/anno. Ogni anno.</p>
+<h3>Il framework per il piccolo investitore: regole non negoziabili</h3>
+<p>Per chi costruisce un portafoglio income con budget limitato, cinque regole non negoziabili:</p>
+<ol>
+<li>
+<p><strong>Mai più del 15% su un singolo titolo.</strong> La concentrazione è il rischio numero uno dei portafogli piccoli. Se hai €5.000 e €900 su AXA, sei al 18% — limite raggiunto. Diversifica il prossimo PAC.</p>
+</li>
+<li>
+<p><strong>Payout ratio prima del yield.</strong> Non comprare mai un titolo solo perché ha yield alto. Controlla prima che il payout sia sotto il 75% (sotto il 90% per REIT). Se il payout è sopra il 100%, il dividendo è pagato con debito — scappa.</p>
+</li>
+<li>
+<p><strong>Crescita dividendo prima del rendimento attuale.</strong> Un titolo che cresce il dividendo del 10% annuo con yield del 2% batte un titolo con yield del 6% e crescita zero in meno di 8 anni. Sempre.</p>
+</li>
+<li>
+<p><strong>PAC mensile fisso, non market timing.</strong> Il DCA (Dollar Cost Averaging) è l'unica strategia che funziona sistematicamente per l'investitore retail. Non cercare "il momento giusto" — il momento giusto è ogni mese, automaticamente.</p>
+</li>
+<li>
+<p><strong>Riserva di emergenza separata dal portafoglio.</strong> La overlay reserve (€600 nel caso di Vale) serve SOLO per mediare i cali significativi (-7%, -14%, -21%). Non è cash per trading, non è cash per emergenze personali. Deve restare intatta finché non serve.</p>
+</li>
+</ol>
+<h3>Per Proxima, il take strategico</h3>
+<p>Il portafoglio income per il retail italiano è un mercato enorme e completamente inservito. Moneyfarm offre portafogli ETF generici. Scalable offre la piattaforma ma zero guida. Trade Republic gamifica il trading. Nessuno dice al cliente: "ecco quanto il tuo portafoglio genererà in dividendi tra 5 anni" con un numero concreto.</p>
+<p>Proxima può costruire l'unica esperienza di investimento in Italia dove il dividendo — la rendita passiva — è al centro dell'interfaccia. Non il P&amp;L giornaliero. Non il rendimento percentuale astratto. Ma: "questo mese il tuo portafoglio ti ha pagato €12.40 di dividendi. L'anno scorso erano €8.70. Stai crescendo." Questo è il linguaggio che converte il risparmiatore italiano in investitore. Non il grafico a candele. Non il rendimento del benchmark. Il numero concreto che arriva sul conto.</p>
+<hr />
+<p><strong>Fonti primarie:</strong><br />
+- Banca d'Italia, "Ricchezza delle famiglie italiane", aggiornamento 2025<br />
+- S&amp;P Global, "Dividend Aristocrats Factsheet", Q2 2026<br />
+- Morningstar, "The Dividend Investor's Handbook", 2024</p>
+    </article>
+
+    <div class="footer">
+      Proxima Daily &mdash; generato il 2026-07-25 06:19 &mdash; uso personale
+    </div>
+
+  </div>
+</body>
+</html>

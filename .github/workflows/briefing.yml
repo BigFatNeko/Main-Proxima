@@ -7,6 +7,19 @@ on:
     # Sabato: 3:30 UTC = 4:30 CET
     - cron: '30 3 * * 6'
   workflow_dispatch:
+    inputs:
+      force_rescreen:
+        description: 'Forza riesecuzione screener (ignora cache giornaliera)'
+        type: boolean
+        default: false
+      debug_filiere:
+        description: 'Debug filiere: testa solo lo screener filiere e stampa risultati (non genera briefing)'
+        type: boolean
+        default: false
+      debug_snapshot:
+        description: 'Debug market snapshot: verifica prezzi indici (non genera briefing)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -14,13 +27,15 @@ permissions:
 jobs:
   generate-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 110
+    timeout-minutes: 130
 
     steps:
+      # Nessun `ref:` fisso: il workflow lavora sul branch da cui parte.
+      # Prima era inchiodato a claude/financial-briefing-pipeline-aVCmh, quindi
+      # i run schedulati usavano il YAML di main attorno al codice del branch.
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          ref: claude/financial-briefing-pipeline-aVCmh
           fetch-depth: 0
 
       - name: Calcola data
@@ -40,38 +55,83 @@ jobs:
         run: |
           mkdir -p briefings
           mkdir -p rassegna-stampa/data/screener_results
+          mkdir -p rassegna-stampa/data/edgar_cache
+
+      # La cache EDGAR contiene solo estratti normalizzati (~0.8 KB per
+      # emittente) piu' la mappa ticker->CIK. Persisterla evita di
+      # riscaricare gli stessi companyfacts a ogni run e conserva il budget
+      # di lookup per i titoli non ancora verificati.
+      - name: Cache SEC EDGAR
+        uses: actions/cache@v4
+        with:
+          path: rassegna-stampa/data/edgar_cache
+          key: edgar-cache-${{ github.run_id }}
+          restore-keys: |
+            edgar-cache-
+
+      - name: Cancella cache screener (solo se force_rescreen)
+        if: ${{ github.event.inputs.force_rescreen == 'true' }}
+        run: |
+          DATE=$(date +'%Y-%m-%d')
+          rm -f rassegna-stampa/data/screener_results/screener_${DATE}.json
+          echo "Cache screener ${DATE} rimossa — verrà rieseguito da zero."
+
+      - name: "[DEBUG] Test filiere screener"
+        if: ${{ github.event.inputs.debug_filiere == 'true' }}
+        run: |
+          cd rassegna-stampa
+          python filiere_screener.py
+          echo "--- DEBUG TERMINATO: exit 0 intenzionale ---"
+
+      - name: "[DEBUG] Test market snapshot"
+        if: ${{ github.event.inputs.debug_snapshot == 'true' }}
+        run: |
+          cd rassegna-stampa
+          python briefing_pipeline.py --test-snapshot
+          echo "--- DEBUG TERMINATO: exit 0 intenzionale ---"
 
       - name: Genera briefing Alex
+        if: ${{ github.event.inputs.debug_filiere != 'true' && github.event.inputs.debug_snapshot != 'true' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
           BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
+          # SEC EDGAR richiede uno User-Agent identificativo (nome + email).
+          # Senza, le richieste vengono rifiutate e il cross-check si limita
+          # a non eseguirsi: il pipeline resta sui dati yfinance con tag [V].
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
         run: |
           cd rassegna-stampa
           python briefing_pipeline.py --user alex
 
       - name: Genera briefing Vale
+        if: ${{ github.event.inputs.debug_filiere != 'true' && github.event.inputs.debug_snapshot != 'true' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
           BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
+          # SEC EDGAR richiede uno User-Agent identificativo (nome + email).
+          # Senza, le richieste vengono rifiutate e il cross-check si limita
+          # a non eseguirsi: il pipeline resta sui dati yfinance con tag [V].
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
         run: |
           cd rassegna-stampa
           python briefing_pipeline.py --user vale
 
       - name: Commit briefing in docs/
+        if: ${{ github.event.inputs.debug_filiere != 'true' && github.event.inputs.debug_snapshot != 'true' }}
         run: |
           DATE="${{ steps.date.outputs.today }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin
-          git pull origin claude/financial-briefing-pipeline-aVCmh --ff-only || true
+          git pull origin "${GITHUB_REF_NAME}" --ff-only || true
           mkdir -p docs/archivio
           cp briefings/${DATE}-alex.html docs/alex-latest.html
           cp briefings/${DATE}-vale.html docs/vale-latest.html
           cp briefings/${DATE}-alex.html docs/archivio/${DATE}-alex.html
           cp briefings/${DATE}-vale.html docs/archivio/${DATE}-vale.html
           echo "$DATE" > docs/last-generated.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/
           git diff --cached --quiet || git commit -m "briefing Alex + Vale ${DATE}"
-          git push origin claude/financial-briefing-pipeline-aVCmh
+          git push origin "HEAD:${GITHUB_REF_NAME}"
