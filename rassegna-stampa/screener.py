@@ -2165,6 +2165,21 @@ def screen_ticker(ticker):
     return c
 
 
+def _workers_yfinance(default: int = 5) -> int:
+    """Concorrenza verso Yahoo, unica per tutto il run.
+
+    Prima ogni tier aveva il suo numero (8, 5, 15, 15, 40 nel market
+    context) e nessuno teneva conto che le richieste finiscono tutte sullo
+    stesso rate limit. Una sola manopola, sovrascrivibile con
+    SCREENER_WORKERS, rende misurabile l'effetto di cambiarla.
+    """
+    try:
+        n = int(os.environ.get("SCREENER_WORKERS", str(default)))
+    except ValueError:
+        n = default
+    return max(1, n)
+
+
 def screen_universe(tickers, strategy="all", max_workers=None):
     """Screening a due fasi per minimizzare le chiamate HTTP totali.
 
@@ -2183,10 +2198,7 @@ def screen_universe(tickers, strategy="all", max_workers=None):
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     if max_workers is None:
-        try:
-            max_workers = int(os.environ.get("SCREENER_WORKERS", "5"))
-        except ValueError:
-            max_workers = 5
+        max_workers = _workers_yfinance()
     max_workers = max(1, max_workers)
 
     n = len(tickers)
@@ -2216,6 +2228,7 @@ def screen_universe(tickers, strategy="all", max_workers=None):
 
     log.info("Fase 2/2: fondamentali su %d ticker...", len(phase1))
     out: list[Candidate] = []
+    mvf_falliti: list[tuple[str, str]] = []
     # Fase 2 fa 8 chiamate HTTP per ticker contro l'unica della fase 1:
     # tenerla piu' stretta e' cio' che regge il carico complessivo.
     with ThreadPoolExecutor(max_workers=max(2, max_workers - 2)) as ex:
@@ -2268,8 +2281,27 @@ def screen_universe(tickers, strategy="all", max_workers=None):
             try:
                 apply_mvf_valuation(c, data, market)
             except Exception as e:
+                mvf_falliti.append((c.ticker, f"{type(e).__name__}: {e}"))
                 log.debug("MVF valuation fallita per %s: %s", c.ticker, e)
             out.append(c)
+
+    # Il prompt del briefing ordina i candidati per `mvf_vote_100 or 0`:
+    # un titolo senza voto finisce in fondo e non arriva mai al modello.
+    # Se MVF fallisse su tutti, l'output sarebbe pieno di candidati
+    # ordinati a zero e nessuno se ne accorgerebbe — la valutazione e' il
+    # cuore del sistema e il suo silenzio non deve essere ambiguo.
+    senza_voto = [c.ticker for c in out if not c.mvf_vote_1000]
+    if mvf_falliti:
+        quota = len(mvf_falliti) / max(len(out), 1)
+        primi = ", ".join(f"{t} ({e[:50]})" for t, e in mvf_falliti[:3])
+        livello = log.error if quota > 0.10 else log.warning
+        livello("MVF fallita su %d/%d candidati (%.0f%%). Primi casi: %s",
+                len(mvf_falliti), len(out), quota * 100, primi)
+    if senza_voto:
+        log.info("Candidati senza voto MVF: %d/%d (classi non-common rilevate "
+                 "e marcate, piu' eventuali fallimenti). Non raggiungono il "
+                 "briefing: l'ordinamento li mette in fondo.",
+                 len(senza_voto), len(out))
 
     return out
 
@@ -2572,10 +2604,16 @@ def build_market_context() -> dict:
                 "1m": pct(22), "3m": pct(63), "6m": pct(126), "1y": pct(252),
                 "rel_vol_10d": rel_vol,
             }
-        except Exception:
+        except Exception as e:
+            YF_HEALTH.record_error(e)
             return label, None
 
-    with ThreadPoolExecutor(max_workers=40) as ex:
+    # Erano 40 thread per 36 strumenti: tutte le richieste in una raffica
+    # sola, e per giunta come primissima cosa del run, subito prima del
+    # Tier 1. Un ottimo modo per farsi limitare proprio quando serve la
+    # capacita'. Con 8 thread i 36 strumenti si prendono in cinque ondate,
+    # e restano pochi secondi in piu' su un run da un quarto d'ora.
+    with ThreadPoolExecutor(max_workers=8) as ex:
         futs = {ex.submit(fetch_etf, lbl, tkr): lbl for lbl, tkr in all_instruments.items()}
         for fut in as_completed(futs):
             lbl, rec = fut.result()
@@ -3077,8 +3115,11 @@ def main():
                      len(spec_tickers_new), len(spec_tickers) - len(spec_tickers_new))
             # 15 thread erano la causa, non la cura: la raffica parallela
             # reinvalidava il crumb appena rinnovato. 6 è sostenibile.
-            spec_cands = screen_speculative_universe(spec_tickers_new, top_n=args.top_speculative,
-                                                      max_workers=6)
+            # Stessa concorrenza del Tier 1, non di piu': i tier girano in
+            # coda, quando la sessione ha gia' incassato migliaia di richieste.
+            spec_cands = screen_speculative_universe(
+                spec_tickers_new, top_n=args.top_speculative,
+                max_workers=_workers_yfinance())
             tier2_set = {sc.ticker for sc in spec_cands}
             log.info("Tier 2 candidati: %d", len(spec_cands))
             if not spec_cands:
@@ -3102,7 +3143,7 @@ def main():
         if any(sp_buckets.values()):
             special_cands = screen_special_situations(
                 sp_buckets, tier1_set, tier2_set, top_n=args.top_special,
-                max_workers=6,
+                max_workers=_workers_yfinance(),
             )
             log.info("Tier 3 special situations: %d", len(special_cands))
             if not special_cands:
