@@ -123,10 +123,6 @@ TV_TO_YF_SUFFIX = {
     # --- Europa ---
     "MIL": ".MI",       # Borsa Italiana (TV emette MIL, non BIT)
     "XETR": ".DE", "FWB": ".F",
-    # Le piazze regionali tedesche quotano gli stessi titoli di XETRA:
-    # le si riporta su .DE e ci pensa il dedup a collassarle.
-    "GETTEX": ".DE", "TRADEGATE": ".DE", "SWB": ".DE", "MUN": ".DE",
-    "DUS": ".DE", "HAM": ".DE", "HAN": ".DE", "LS": ".DE", "LSX": ".DE",
     "LSE": ".L",
     "BME": ".MC",
     "SIX": ".SW", "BX": ".SW", "EBS": ".SW", "SWX": ".SW",
@@ -147,9 +143,9 @@ TV_TO_YF_SUFFIX = {
     "TWSE": ".TW", "TPEX": ".TWO",   # Taiwan: assenti in precedenza
     "ASX": ".AX", "NZX": ".NZ",
     "IDX": ".JK",
-    "MYX": ".KL",       # Kuala Lumpur: assente in precedenza
     "SET": ".BK",       # Bangkok
     "HOSE": ".VN", "HNX": ".HN",
+    # MYX (Kuala Lumpur) è in TV_SKIP_PREFIXES: vedi la nota lì sotto.
     "PSE": ".PS",       # Filippine (era ".PSE", suffisso inesistente)
     # --- America Latina ---
     "BMFBOVESPA": ".SA",  # San Paolo (TV emette BMFBOVESPA, non BVMF)
@@ -162,14 +158,32 @@ TV_TO_YF_SUFFIX = {
     "JSE": ".JO",       # Johannesburg
     "TADAWUL": ".SR",   # Riyadh
     "TASE": ".TA",      # Tel Aviv
-    "ADX": ".AD",       # Abu Dhabi (DFM→".DU" era Düsseldorf)
 }
 
 # Venue senza copertura yfinance utilizzabile: scartati di proposito, non per
-# mappa mancante. EUROTLX quota obbligazioni e certificati, LSIN sono ADR
-# internazionali su LSE, UPCOM è il mercato OTC vietnamita, DFM (Dubai) non ha
-# un suffisso Yahoo proprio — il ".DU" usato in passato è Düsseldorf.
-TV_SKIP_PREFIXES = {"OTC", "EUROTLX", "LSIN", "UPCOM", "DFM"}
+# mappa mancante. Ogni voce è stata verificata interrogando Yahoo.
+#
+#   OTC, EUROTLX          obbligazioni, certificati, ADR minori
+#   LSIN                  linee internazionali su LSE, strumenti diversi
+#   UPCOM                 mercato OTC vietnamita
+#   DFM, ADX              Emirati: Yahoo non li copre sotto alcun suffisso.
+#                         Verificato: IHC.AD, IHC.AE, IHC.AB, ALDAR.AD → 404.
+#                         Il ".DU" un tempo usato per Dubai è Düsseldorf.
+#   MYX                   Kuala Lumpur: TradingView emette le sigle (KPJ,
+#                         AMBANK, MAYBANK), Yahoo conosce solo i codici
+#                         numerici (5878.KL, 1015.KL, 1155.KL). Non c'è
+#                         conversione possibile senza una tabella di
+#                         corrispondenza da mantenere a mano.
+#   piazze regionali DE   GETTEX, TRADEGATE, SWB, MUN, DUS, HAM, HAN, LS, LSX
+#                         emettono codici WKN, non ticker: A0M4W0, 871784.
+#                         Riportarli su ".DE" produceva simboli inesistenti
+#                         (A0M4W0.DE → 404, mentre SAP.DE risponde).
+#                         Restano XETR e FWB, che emettono ticker veri.
+TV_SKIP_PREFIXES = {
+    "OTC", "EUROTLX", "LSIN", "UPCOM",
+    "DFM", "ADX", "MYX",
+    "GETTEX", "TRADEGATE", "SWB", "MUN", "DUS", "HAM", "HAN", "LS", "LSX",
+}
 
 # EURONEXT usa lo stesso prefisso per cinque paesi. Senza questa tabella un
 # titolo belga diventava NOS.PA e yfinance rispondeva 404: nei log di
@@ -454,6 +468,28 @@ def tv_to_yf_ticker(tv_ticker: str, market: Optional[str] = None,
         if dropped is not None:
             dropped[exchange] = dropped.get(exchange, 0) + 1
         return None
+
+    # TradingView separa le classi di azioni con l'underscore, Yahoo con il
+    # trattino. Verificato su quattro mercati: ERIC_B.ST, NOVO_B.CO,
+    # NDA_FI.HE e SQM_B.SN rispondono 404, le stesse col trattino rispondono.
+    # Erano large cap europee — Ericsson, Novo Nordisk, Nordea, SEB,
+    # Swedbank, Handelsbanken — scartate in silenzio a ogni run.
+    symbol = symbol.replace("_", "-")
+
+    # La barra marca classi di azioni e privilegiate. Yahoo la rende col
+    # trattino quasi ovunque (BAC/PE → BAC-PE, BRK/B → BRK-B) ma la elimina
+    # sul Messico (GFNORTE/O → GFNORTEO, FEMSA/UBD → FEMSAUBD). Verificato
+    # su entrambe le forme per ciascun mercato.
+    if "/" in symbol:
+        symbol = symbol.replace("/", "") if suffix == ".MX" else symbol.replace("/", "-")
+
+    # Hong Kong: Yahoo vuole il codice numerico su 4 cifre con gli zeri
+    # iniziali. TradingView emette HKEX:5, Yahoo conosce 0005.HK.
+    # Verificato su 267, 5, 939, 941, 386: tutte 404 senza padding, tutte
+    # valide con.
+    if suffix == ".HK" and symbol.isdigit():
+        symbol = symbol.zfill(4)
+
     return f"{symbol}{suffix}" if suffix else symbol
 
 
