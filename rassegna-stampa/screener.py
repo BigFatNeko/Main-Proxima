@@ -2398,10 +2398,20 @@ def passes_speculative_quick_filter(info: dict) -> bool:
 
 
 def fetch_speculative_data(ticker: str, prefetched_info: dict) -> Optional[dict]:
-    """Fetch dati per analisi catalyst: history 1y + financials base."""
+    """Fetch dati per analisi catalyst: history 1y + financials base.
+
+    Era l'ultima fetch rimasta fuori da YF_HEALTH, e si e' visto nel run
+    #142: 55 ticker processati in un secondo netto e zero candidati. Un
+    secondo per 55 titoli significa che nessuna chiamata e' andata a buon
+    fine, ma il log non poteva dirlo — l'eccezione veniva inghiottita qui
+    e il riepilogo del run attribuiva tutto al Tier 1. Cosi' il Tier 2
+    sembrava avere filtri troppo severi quando invece non stava
+    ricevendo dati.
+    """
+    YF_HEALTH.attendi_se_in_pausa()
     try:
         t = yf.Ticker(ticker)
-        return {
+        dati = {
             "ticker": ticker,
             "info": prefetched_info,
             "financials": t.quarterly_financials,   # quarterly per revenue acceleration
@@ -2409,7 +2419,10 @@ def fetch_speculative_data(ticker: str, prefetched_info: dict) -> Optional[dict]
             "history": t.history(period="1y", auto_adjust=True),
             "earnings_dates": getattr(t, "earnings_dates", None),
         }
-    except Exception:
+        YF_HEALTH.record_ok()
+        return dati
+    except Exception as e:
+        YF_HEALTH.record_error(e)
         return None
 
 
@@ -2586,8 +2599,14 @@ def screen_speculative_universe(tickers: list[str], max_workers: int = 8,
 
     log.info("Spec Fase 1/2: %d/%d passano il filtro rapido", len(phase1), n)
 
+    # Fotografia della salute PRIMA della fase 2, per poter attribuire a
+    # questa fase i rifiuti che arrivano dopo: il riepilogo di YF_HEALTH e'
+    # cumulativo sul run e da solo non distingue i tier.
+    _rl_prima = YF_HEALTH.rate_limited
     log.info("Spec Fase 2/2: catalyst analysis su %d ticker...", len(phase1))
     out: list[SpeculativeCandidate] = []
+    senza_segnale = 0
+    senza_dati = 0
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futs = {ex.submit(fetch_speculative_data, tkr, inf): tkr for tkr, inf in phase1}
@@ -2597,6 +2616,7 @@ def screen_speculative_universe(tickers: list[str], max_workers: int = 8,
             except Exception:
                 continue
             if data is None:
+                senza_dati += 1
                 continue
             info = data["info"]
             sig, extra = detect_catalyst_signals(data)
@@ -2604,6 +2624,7 @@ def screen_speculative_universe(tickers: list[str], max_workers: int = 8,
             active_signals = [k for k, v in sig_dict.items() if v]
             count = len(active_signals)
             if count == 0:
+                senza_segnale += 1
                 continue   # nessun segnale, non interessa
 
             mc = info.get("marketCap", 0) or 0
@@ -2632,6 +2653,18 @@ def screen_speculative_universe(tickers: list[str], max_workers: int = 8,
             out.append(sc)
 
     out.sort(key=lambda c: c.speculative_score, reverse=True)
+    # Distinguere le due ragioni per cui il tier puo' rendere zero:
+    # "nessun dato" e' un guasto della fonte, "nessun segnale" e' un
+    # giudizio dei filtri. Confonderle e' costato settimane di diagnosi
+    # sbagliata: il Tier 2 sembrava selettivo mentre non riceveva nulla.
+    rl_fase2 = YF_HEALTH.rate_limited - _rl_prima
+    log.info("Spec Fase 2/2: %d con almeno un segnale, %d senza segnali, "
+             "%d senza dati | rifiuti in questa fase: %d",
+             len(out), senza_segnale, senza_dati, rl_fase2)
+    if senza_dati and senza_dati >= len(phase1) / 2:
+        log.error("Tier 2: %d ticker su %d non hanno restituito dati. "
+                  "Non e' selettivita' dei filtri, e' la fonte che non "
+                  "risponde.", senza_dati, len(phase1))
     log.info("Speculative candidati con signal>=1: %d", len(out))
     return out[:top_n]
 
