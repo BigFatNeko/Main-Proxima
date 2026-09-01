@@ -208,19 +208,34 @@ def enrich_portfolio_prices(user_data: dict) -> dict:
 
     enriched = sum(1 for p in positions if "current_price" in p)
 
-    # Rete di sicurezza: se non è arrivato nulla è quasi sempre la sessione
-    # yfinance, non i ticker. Vale un rinnovo e un secondo giro — i prezzi
-    # del portafoglio sono il dato più visibile dell'intero briefing.
-    if enriched == 0 and positions:
-        log.warning("Nessun prezzo ottenuto: rinnovo sessione yfinance e riprovo.")
+    # Rete di sicurezza a passaggi ripetuti, non uno solo.
+    #
+    # Il primo utente della giornata trova la sessione pulita; il secondo
+    # gira dopo ~15.000 richieste fatte dal primo, sullo stesso indirizzo IP,
+    # e Yahoo lo rifiuta. Nel run #143 Vale e' passato da 14/14 a 5/14 per
+    # questo. Cinque secondi di attesa non bastavano: il rate limit di Yahoo
+    # si allenta in decine di secondi, non in unita'.
+    #
+    # La griglia delle posizioni e' la prima cosa che l'utente vede aprendo
+    # il briefing: qui vale la pena aspettare. Tre passaggi con attese
+    # crescenti costano al massimo due minuti su un run da venti, e solo
+    # quando servono davvero — se il primo giro riesce, non si aspetta nulla.
+    for pausa in (15, 45):
+        if enriched >= len(positions):
+            break
+        mancanti_ora = [p for p in positions if "current_price" not in p]
+        log.warning("Prezzi mancanti su %d/%d posizioni: rinnovo la sessione "
+                    "e riprovo fra %ds.", len(mancanti_ora), len(positions), pausa)
         try:
             from yfinance.data import SingletonMeta
             SingletonMeta._instances.clear()
         except Exception as e:
             log.debug("reset sessione non riuscito: %s", e)
-        _time.sleep(5)
-        with ThreadPoolExecutor(max_workers=min(len(positions), 4)) as ex:
-            list(ex.map(_fetch_price, positions))
+        _time.sleep(pausa)
+        # Solo i mancanti, e con meno parallelismo: si sta gia' rientrando
+        # da un rifiuto, ripartire a tutta velocita' lo rinnoverebbe.
+        with ThreadPoolExecutor(max_workers=min(len(mancanti_ora), 3)) as ex:
+            list(ex.map(_fetch_price, mancanti_ora))
         enriched = sum(1 for p in positions if "current_price" in p)
 
     if enriched == 0 and positions:

@@ -2872,12 +2872,31 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
     if failed:
         log.info("Tier 3: %d ticker non mappati skipped", len(failed))
 
-    # Dedup each bucket
+    # Cap per bucket, stessa logica del Tier 2 e per lo stesso motivo. Nel
+    # run #143 il Tier 3 ha interrogato 990 ticker per tenerne 15: un
+    # rapporto peggiore di quello che avevamo appena corretto nel Tier 2.
+    # Sommato al resto portava il run a circa 15.000 richieste, e a pagarne
+    # il conto era Vale — che gira per ultimo e si e' ritrovato con 5
+    # posizioni su 14 senza prezzo, dopo esserne arrivato a 14/14.
+    #
+    # I ticker arrivano gia' ordinati per capitalizzazione decrescente dalla
+    # query TradingView, quindi il taglio tiene i piu' liquidi di ciascun
+    # bucket, che sono anche quelli con dati piu' affidabili.
+    try:
+        cap = int(os.environ.get("SPECIAL_BUCKET_CAP", "100"))
+    except ValueError:
+        cap = 100
+
     for k in buckets:
         seen: set[str] = set()
         unique = [t for t in buckets[k] if t not in seen and not seen.add(t)]  # type: ignore[func-returns-value]
+        if cap > 0 and len(unique) > cap:
+            log.info("Tier 3 bucket '%s': %d ticker, cappati a %d",
+                     k, len(unique), cap)
+            unique = unique[:cap]
+        else:
+            log.info("Tier 3 bucket '%s': %d ticker", k, len(unique))
         buckets[k] = unique
-        log.info("Tier 3 bucket '%s': %d ticker", k, len(unique))
 
     return buckets
 
