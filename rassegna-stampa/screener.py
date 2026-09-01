@@ -446,7 +446,8 @@ class SpecialCandidate:
 # =============================================================================
 
 def tv_to_yf_ticker(tv_ticker: str, market: Optional[str] = None,
-                     dropped: Optional[dict] = None) -> Optional[str]:
+                     dropped: Optional[dict] = None,
+                     skipped: Optional[dict] = None) -> Optional[str]:
     """Converti 'MIL:ENI' -> 'ENI.MI', 'NASDAQ:NKLR' -> 'NKLR'.
 
     `market` disambigua i prefissi condivisi da più paesi (EURONEXT), dove il
@@ -461,6 +462,8 @@ def tv_to_yf_ticker(tv_ticker: str, market: Optional[str] = None,
     exchange, symbol = tv_ticker.split(":", 1)
     exchange = exchange.upper()
     if exchange in TV_SKIP_PREFIXES:
+        if skipped is not None:
+            skipped[exchange] = skipped.get(exchange, 0) + 1
         return None
     suffix = None
     if market:
@@ -498,7 +501,7 @@ def tv_to_yf_ticker(tv_ticker: str, market: Optional[str] = None,
 
 def _query_one_market(market: str, min_mcap_m: int, min_price: float,
                        limit: int, sector_filter: Optional[str]
-                       ) -> tuple[list[dict], dict, Optional[str]]:
+                       ) -> tuple[list[dict], dict, dict, Optional[str]]:
     """Query TV per un singolo mercato con pre-filtri qualità.
 
     Ritorna (righe, prefissi_scartati, errore). I due valori in coda servono a
@@ -513,6 +516,7 @@ def _query_one_market(market: str, min_mcap_m: int, min_price: float,
     """
     rows: list[dict] = []
     dropped: dict = {}
+    skipped: dict = {}
     try:
         q = (Query()
              .set_markets(market)
@@ -532,9 +536,10 @@ def _query_one_market(market: str, min_mcap_m: int, min_price: float,
             q = q.where(Column("sector") == sector_filter)
         _count, df = q.get_scanner_data()
         if df is None or df.empty:
-            return rows, dropped, None
+            return rows, dropped, skipped, None
         for _, row in df.iterrows():
-            yf_tkr = tv_to_yf_ticker(row["ticker"], market=market, dropped=dropped)
+            yf_tkr = tv_to_yf_ticker(row["ticker"], market=market,
+                                     dropped=dropped, skipped=skipped)
             if yf_tkr is None:
                 continue
             rows.append({
@@ -544,8 +549,8 @@ def _query_one_market(market: str, min_mcap_m: int, min_price: float,
                 "div_yield": row.get("dividends_yield") or 0,
             })
     except Exception as e:
-        return rows, dropped, f"{type(e).__name__}: {str(e)[:80]}"
-    return rows, dropped, None
+        return rows, dropped, skipped, f"{type(e).__name__}: {str(e)[:80]}"
+    return rows, dropped, skipped, None
 
 
 def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
@@ -577,10 +582,11 @@ def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
         ok, fail = 0, 0
         errori: list[str] = []
         mercati_a_zero: list[str] = []
+        mercati_esclusi: list[str] = []
         prefissi_persi: dict = {}
         for fut in as_completed(futs):
             mkt = futs[fut]
-            rows, dropped, err = fut.result()
+            rows, dropped, skipped, err = fut.result()
             for pref, n in dropped.items():
                 prefissi_persi[pref] = prefissi_persi.get(pref, 0) + n
             if rows:
@@ -590,6 +596,12 @@ def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
                 fail += 1
                 if err:
                     errori.append(f"{mkt} ({err})")
+                elif skipped and not dropped:
+                    # Zero righe perche' l'intero mercato usa venue che
+                    # scartiamo di proposito (Malesia, Emirati): e' una
+                    # scelta documentata, non un guasto da investigare.
+                    mercati_esclusi.append(
+                        f"{mkt} ({'/'.join(sorted(skipped))})")
                 else:
                     mercati_a_zero.append(mkt)
 
@@ -600,8 +612,12 @@ def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
     # prefisso non mappato hanno convissuto per mesi con un log dall'aria sana.
     if errori:
         log.warning("TV mercati in errore (%d): %s", len(errori), ", ".join(sorted(errori)))
+    if mercati_esclusi:
+        log.info("TV mercati esclusi per scelta (%d): %s — venue senza "
+                 "copertura yfinance, vedi TV_SKIP_PREFIXES.",
+                 len(mercati_esclusi), ", ".join(sorted(mercati_esclusi)))
     if mercati_a_zero:
-        log.warning("TV mercati a zero righe (%d): %s",
+        log.warning("TV mercati a zero righe senza causa nota (%d): %s",
                     len(mercati_a_zero), ", ".join(sorted(mercati_a_zero)))
     if prefissi_persi:
         persi = sorted(prefissi_persi.items(), key=lambda kv: kv[1], reverse=True)
@@ -2073,7 +2089,7 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
 # SEZIONE 8 — PIPELINE
 # =============================================================================
 
-def _refresh_yfinance_session(attempts: int = 3) -> bool:
+def _refresh_yfinance_session(attempts: int = 3, force: bool = False) -> bool:
     """Forza un nuovo crumb Yahoo Finance per evitare errori 401.
 
     Il crumb (token di sessione) si invalida dopo molte richieste parallele e
@@ -2089,8 +2105,33 @@ def _refresh_yfinance_session(attempts: int = 3) -> bool:
 
     Qui si distrugge il singleton, si verifica che la sessione nuova risponda
     davvero, e si ritorna l'esito al chiamante.
+
+    ATTENZIONE all'ordine, che nel run #140 e' costato Tier 2 e Tier 3.
+    Distruggere il singleton obbliga yfinance a rifare l'handshake
+    cookie+crumb, e proprio quell'handshake e' cio' che Yahoo limita dopo
+    qualche migliaio di richieste: le chiamate dati passavano ancora
+    (1.102 risposte piene, zero rifiuti), ma il nuovo handshake veniva
+    respinto tre volte su tre. Risultato: una sessione perfettamente viva
+    veniva buttata e non si riusciva piu' a ricostruirla, e i due tier
+    successivi venivano saltati per nulla.
+
+    Quindi: prima si prova la sessione che c'e'. Si ricostruisce solo se
+    e' davvero morta, o se il chiamante lo impone con force=True.
     """
     import time
+
+    def _sessione_viva() -> bool:
+        try:
+            probe = yf.Ticker("AAPL").history(period="1d")
+            return probe is not None and not probe.empty
+        except Exception as e:
+            YF_HEALTH.record_error(e)
+            return False
+
+    if not force and _sessione_viva():
+        log.info("yfinance: sessione attuale ancora valida, nessun rinnovo.")
+        return True
+
     for tentativo in range(1, attempts + 1):
         try:
             from yfinance.data import YfData, SingletonMeta
@@ -2125,6 +2166,7 @@ def _refresh_yfinance_session(attempts: int = 3) -> bool:
             log.warning("yfinance: handshake senza dati (tentativo %d/%d)",
                         tentativo, attempts)
         except Exception as e:
+            YF_HEALTH.record_error(e)
             log.warning("yfinance: rinnovo sessione fallito (tentativo %d/%d): %s",
                         tentativo, attempts, str(e)[:100])
 
