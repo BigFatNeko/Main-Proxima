@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proxima Screener Live</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="bar">
+      <div class="brand">
+        <span class="star">✦</span>
+        <div>
+          <h1 class="serif">Proxima · Screener Live</h1>
+          <div class="sub">Regime S — selezione</div>
+        </div>
+      </div>
+      <nav>
+        <span style="color:#7E97AD">v. {{ snap.mvf_version if snap else '4.0' }}</span>
+        <a href="{{ url_for('logout') }}">Esci</a>
+      </nav>
+    </div>
+    <div class="meta">
+      {% if snap %}
+      <span>Snapshot <b class="mono">{{ snap.snapshot_id }}</b></span>
+      <span>Motore <b>{{ snap.engine }}</b></span>
+      {% else %}<span>Nessuno snapshot: esegui <b class="mono">batch.py</b></span>{% endif %}
+      <span>Fonti <b>EDGAR [P] · ESEF [P] · TradingView [U]</b></span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="mags">
+    <div class="mag"><div class="k">Voto MVF · /1000</div><div class="v">Qualità dell'azienda</div>
+      <div class="d">Solidità e redditività. Confrontabile solo entro la stessa classe.</div></div>
+    <div class="mag"><div class="k">IQI · /100</div><div class="v">Qualità dell'investimento</div>
+      <div class="d">Solidità + prospettive e reddito. Guida il margine di sicurezza.</div></div>
+    <div class="mag"><div class="k">CS · /100</div><div class="v">Qualità dei dati</div>
+      <div class="d">Affidabilità delle fonti: quota <span class="mono">[P]</span>/<span class="mono">[V]</span>/<span class="mono">[U]</span>.</div></div>
+  </div>
+
+  {% if not snap %}
+  <div class="panel" style="border-color:var(--warn);background:var(--warn-soft);margin:20px 0">
+    <h3 style="color:var(--warn)">Nessun dato — il batch non è ancora stato eseguito</h3>
+    <p style="font-size:13.5px;margin:0 0 12px">
+      L'app legge i risultati da <code class="mono">{{ db_path }}</code>,
+      che {% if db_ready %}esiste ma non contiene ancora snapshot{% else %}non esiste ancora{% endif %}.
+      Genera i dati con il motore, poi ricarica questa pagina.
+    </p>
+    <pre class="mono" style="background:var(--card);border:1px solid var(--line);border-radius:8px;
+      padding:12px 14px;font-size:12.5px;overflow-x:auto;margin:0">cd {{ db_path.rsplit('output',1)[0].rstrip('\\/') }}
+python batch.py --universe-global --source auto</pre>
+    <p style="font-size:12.5px;color:var(--muted);margin:12px 0 0">
+      Il primo giro richiede qualche minuto: scarica i bilanci e li mette in cache.
+    </p>
+  </div>
+  {% endif %}
+
+  <div class="summary" id="summary"></div>
+
+  <h2 class="sec">Titoli investibili — ordinati per Voto MVF</h2>
+  <div class="filterbar" id="filterbar"></div>
+  <div class="rows" id="rows-ok">{% if snap %}<div class="loading">Carico i risultati…</div>{% endif %}</div>
+
+  <h2 class="sec" id="gate-h" style="display:none">Esclusi — gate di qualità (NO-BUY strutturale)</h2>
+  <div class="rows" id="rows-gate"></div>
+
+  <footer>
+    Clic su un titolo per la scheda completa (il «giustifica» del Regime A da mostrare al cliente).
+    Voto MVF, IQI e CS sono tre grandezze distinte. I prezzi ideali in Regime S sono indicativi.
+  </footer>
+</main>
+
+<script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+</body>
+</html>
