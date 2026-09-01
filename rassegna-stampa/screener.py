@@ -742,7 +742,25 @@ def build_speculative_universe_tv(region: str = "GLOBAL") -> list[str]:
     # Sort by relative volume (most active first = highest catalyst probability)
     unique.sort(key=lambda r: r["rel_vol"], reverse=True)
     tickers = [r["yf_ticker"] for r in unique]
-    log.info("Speculative universe: %d ticker unici", len(tickers))
+
+    # Cap sull'universo speculativo. Nel run #141 il Tier 2 ha interrogato
+    # 1.196 ticker subito dopo che il Tier 1 ne aveva gia' consumati 600 con
+    # otto chiamate ciascuno: Yahoo ha risposto con 1.178 rifiuti, il budget
+    # di raffreddamento si e' esaurito in 300 secondi, 19 ticker su 1.196
+    # sono passati e i candidati sono stati zero. Il tier si autodistruggeva
+    # e portava con se' anche il Tier 3, che restava senza sessione.
+    #
+    # Di quei ticker ne servono `--top-speculative` (25): prenderne 1.196
+    # per tenerne 25 e' spreco che si paga in rifiuti. La lista e' gia'
+    # ordinata per volume relativo, cioe' per probabilita' di catalyst:
+    # i primi 300 sono quelli che contano.
+    cap = int(os.environ.get("SPEC_UNIVERSE_CAP", "300"))
+    if cap > 0 and len(tickers) > cap:
+        log.info("Speculative universe: %d ticker unici, cappati ai %d piu' "
+                 "attivi per volume relativo.", len(tickers), cap)
+        tickers = tickers[:cap]
+    else:
+        log.info("Speculative universe: %d ticker unici", len(tickers))
     return tickers
 
 
@@ -977,10 +995,22 @@ class _YFHealth:
         if restante > 0:
             time.sleep(restante)
 
-    def azzera_pausa(self) -> None:
+    def azzera_pausa(self, anche_budget: bool = False) -> None:
+        """Azzera il raffreddamento in corso.
+
+        Con anche_budget=True rimette in pari anche il tetto complessivo:
+        si usa ai confini fra un tier e l'altro. Nel run #141 il Tier 2 ha
+        consumato tutti i 300 secondi disponibili e il Tier 3 e' partito
+        senza alcuna protezione. Il budget serve a limitare lo stallo
+        dentro una fase, non a punire le fasi successive; i tier sono
+        pochi, quindi il totale resta comunque limitato.
+        """
         with self._lock:
             self._cooldown_fino = 0.0
             self._passo = 0
+            if anche_budget:
+                self._speso_in_pausa = 0.0
+                self._budget_esaurito_detto = False
 
     def riepilogo(self) -> str:
         with self._lock:
@@ -2266,7 +2296,7 @@ def screen_universe(tickers, strategy="all", max_workers=None):
     # Refresh sessione yfinance per evitare 401 Unauthorized in Phase 2
     # (dopo migliaia di .info calls il crumb può essere invalidato).
     _refresh_yfinance_session()
-    YF_HEALTH.azzera_pausa()
+    YF_HEALTH.azzera_pausa(anche_budget=True)
 
     log.info("Fase 2/2: fondamentali su %d ticker...", len(phase1))
     out: list[Candidate] = []
@@ -3137,6 +3167,7 @@ def main():
 
     # Refresh sessione yfinance tra i tier per evitare 401 Unauthorized
     # (il crumb Yahoo Finance si invalida dopo molte richieste parallele)
+    YF_HEALTH.azzera_pausa(anche_budget=True)
     sessione_ok = _refresh_yfinance_session()
 
     # ---- Tier 2: Speculative / Catalyst Universe ----
@@ -3171,6 +3202,7 @@ def main():
         elif sessione_ok:
             log.warning("Tier 2 universe vuoto.")
 
+    YF_HEALTH.azzera_pausa(anche_budget=True)
     sessione_ok = _refresh_yfinance_session()
 
     # ---- Tier 3: Special Situations ----
