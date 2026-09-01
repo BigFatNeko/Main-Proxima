@@ -24,7 +24,10 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
+import threading
+import time
 import warnings
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
@@ -867,15 +870,172 @@ def compute_accruals(fin, bs, cf):
 # SEZIONE 5 — CALCOLO METRICHE
 # =============================================================================
 
+class _YFHealth:
+    """Distingue il rate limiting dalle altre cause di fallimento.
+
+    fetch_info_only e fetch_remaining catturavano ogni eccezione e
+    ritornavano None: un 429 era indistinguibile da un titolo delistato o da
+    un campo mancante. Con 600 ticker questo significa che un run poteva
+    perdere due terzi dell'universo senza una sola riga di log — ed e'
+    esattamente quanto successo nei run #138 (186 candidati) e #139 (88),
+    contro i 383 di due giorni prima.
+
+    Oltre a contare, applica un raffreddamento globale: quando Yahoo inizia a
+    rifiutare, tutti i thread si fermano insieme invece di continuare a
+    bussare e peggiorare il blocco.
+    """
+
+    # "429" da solo darebbe falsi positivi: i ticker di Hong Kong sono
+    # numerici a quattro cifre e "quote not found for symbol: 0429.HK"
+    # verrebbe contato come rate limit. Servono le forme complete.
+    _RATE = ("too many requests", "rate limit",
+             "http error 429", "status 429", "error 429")
+    _ASSENTE = ("delisted", "not found", "no data found", "no price data")
+
+    # Tetto complessivo al tempo passato in raffreddamento. Senza, ogni
+    # messaggio di rate limit rinvia la ripresa: con centinaia di ticker
+    # bloccati i thread resterebbero fermi finche' il job non sbatte contro
+    # il timeout di 130 minuti, che e' peggio di un run degradato ma
+    # concluso e correttamente segnalato.
+    _BUDGET_PAUSA_S = 300.0
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.ok = 0
+        self.vuoti = 0
+        self.rate_limited = 0
+        self.non_trovati = 0
+        self.altri = 0
+        self._cooldown_fino = 0.0
+        self._passo = 0
+        self._speso_in_pausa = 0.0
+        self._budget_esaurito_detto = False
+
+    def record_ok(self) -> None:
+        with self._lock:
+            self.ok += 1
+
+    def record_vuoto(self) -> None:
+        with self._lock:
+            self.vuoti += 1
+
+    def record_error(self, exc: BaseException) -> str:
+        msg = str(exc).lower()
+        with self._lock:
+            if any(m in msg for m in self._RATE):
+                return self._segna_rate_limit_locked()
+            if any(m in msg for m in self._ASSENTE):
+                self.non_trovati += 1
+                return "non_trovato"
+            self.altri += 1
+            return "altro"
+
+    def segna_rate_limit(self) -> None:
+        """Segnalazione esterna: la usa il watcher sui log di yfinance, che
+        intercetta i casi in cui la libreria logga il 429 senza sollevarlo."""
+        with self._lock:
+            self._segna_rate_limit_locked()
+
+    def _segna_rate_limit_locked(self) -> str:
+        self.rate_limited += 1
+        self._passo = min(self._passo + 1, 5)
+        pausa = min(5 * (2 ** (self._passo - 1)), 60)
+        self._cooldown_fino = max(self._cooldown_fino, time.monotonic() + pausa)
+        return "rate_limited"
+
+    def attendi_se_in_pausa(self) -> None:
+        with self._lock:
+            if self._speso_in_pausa >= self._BUDGET_PAUSA_S:
+                if not self._budget_esaurito_detto:
+                    self._budget_esaurito_detto = True
+                    log.warning(
+                        "Budget di raffreddamento esaurito (%.0fs): si prosegue "
+                        "senza pause. I titoli che Yahoo continua a rifiutare "
+                        "verranno persi, ma il run arriva in fondo e lo dichiara.",
+                        self._BUDGET_PAUSA_S)
+                return
+            restante = min(self._cooldown_fino - time.monotonic(), 60.0,
+                           self._BUDGET_PAUSA_S - self._speso_in_pausa)
+            if restante > 0:
+                self._speso_in_pausa += restante
+        if restante > 0:
+            time.sleep(restante)
+
+    def azzera_pausa(self) -> None:
+        with self._lock:
+            self._cooldown_fino = 0.0
+            self._passo = 0
+
+    def riepilogo(self) -> str:
+        with self._lock:
+            # "segnalazioni" e non "richieste rifiutate": lo stesso 429 puo'
+            # essere contato due volte, dall'eccezione e dal log di yfinance.
+            # E' un indicatore di stato, non un contatore esatto.
+            return (f"yfinance — {self.ok} risposte piene, {self.vuoti} vuote, "
+                    f"{self.non_trovati} titoli assenti, {self.altri} altri errori "
+                    f"| segnalazioni di rate limiting: {self.rate_limited}"
+                    f" | tempo in pausa: {self._speso_in_pausa:.0f}s")
+
+    @property
+    def degradato(self) -> bool:
+        with self._lock:
+            return self.rate_limited > 0
+
+
+YF_HEALTH = _YFHealth()
+
+
+class _YFLogWatcher(logging.Handler):
+    """Conta i rate limit che yfinance logga senza sollevare eccezioni.
+
+    Sotto blocco, `t.info` non alza nulla: torna un dizionario vuoto e
+    scrive l'errore sul proprio logger. Senza questo handler quel caso
+    resterebbe invisibile al chiamante, che vedrebbe solo un titolo in meno.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = record.getMessage().lower()
+        except Exception:
+            return
+        if any(m in msg for m in _YFHealth._RATE):
+            YF_HEALTH.segna_rate_limit()
+
+
+def _installa_watcher_yfinance() -> None:
+    """Aggancia il watcher al logger di yfinance.
+
+    Il livello va forzato: senza, "yfinance" eredita dalla root e se la root
+    e' configurata alta il record non viene nemmeno creato, quindi l'handler
+    non lo vede. WARNING non aggiunge rumore — i messaggi di quel livello
+    finivano gia' nei log di Actions — ma rende il conteggio indipendente da
+    come il chiamante ha configurato il logging.
+    """
+    lg = logging.getLogger("yfinance")
+    if not any(isinstance(h, _YFLogWatcher) for h in lg.handlers):
+        w = _YFLogWatcher()
+        w.setLevel(logging.WARNING)
+        lg.addHandler(w)
+    if lg.level == logging.NOTSET or lg.level > logging.WARNING:
+        lg.setLevel(logging.WARNING)
+
+
+_installa_watcher_yfinance()
+
+
 def fetch_info_only(ticker: str) -> Optional[dict]:
     """Fase 1: una sola chiamata HTTP — solo t.info."""
+    YF_HEALTH.attendi_se_in_pausa()
     try:
         t = yf.Ticker(ticker)
         info = t.info or {}
         if not info or info.get("marketCap") is None:
+            YF_HEALTH.record_vuoto()
             return None
+        YF_HEALTH.record_ok()
         return {"ticker": ticker, "info": info}
-    except Exception:
+    except Exception as e:
+        YF_HEALTH.record_error(e)
         return None
 
 
@@ -909,9 +1069,10 @@ def passes_quick_filter(info: dict) -> bool:
 
 def fetch_remaining(ticker: str, prefetched_info: dict) -> Optional[dict]:
     """Fase 2: fetch fondamentali — riusa info già scaricato in fase 1."""
+    YF_HEALTH.attendi_se_in_pausa()
     try:
         t = yf.Ticker(ticker)
-        return {
+        dati = {
             "ticker": ticker,
             "info": prefetched_info,
             "financials": t.financials,
@@ -922,7 +1083,10 @@ def fetch_remaining(ticker: str, prefetched_info: dict) -> Optional[dict]:
             "earnings_dates": getattr(t, "earnings_dates", None),
             "quarterly_financials": t.quarterly_financials,
         }
-    except Exception:
+        YF_HEALTH.record_ok()
+        return dati
+    except Exception as e:
+        YF_HEALTH.record_error(e)
         return None
 
 
@@ -1373,8 +1537,19 @@ def _series_to_list(df, row_name, n: int = 5) -> list:
 
 COVERAGE_ALERT_THRESHOLD = 0.40   # scostamento oltre il quale allertare
 
+# Lo storico di copertura DEVE sopravvivere tra i run, altrimenti la media
+# mobile riparte da zero ogni mattina e l'allerta non puo' scattare mai: e'
+# successo davvero, il crollo da 383 a 88 candidati e' passato inosservato.
+# Vive in una cartella dedicata perche' data/screener_results/ contiene gli
+# output giornalieri, che non ha senso mettere in cache.
+# Ancorata al file, non alla directory di lavoro: lo screener viene lanciato
+# sia da rassegna-stampa/ sia come subprocess da briefing_pipeline.py.
+_SCREENER_DIR = Path(__file__).resolve().parent
+STATE_DIR = Path(os.environ.get("SCREENER_STATE_DIR",
+                                _SCREENER_DIR / "data" / "state"))
 
-def _log_coverage(n_candidates: int, out_dir) -> None:
+
+def _log_coverage(n_candidates: int, out_dir=None) -> None:
     """Registra la copertura del run e allerta se si discosta dalla storia.
 
     yfinance degrada in silenzio: sotto rate limiting restituisce risposte
@@ -1383,7 +1558,13 @@ def _log_coverage(n_candidates: int, out_dir) -> None:
     per accorgersene senza leggere i log riga per riga.
     """
     try:
-        hist_path = Path(out_dir) / "coverage_history.json"
+        hist_path = STATE_DIR / "coverage_history.json"
+        # Migrazione dalla vecchia posizione, se lo storico esiste già lì.
+        if not hist_path.exists() and out_dir:
+            legacy = Path(out_dir) / "coverage_history.json"
+            if legacy.exists():
+                hist_path.parent.mkdir(parents=True, exist_ok=True)
+                hist_path.write_text(legacy.read_text())
         history = []
         if hist_path.exists():
             history = json.loads(hist_path.read_text())
@@ -1413,11 +1594,17 @@ def _log_coverage(n_candidates: int, out_dir) -> None:
             "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "candidates": n_candidates,
             "mvf_version": mvf.MVF_VERSION,
+            # Il conteggio dei rate limit va accanto alla copertura: senza,
+            # un calo resta ambiguo fra mercato povero e fonte che rifiuta.
+            "rate_limited": YF_HEALTH.rate_limited,
+            "yf_ok": YF_HEALTH.ok,
         })
         hist_path.parent.mkdir(parents=True, exist_ok=True)
         hist_path.write_text(json.dumps(history[-60:], indent=2))
+        log.info("Storico copertura: %d run registrati in %s",
+                 len(history), hist_path)
     except Exception as e:
-        log.debug("Log di copertura non riuscito: %s", e)
+        log.warning("Log di copertura non riuscito: %s", e)
 
 
 _YF_SUFFIX_TO_COUNTRY = {
@@ -1978,17 +2165,29 @@ def screen_ticker(ticker):
     return c
 
 
-def screen_universe(tickers, strategy="all", max_workers=8):
+def screen_universe(tickers, strategy="all", max_workers=None):
     """Screening a due fasi per minimizzare le chiamate HTTP totali.
 
     Fase 1: t.info per tutti (1 call/ticker) → quick filter → ~40% eliminati
-    Fase 2: fondamentali completi solo sui superstiti (5 call/ticker)
+    Fase 2: fondamentali completi solo sui superstiti (8 call/ticker)
 
-    Workers a 8: Yahoo Finance blocca con >~50 req/sec sostenuti (crumb
-    invalidato). Con pre-filtri TV l'universo è già ~300-600 ticker, quindi
-    8 workers bilanciano velocità e stabilità (~40 req/s).
+    La concorrenza e' scesa da 8 a 5 thread. Con 600 ticker le due fasi
+    fanno circa 5.000 richieste e Yahoo ha iniziato a rifiutarle: i
+    candidati Tier 1 sono passati da 383 a 186 a 88 in tre run, senza che
+    nulla lo segnalasse, perche' un 429 tornava come None esattamente come
+    un titolo inesistente. Meglio un run piu' lento che un briefing
+    costruito su un quarto dell'universo.
+
+    Override con SCREENER_WORKERS per sperimentare senza toccare il codice.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if max_workers is None:
+        try:
+            max_workers = int(os.environ.get("SCREENER_WORKERS", "5"))
+        except ValueError:
+            max_workers = 5
+    max_workers = max(1, max_workers)
 
     n = len(tickers)
     log.info("Fase 1/2: info fetch su %d ticker (%d workers)...", n, max_workers)
@@ -2004,17 +2203,22 @@ def screen_universe(tickers, strategy="all", max_workers=8):
             if result and passes_quick_filter(result["info"]):
                 phase1.append((result["ticker"], result["info"]))
 
-    log.info("Fase 1/2: %d/%d passano il filtro rapido", len(phase1), n)
+    log.info("Fase 1/2: %d/%d passano il filtro rapido | %s",
+             len(phase1), n, YF_HEALTH.riepilogo())
+    if YF_HEALTH.degradato:
+        log.error("Fase 1 ha incontrato rate limiting: i %d ticker esclusi non "
+                  "sono necessariamente scartati per merito.", n - len(phase1))
 
     # Refresh sessione yfinance per evitare 401 Unauthorized in Phase 2
     # (dopo migliaia di .info calls il crumb può essere invalidato).
     _refresh_yfinance_session()
+    YF_HEALTH.azzera_pausa()
 
     log.info("Fase 2/2: fondamentali su %d ticker...", len(phase1))
     out: list[Candidate] = []
-    # Phase 2 ha 5 chiamate HTTP/ticker → ulteriore riduzione a 10 workers
-    # per non saturare la nuova sessione Yahoo Finance.
-    with ThreadPoolExecutor(max_workers=max(5, max_workers - 5)) as ex:
+    # Fase 2 fa 8 chiamate HTTP per ticker contro l'unica della fase 1:
+    # tenerla piu' stretta e' cio' che regge il carico complessivo.
+    with ThreadPoolExecutor(max_workers=max(2, max_workers - 2)) as ex:
         futs = {ex.submit(fetch_remaining, tkr, inf): tkr for tkr, inf in phase1}
         for fut in as_completed(futs):
             try:
@@ -2936,6 +3140,16 @@ def main():
 
     if EDGAR_OK:
         log.info(edgar.EdgarClient.run_summary())
+
+    # Salute della fonte dati. Va emesso sempre e a fine run: un modulo
+    # silenzioso e' indistinguibile da un modulo che non ha mai girato.
+    log.info(YF_HEALTH.riepilogo())
+    if YF_HEALTH.degradato:
+        log.error("RATE LIMITING: Yahoo ha rifiutato %d richieste. I conteggi "
+                  "di questo run sono per difetto e il briefing NON e' "
+                  "confrontabile con i precedenti. Ridurre SCREENER_WORKERS "
+                  "o --universe-cap se il fenomeno persiste.",
+                  YF_HEALTH.rate_limited)
 
     # Log di copertura + allerta su scostamento (RISK-ASSESSMENT-yfinance §4.4).
     # Il rischio dominante di yfinance non e' il dato sbagliato: e' il dato

@@ -56,18 +56,52 @@ jobs:
           mkdir -p briefings
           mkdir -p rassegna-stampa/data/screener_results
           mkdir -p rassegna-stampa/data/edgar_cache
+          mkdir -p rassegna-stampa/data/state
 
-      # La cache EDGAR contiene solo estratti normalizzati (~0.8 KB per
-      # emittente) piu' la mappa ticker->CIK. Persisterla evita di
-      # riscaricare gli stessi companyfacts a ogni run e conserva il budget
-      # di lookup per i titoli non ancora verificati.
-      - name: Cache SEC EDGAR
+      # Due cose diverse nella stessa cache:
+      #  - edgar_cache/ estratti normalizzati (~0.8 KB per emittente) e la
+      #    mappa ticker->CIK, per non riscaricare i companyfacts ogni volta;
+      #  - state/ lo storico di copertura, su cui si basa l'allerta di
+      #    degrado silenzioso. Senza persistenza la media mobile riparte da
+      #    zero a ogni run e l'allerta non puo' scattare: il crollo dei
+      #    candidati da 383 a 88 e' passato inosservato per questo.
+      - name: Cache SEC EDGAR + stato screener
         uses: actions/cache@v4
         with:
-          path: rassegna-stampa/data/edgar_cache
-          key: edgar-cache-${{ github.run_id }}
+          path: |
+            rassegna-stampa/data/edgar_cache
+            rassegna-stampa/data/state
+          key: screener-state-${{ github.run_id }}
           restore-keys: |
+            screener-state-
             edgar-cache-
+
+      # Il saldo Anthropic si esaurisce senza preavviso: e' costato nove run
+      # falliti e diciotto giorni senza briefing. Una chiamata da un token
+      # costa nulla e fa fallire il run in tre secondi con un messaggio
+      # chiaro, invece che dopo sei minuti di screener con uno stack trace.
+      - name: Verifica credito Anthropic
+        id: credito
+        if: ${{ github.event.inputs.debug_filiere != 'true' && github.event.inputs.debug_snapshot != 'true' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          RISPOSTA=$(curl -sS -w '\n%{http_code}' https://api.anthropic.com/v1/messages \
+            -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d '{"model":"claude-opus-4-6","max_tokens":1,"messages":[{"role":"user","content":"ok"}]}')
+          CODICE=$(echo "$RISPOSTA" | tail -n1)
+          CORPO=$(echo "$RISPOSTA" | sed '$d')
+          if [ "$CODICE" = "200" ]; then
+            echo "Credito Anthropic disponibile."
+          elif echo "$CORPO" | grep -qi "credit balance"; then
+            echo "::error::Saldo Anthropic esaurito. Il credito va caricato sul workspace a cui appartiene ANTHROPIC_API_KEY, e il limite di spesa di quel workspace deve essere maggiore di zero."
+            exit 1
+          else
+            echo "::error::L'API Anthropic ha risposto $CODICE: $CORPO"
+            exit 1
+          fi
 
       - name: Cancella cache screener (solo se force_rescreen)
         if: ${{ github.event.inputs.force_rescreen == 'true' }}
@@ -104,8 +138,11 @@ jobs:
           cd rassegna-stampa
           python briefing_pipeline.py --user alex
 
+      # !cancelled() e non success(): un errore su Alex non deve azzerare
+      # anche Vale. E' successo il 17 agosto — un solo 400 sull'API ha
+      # lasciato entrambi gli utenti senza briefing.
       - name: Genera briefing Vale
-        if: ${{ github.event.inputs.debug_filiere != 'true' && github.event.inputs.debug_snapshot != 'true' }}
+        if: ${{ !cancelled() && steps.credito.outcome == 'success' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
@@ -118,8 +155,11 @@ jobs:
           cd rassegna-stampa
           python briefing_pipeline.py --user vale
 
+      # Pubblica quello che esiste: con un utente riuscito e uno fallito,
+      # meta' briefing e' meglio di nessuno. I cp sono condizionati, cosi'
+      # un file mancante non fa fallire lo step.
       - name: Commit briefing in docs/
-        if: ${{ github.event.inputs.debug_filiere != 'true' && github.event.inputs.debug_snapshot != 'true' }}
+        if: ${{ !cancelled() && steps.credito.outcome == 'success' }}
         run: |
           DATE="${{ steps.date.outputs.today }}"
           git config user.name "github-actions[bot]"
@@ -127,11 +167,21 @@ jobs:
           git fetch origin
           git pull origin "${GITHUB_REF_NAME}" --ff-only || true
           mkdir -p docs/archivio
-          cp briefings/${DATE}-alex.html docs/alex-latest.html
-          cp briefings/${DATE}-vale.html docs/vale-latest.html
-          cp briefings/${DATE}-alex.html docs/archivio/${DATE}-alex.html
-          cp briefings/${DATE}-vale.html docs/archivio/${DATE}-vale.html
+          PUBBLICATI=""
+          for U in alex vale; do
+            if [ -s "briefings/${DATE}-${U}.html" ]; then
+              cp "briefings/${DATE}-${U}.html" "docs/${U}-latest.html"
+              cp "briefings/${DATE}-${U}.html" "docs/archivio/${DATE}-${U}.html"
+              PUBBLICATI="${PUBBLICATI}${U} "
+            else
+              echo "::warning::Briefing di ${U} assente per ${DATE}: non pubblicato."
+            fi
+          done
+          if [ -z "$PUBBLICATI" ]; then
+            echo "::error::Nessun briefing prodotto per ${DATE}."
+            exit 1
+          fi
           echo "$DATE" > docs/last-generated.txt
           git add docs/
-          git diff --cached --quiet || git commit -m "briefing Alex + Vale ${DATE}"
+          git diff --cached --quiet || git commit -m "briefing ${PUBBLICATI}${DATE}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
