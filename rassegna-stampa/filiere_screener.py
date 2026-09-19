@@ -190,11 +190,15 @@ FILIERE_DEFINITIONS = {
 }
 
 
-# Markets globali per le query filiere
+# Markets globali per le query filiere.
+# "hongkong" senza underscore: lo slug con underscore risponde 404 e ogni
+# query filiera su Hong Kong falliva in silenzio. Lo stesso errore era in
+# screener.py ed era stato corretto il 31 agosto, ma questa lista non era
+# stata controllata — con 15 filiere fa decine di query buttate per run.
 FILIERE_MARKETS = [
     "america", "italy", "germany", "france", "spain", "netherlands",
     "switzerland", "uk", "sweden", "norway", "denmark", "japan", "china",
-    "hong_kong", "korea", "australia", "canada"
+    "hongkong", "korea", "australia", "canada"
 ]
 
 

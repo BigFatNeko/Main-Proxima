@@ -2942,6 +2942,18 @@ def screen_special_situations(buckets: dict[str, list[str]],
             bucket = ticker_to_bucket.get(result["ticker"], "deep_value_pe")
             phase1.append((result["ticker"], info, bucket))
 
+    # Stessa distinzione del Tier 2: zero per selettivita' dei filtri e zero
+    # perche' la fonte non risponde sono due diagnosi opposte. Il Tier 3 gira
+    # per ultimo, dopo circa diecimila richieste, ed e' il primo a pagarne il
+    # prezzo — nel run #160 sono entrati 199 ticker e ne sono usciti zero.
+    if all_tickers and not phase1:
+        log.error("Tier 3: %d ticker interrogati, nessuno ha restituito dati. "
+                  "Non e' selettivita' dei filtri, e' la fonte che non risponde: "
+                  "il tier gira in coda e trova la sessione gia' esaurita.",
+                  len(all_tickers))
+    elif all_tickers:
+        log.info("Tier 3 Fase 1/2: %d/%d hanno restituito dati utilizzabili",
+                 len(phase1), len(all_tickers))
     log.info("Tier 3 Fase 2/2: fondamentali su %d ticker...", len(phase1))
     candidates: list[SpecialCandidate] = []
 

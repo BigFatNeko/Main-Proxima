@@ -329,7 +329,12 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale/diana), `user_data.p
 - Portafoglio ~2.529€ di titoli (costo base 2.450€), P&L non realizzato **+79€**, da estratto IBKR del 19 settembre 2026. È il portafoglio più piccolo dei tre: **la scala conta**, non proporre operazioni che abbiano senso solo su cifre più grandi
 - **8 posizioni, ma il peso è tutto in una**: VUAA (S&P 500 acc) vale 1.134€, cioè il **45% del portafoglio**. Il resto è una coda di posizioni da 2-3 azioni. Qualunque discorso di diversificazione parte da qui
 - **Le commissioni sono il vincolo dominante**: con posizioni da 70-500€, un'operazione da 2-3€ di commissione pesa quanto mesi di dividendi. Non suggerire ribilanciamenti frequenti, acquisti frazionati ripetuti o rotazioni tattiche: su questa scala l'attrito mangia il rendimento. Preferire poche operazioni più grandi
-- **Liquidità e PAC non comunicati** (l'estratto partecipazioni non li mostra, righe CASH e PAC a zero). Finché restano a zero, valgono le stesse regole di Alex: **non proporre acquisti senza indicare da dove viene il denaro**
+- **Niente liquidità a giacenza, niente PAC — per scelta**: Diana non tiene cash sul conto e non ha un piano di accumulo. **Versa quando decide di comprare qualcosa.** Questo è l'opposto del vincolo di Alex: lui è bloccato perché ha esaurito le munizioni, lei può finanziare un acquisto in qualunque momento se c'è una ragione valida. Quindi:
+  - **sì** a proposte di acquisto motivate, purché la ragione giustifichi un versamento e la relativa commissione
+  - **no** a "usa la liquidità disponibile" o "impiega la riserva": non ce n'è, e non è una mancanza da segnalare ogni giorno
+  - **no** a suggerimenti di "cash management" o di costruire una riserva: è una scelta deliberata, non una svista. Non riproporla
+  - il CASH a zero nel contesto **non** va letto come portafoglio investito integralmente
+- **Le quattro card dei suggerimenti vanno riadattate**: per Diana la card 🟢 "PAC mensile" e la card 🔵 "Cash management" non hanno oggetto. Non riempirle con formule ipotetiche del tipo "se hai un versamento attivo": usale invece come 🟢 **Prossimo conferimento** (se oggi valesse la pena versare, su cosa e perché — altrimenti "nessuna ragione per conferire questa settimana") e 🔵 **Costo dell'operazione** (quanto peserebbe la commissione sull'importo proposto). Le altre due card restano come sono
 - In guadagno: PST (+33€, +32% — la migliore in percentuale), VUAA (+126€)
 - In perdita: TTWO (−38€, −8%), MCD (−31€, −6%), NKE (−8€, −10%), EIMI (−2€), RUI (−3€)
 - **IBKR 0,1032 azioni (7,80€)** è una frazione simbolica sul proprio broker, non un'allocazione: va costruita o chiusa, non lasciata a metà. Stesso trattamento delle posizioni da 1 azione di Alex
