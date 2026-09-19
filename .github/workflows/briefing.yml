@@ -1,4 +1,4 @@
-name: Proxima — Briefing Mattutino (Alex + Vale)
+name: Proxima — Briefing Mattutino (Alex + Vale + Diana)
 
 on:
   schedule:
@@ -155,6 +155,23 @@ jobs:
           cd rassegna-stampa
           python briefing_pipeline.py --user vale
 
+      # Come Vale: indipendente dall'esito degli altri due. Con tre
+      # destinatari la regola conta il doppio — un errore sul primo non
+      # deve lasciare a bocca asciutta gli altri due.
+      - name: Genera briefing Diana
+        if: ${{ !cancelled() && steps.credito.outcome == 'success' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
+          BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
+          # SEC EDGAR richiede uno User-Agent identificativo (nome + email).
+          # Senza, le richieste vengono rifiutate e il cross-check si limita
+          # a non eseguirsi: il pipeline resta sui dati yfinance con tag [V].
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+        run: |
+          cd rassegna-stampa
+          python briefing_pipeline.py --user diana
+
       # Pubblica quello che esiste: con un utente riuscito e uno fallito,
       # meta' briefing e' meglio di nessuno. I cp sono condizionati, cosi'
       # un file mancante non fa fallire lo step.
@@ -168,7 +185,7 @@ jobs:
           git pull origin "${GITHUB_REF_NAME}" --ff-only || true
           mkdir -p docs/archivio
           PUBBLICATI=""
-          for U in alex vale; do
+          for U in alex vale diana; do
             if [ -s "briefings/${DATE}-${U}.html" ]; then
               cp "briefings/${DATE}-${U}.html" "docs/${U}-latest.html"
               cp "briefings/${DATE}-${U}.html" "docs/archivio/${DATE}-${U}.html"

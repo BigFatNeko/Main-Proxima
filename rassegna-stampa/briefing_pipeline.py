@@ -128,7 +128,9 @@ def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
 # =============================================================================
 
 # Users whose briefing narrative uses feminine Italian; all others default to maschile.
-_FEMININE_USERS: frozenset[str] = frozenset()
+# Diana e' l'unica al femminile: Alex e Vale sono entrambi uomini (vedi la nota
+# esplicita nel profilo di Vale in system_prompt.md).
+_FEMININE_USERS: frozenset[str] = frozenset({"diana"})
 
 
 def load_portfolio(user: str) -> dict:
@@ -866,7 +868,7 @@ def deliver(output_path: Path, user: str):
 
 def main():
     p = argparse.ArgumentParser(description="Proxima Briefing Pipeline")
-    p.add_argument("--user", default=None, choices=["alex", "vale"])
+    p.add_argument("--user", default=None, choices=["alex", "vale", "diana"])
     p.add_argument("--mode",
                    choices=["auto", "daily", "weekend", "lunedì", "catchup", "festivo", "onboarding"],
                    default="auto")
