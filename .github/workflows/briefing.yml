@@ -84,6 +84,13 @@ jobs:
             *)              F="${{ github.event.inputs.fase }}"
                             S="${{ github.event.inputs.fetta }}" ;;
           esac
+          # Senza questa guardia un cron non riconosciuto cadrebbe nel ramo
+          # '*', dove gli input di dispatch sono vuoti: nessuno step
+          # corrisponderebbe e il run finirebbe verde senza aver fatto nulla.
+          if [ -z "$F" ]; then
+            echo "::error::Fase non determinata (schedule='${{ github.event.schedule }}'). Nessun ramo del case corrisponde: il calendario dei cron e la mappa delle fasi sono fuori sincrono."
+            exit 1
+          fi
           echo "fase=$F"  >> $GITHUB_OUTPUT
           echo "fetta=$S" >> $GITHUB_OUTPUT
           echo "::notice::Fascia in esecuzione: $F ${S:+(fetta $S)}"
@@ -128,14 +135,22 @@ jobs:
 
       # ---------------------------------------------------------------- fasi
 
+      # Il cron le accorpa perche' insieme costano poco. A mano invece si
+      # possono lanciare singolarmente: 'contesto' e 'filiere' sono voci del
+      # menu di dispatch e devono fare qualcosa, non finire verdi a vuoto.
       - name: "Fase: contesto + filiere"
-        if: ${{ steps.fase.outputs.fase == 'contesto_filiere' }}
+        if: ${{ contains(fromJSON('["contesto_filiere","contesto","filiere"]'), steps.fase.outputs.fase) }}
         env:
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
         run: |
           cd rassegna-stampa
-          python screener.py --stage contesto
-          python screener.py --stage filiere
+          F="${{ steps.fase.outputs.fase }}"
+          if [ "$F" = "contesto_filiere" ] || [ "$F" = "contesto" ]; then
+            python screener.py --stage contesto
+          fi
+          if [ "$F" = "contesto_filiere" ] || [ "$F" = "filiere" ]; then
+            python screener.py --stage filiere
+          fi
 
       - name: "Fase: Tier 1"
         if: ${{ steps.fase.outputs.fase == 'tier1' }}
@@ -180,11 +195,17 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          cd rassegna-stampa
+          # Il modello lo dichiara la pipeline: scriverlo a mano qui vorrebbe
+          # dire, il giorno che cambia, verificare il credito su un modello
+          # diverso da quello che poi viene chiamato davvero.
+          MODELLO=$(python -c 'import briefing_pipeline as b; print(b.CLAUDE_MODEL)')
+          echo "Verifica credito sul modello $MODELLO"
           RISPOSTA=$(curl -sS -w '\n%{http_code}' https://api.anthropic.com/v1/messages \
             -H "x-api-key: ${ANTHROPIC_API_KEY}" \
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
-            -d '{"model":"claude-opus-4-6","max_tokens":1,"messages":[{"role":"user","content":"ok"}]}')
+            -d "{\"model\":\"${MODELLO}\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"ok\"}]}")
           CODICE=$(echo "$RISPOSTA" | tail -n1)
           CORPO=$(echo "$RISPOSTA" | sed '$d')
           if [ "$CODICE" = "200" ]; then

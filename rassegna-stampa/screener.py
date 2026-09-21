@@ -3308,6 +3308,24 @@ def _affetta(tickers: list, spec: Optional[str]) -> list:
 # =============================================================================
 
 
+def _insiemi_da_parti(out_dir) -> tuple[set, set]:
+    """Ticker gia' coperti dalle fasi precedenti, letti dalle parti.
+
+    Il Tier 2 esclude quanto visto dal Tier 1 e il Tier 3 esclude entrambi,
+    per non rianalizzare gli stessi titoli. In modalita' a fasi quei due
+    insiemi non esistono in memoria — vivono nelle parti gia' scritte.
+    """
+    parti = _leggi_parti(out_dir)
+    t1: set = set()
+    for k, v in parti.items():
+        if k.startswith("tier1"):
+            t1.update(v.get("universo") or [])
+            t1.update(c.get("ticker") for c in v.get("candidates", []) if c.get("ticker"))
+    t2 = {c.get("ticker") for c in parti.get("tier2", {}).get("speculative_candidates", [])
+          if c.get("ticker")}
+    return t1, t2
+
+
 def _assembla(args) -> None:
     """Ricompone le parti prodotte dalle fasi in un unico JSON.
 
@@ -3423,9 +3441,13 @@ def main():
 
     CONFIG["min_market_cap_million"] = args.min_mcap
 
-    # Inizializza sessione yfinance prima di qualsiasi chiamata
-    log.info("Inizializzazione sessione yfinance...")
-    _refresh_yfinance_session()
+    # Inizializza sessione yfinance prima di qualsiasi chiamata. La fase
+    # 'filiere' non ne ha bisogno: interroga solo TradingView, e aprire un
+    # handshake con Yahoo per poi non usarlo e' una richiesta regalata al
+    # contatore che stiamo cercando di non saturare.
+    if fase != "filiere":
+        log.info("Inizializzazione sessione yfinance...")
+        _refresh_yfinance_session()
 
     # ---- Market Context Layer (in parallelo con Tier 1 TV fetch) ----
     market_ctx: dict = {}
@@ -3442,55 +3464,76 @@ def main():
             return
 
     # ---- Tier 1: Quality/Income Universe ----
-    log.info("=== TIER 1: Quality/Income Universe (mcap>%dM, limit/mkt=%d) ===",
-             args.min_mcap, args.limit_per_market)
-    tickers = build_universe_tradingview(
-        region=args.region, min_mcap_m=args.min_mcap,
-        min_price=CONFIG["min_price_usd"],
-        limit_per_market=args.limit_per_market,
-        sector_filter=args.sector,
-        total_limit=args.universe_cap,
-    )
-    if not tickers and args.region in ("US", "GLOBAL") and FINVIZ_OK:
-        log.warning("Tentativo fallback finvizfinance...")
-        tickers = build_universe_finviz_fallback(args.min_mcap, args.sector, args.limit_per_market)
-    if not tickers:
-        log.error("Universe Tier 1 vuoto.")
-        sys.exit(1)
+    # Gestito solo dalle fasi che lo riguardano. Senza questa guardia ogni
+    # fase rieseguiva l'intero Tier 1 prima della propria — cioe' 4.300
+    # richieste a Yahoo — annullando esattamente cio' che lo staging serve
+    # a ottenere. Preso eseguendo `--stage filiere` e vedendolo chiamare
+    # Yahoo, cosa che quella fase non deve fare affatto.
+    cands: list = []
+    tickers: list = []
+    if fase not in ("tutto", "tier1"):
+        tier1_set, tier2_set = _insiemi_da_parti(args.output)
+        log.info("Fase '%s': Tier 1 non rieseguito. Esclusioni dalle parti: "
+                 "%d ticker Tier 1, %d Tier 2.", fase, len(tier1_set), len(tier2_set))
+    else:
+        tier2_set = set()
+        log.info("=== TIER 1: Quality/Income Universe (mcap>%dM, limit/mkt=%d) ===",
+                 args.min_mcap, args.limit_per_market)
+        tickers = build_universe_tradingview(
+            region=args.region, min_mcap_m=args.min_mcap,
+            min_price=CONFIG["min_price_usd"],
+            limit_per_market=args.limit_per_market,
+            sector_filter=args.sector,
+            total_limit=args.universe_cap,
+        )
+        if not tickers and args.region in ("US", "GLOBAL") and FINVIZ_OK:
+            log.warning("Tentativo fallback finvizfinance...")
+            tickers = build_universe_finviz_fallback(args.min_mcap, args.sector, args.limit_per_market)
+        if not tickers:
+            log.error("Universe Tier 1 vuoto.")
+            sys.exit(1)
 
-    tickers = _affetta(tickers, args.fetta)
-    cands = screen_universe(tickers, strategy=args.strategy)
-    log.info("Tier 1 candidati post-filtri: %d", len(cands))
+        tickers = _affetta(tickers, args.fetta)
+        cands = screen_universe(tickers, strategy=args.strategy)
+        log.info("Tier 1 candidati post-filtri: %d", len(cands))
 
-    # Sector-relative scoring (aggiusta score in funzione del peer group)
-    compute_sector_relative_scores(cands)
-    log.info("Sector-relative scoring applicato")
+        compute_sector_relative_scores(cands)
+        log.info("Sector-relative scoring applicato")
+        tier1_set = set(tickers)
 
-    if fase == "tier1":
-        top = sorted(cands, key=lambda c: c.composite_score or 0, reverse=True)[:args.top]
-        payload = _costruisci_payload(datetime.now().strftime("%Y-%m-%d"),
-                                      cands, top, [], [], {}, {})
-        nome = f"tier1_{args.fetta.replace('/', '-')}" if args.fetta else "tier1"
-        _scrivi_parte(args.output, nome, {
-            "candidates": payload["candidates"],
-            "n_screened": len(cands),
-            "universo_interrogato": len(tickers),
-        })
-        log.info(YF_HEALTH.riepilogo())
-        if YF_HEALTH.degradato:
-            log.error("RATE LIMITING durante il Tier 1: la fetta e' incompleta.")
-        return
-
-    tier1_set = set(tickers)
+        if fase == "tier1":
+            top = sorted(cands, key=lambda c: c.composite_score or 0, reverse=True)[:args.top]
+            payload = _costruisci_payload(datetime.now().strftime("%Y-%m-%d"),
+                                          cands, top, [], [], {}, {})
+            nome = f"tier1_{args.fetta.replace('/', '-')}" if args.fetta else "tier1"
+            _scrivi_parte(args.output, nome, {
+                "candidates": payload["candidates"],
+                "n_screened": len(cands),
+                "universo_interrogato": len(tickers),
+                # Serve alle fasi successive per non rianalizzare gli stessi
+                # titoli: e' l'universo interrogato, non i soli superstiti.
+                "universo": tickers,
+            })
+            log.info(YF_HEALTH.riepilogo())
+            if YF_HEALTH.degradato:
+                log.error("RATE LIMITING durante il Tier 1: la fetta e' incompleta.")
+            return
 
     # Refresh sessione yfinance tra i tier per evitare 401 Unauthorized
-    # (il crumb Yahoo Finance si invalida dopo molte richieste parallele)
-    YF_HEALTH.azzera_pausa(anche_budget=True)
-    sessione_ok = _refresh_yfinance_session()
+    # (il crumb Yahoo Finance si invalida dopo molte richieste parallele).
+    # Solo per le fasi che poi Yahoo lo interrogano davvero: il refresh e'
+    # esso stesso una richiesta a Yahoo, e farla da 'filiere' — che parla
+    # solo con TradingView — significa bussare a una porta senza motivo.
+    sessione_ok = True
+    if fase in ("tutto", "tier2", "tier3"):
+        YF_HEALTH.azzera_pausa(anche_budget=True)
+        sessione_ok = _refresh_yfinance_session()
 
     # ---- Tier 2: Speculative / Catalyst Universe ----
+    # NB: tier2_set NON va reinizializzato qui. Nelle fasi successive alla
+    # tier2 arriva gia' popolato da _insiemi_da_parti(): azzerarlo faceva
+    # sparire l'esclusione che il log aveva appena dichiarato di aver letto.
     spec_cands: list[SpeculativeCandidate] = []
-    tier2_set: set[str] = set()
     if not args.no_speculative and fase in ("tutto", "tier2"):
         log.info("=== TIER 2: Speculative/Catalyst Universe ===")
         if not sessione_ok:
@@ -3526,8 +3569,9 @@ def main():
         log.info(YF_HEALTH.riepilogo())
         return
 
-    YF_HEALTH.azzera_pausa(anche_budget=True)
-    sessione_ok = _refresh_yfinance_session()
+    if fase in ("tutto", "tier3"):
+        YF_HEALTH.azzera_pausa(anche_budget=True)
+        sessione_ok = _refresh_yfinance_session()
 
     # ---- Tier 3: Special Situations ----
     special_cands: list[SpecialCandidate] = []

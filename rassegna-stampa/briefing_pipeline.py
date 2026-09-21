@@ -915,6 +915,18 @@ def main():
         if existing.exists():
             screener_data = json.loads(existing.read_text())
             log.info("Riuso screener output esistente: %s", existing)
+            assemblato = screener_data.get("assemblato_da")
+            if assemblato is not None:
+                log.info("Screener assemblato dalle fasi: %s",
+                         ", ".join(assemblato) or "nessuna")
+        else:
+            # Con --skip-screener il file lo produce la fase di assemblaggio.
+            # Se non c'e', proseguire in silenzio significa pubblicare un
+            # briefing con zero proposte senza che nessuno se ne accorga:
+            # il run risulterebbe riuscito. Meglio dirlo forte.
+            log.error("--skip-screener ma %s non esiste: il briefing uscira' "
+                      "SENZA proposte. Controllare la fase di assemblaggio.",
+                      existing)
     elif args.dry_run:
         log.info("DRY RUN: skip screener")
 
