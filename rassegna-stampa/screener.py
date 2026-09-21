@@ -949,7 +949,8 @@ class _YFHealth:
         self.altri = 0
         self._cooldown_fino = 0.0
         self._passo = 0
-        self._speso_in_pausa = 0.0
+        self._speso_in_pausa = 0.0        # budget della fase corrente
+        self._speso_totale = 0.0          # intero run, non si azzera mai
         self._budget_esaurito_detto = False
 
     def record_ok(self) -> None:
@@ -999,6 +1000,7 @@ class _YFHealth:
                            self._BUDGET_PAUSA_S - self._speso_in_pausa)
             if restante > 0:
                 self._speso_in_pausa += restante
+                self._speso_totale += restante
         if restante > 0:
             time.sleep(restante)
 
@@ -1016,6 +1018,9 @@ class _YFHealth:
             self._cooldown_fino = 0.0
             self._passo = 0
             if anche_budget:
+                # Solo il budget della fase: _speso_totale resta, altrimenti
+                # il riepilogo di fine run dichiara "0s in pausa" dopo
+                # centinaia di rifiuti — ed e' successo nel run #162.
                 self._speso_in_pausa = 0.0
                 self._budget_esaurito_detto = False
 
@@ -1027,7 +1032,7 @@ class _YFHealth:
             return (f"yfinance — {self.ok} risposte piene, {self.vuoti} vuote, "
                     f"{self.non_trovati} titoli assenti, {self.altri} altri errori "
                     f"| segnalazioni di rate limiting: {self.rate_limited}"
-                    f" | tempo in pausa: {self._speso_in_pausa:.0f}s")
+                    f" | tempo in pausa: {self._speso_totale:.0f}s")
 
     @property
     def degradato(self) -> bool:
