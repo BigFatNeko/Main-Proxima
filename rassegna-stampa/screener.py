@@ -25,6 +25,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import threading
 import time
@@ -162,6 +163,12 @@ TV_TO_YF_SUFFIX = {
     "TADAWUL": ".SR",   # Riyadh
     "TASE": ".TA",      # Tel Aviv
 }
+
+# Azioni privilegiate su Yahoo: BAC-PK, JPM-PD, ORCL-PD. MVF v4.1 le
+# riconosce ma non le vota in fase di screening, quindi nei bucket del
+# Tier 3 occuperebbero budget senza poter diventare candidati.
+_PREFERRED_RE = re.compile(r"-P[A-Z]?$")
+
 
 # Venue senza copertura yfinance utilizzabile: scartati di proposito, non per
 # mappa mancante. Ogni voce è stata verificata interrogando Yahoo.
@@ -2151,9 +2158,21 @@ def _refresh_yfinance_session(attempts: int = 3, force: bool = False) -> bool:
     import time
 
     def _sessione_viva() -> bool:
+        """Sonda la stessa chiamata che fanno i tier, non una piu' facile.
+
+        Qui c'era `.history()`, che interroga l'endpoint chart: non richiede
+        cookie ne' crumb e Yahoo non lo limita. I tier invece usano `.info`
+        (quoteSummary), che il crumb lo richiede ed e' proprio cio' che viene
+        rifiutato sotto rate limiting. La sonda passava quindi sempre, e la
+        sessione non veniva mai ricostruita proprio quando serviva.
+
+        Nel run #160 si vede nero su bianco: alle 18:30:58 "sessione attuale
+        ancora valida", alle 18:31:00 il Tier 3 parte e tutte e 199 le
+        chiamate .info falliscono.
+        """
         try:
-            probe = yf.Ticker("AAPL").history(period="1d")
-            return probe is not None and not probe.empty
+            info = yf.Ticker("AAPL").info or {}
+            return info.get("marketCap") is not None
         except Exception as e:
             YF_HEALTH.record_error(e)
             return False
@@ -2186,15 +2205,17 @@ def _refresh_yfinance_session(attempts: int = 3, force: bool = False) -> bool:
         # subito dopo una raffica di 401.
         time.sleep(3 * tentativo)
 
-        # Verifica reale: senza questa, "refreshed OK" non significava nulla.
+        # Verifica reale, e sulla chiamata giusta: come per _sessione_viva,
+        # `.history()` non prova nulla perche' non passa dal crumb. Se la
+        # sessione ricostruita non risponde a `.info`, per i tier e' morta.
         try:
-            probe = yf.Ticker("AAPL").history(period="1d")
-            if probe is not None and not probe.empty:
+            info = yf.Ticker("AAPL").info or {}
+            if info.get("marketCap") is not None:
                 log.info("yfinance: sessione rinnovata e verificata (tentativo %d/%d)",
                          tentativo, attempts)
                 return True
-            log.warning("yfinance: handshake senza dati (tentativo %d/%d)",
-                        tentativo, attempts)
+            log.warning("yfinance: handshake riuscito ma .info senza dati "
+                        "(tentativo %d/%d)", tentativo, attempts)
         except Exception as e:
             YF_HEALTH.record_error(e)
             log.warning("yfinance: rinnovo sessione fallito (tentativo %d/%d): %s",
@@ -2820,6 +2841,7 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
         "deep_value_pe": [], "deep_value_pb": [], "fallen_angel": []
     }
     failed: list[str] = []
+    scartate_preferred: list[str] = []
 
     def query_market(mkt, filters, label):
         try:
@@ -2831,6 +2853,13 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
                  .where(
                      Column("market_cap_basic") > CONFIG["min_market_cap_million"] * 1_000_000,
                      Column("close") > CONFIG["min_price_usd"],
+                     # Il Tier 1 filtra per volume, il Tier 3 no: era l'unica
+                     # query senza. Senza questa soglia l'universo si riempie
+                     # di certificati di Milano su nomi esteri (1CMCSA.MI,
+                     # 1HON.MI, 1BMW.MI, 1PFE.MI...) che hanno P/E e P/B
+                     # distorti e finiscono dritti nei bucket deep value.
+                     # Misurato: elimina 148 ticker su 270, e sono tutti quelli.
+                     Column("volume") > 10000,
                      *filters,
                  )
                  .order_by("market_cap_basic", ascending=False)
@@ -2843,6 +2872,15 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
                 yf_tkr = tv_to_yf_ticker(row["ticker"], market=mkt)
                 if yf_tkr is None:
                     failed.append(row["ticker"])
+                    continue
+                # Le privilegiate affollano i bucket: il 15% di ognuno, e
+                # quasi tutte degli stessi tre emittenti (BAC, BML, JPM).
+                # MVF v4.1 le rileva ma non le vota — e' una scelta
+                # deliberata, il motore preferred non esiste in fase di
+                # screening. Qui consumerebbero budget senza poter
+                # produrre un solo candidato valutabile.
+                if _PREFERRED_RE.search(yf_tkr):
+                    scartate_preferred.append(yf_tkr)
                     continue
                 tickers.append(yf_tkr)
             return tickers
@@ -2871,6 +2909,9 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
 
     if failed:
         log.info("Tier 3: %d ticker non mappati skipped", len(failed))
+    if scartate_preferred:
+        log.info("Tier 3: %d privilegiate escluse (MVF non le vota in fase di "
+                 "screening)", len(scartate_preferred))
 
     # Cap per bucket, stessa logica del Tier 2 e per lo stesso motivo. Nel
     # run #143 il Tier 3 ha interrogato 990 ticker per tenerne 15: un
