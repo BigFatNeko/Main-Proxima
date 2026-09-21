@@ -1,38 +1,64 @@
-name: Proxima — Briefing Mattutino (Alex + Vale)
+name: Proxima — Briefing Mattutino (Alex + Vale + Diana)
+
+# ============================================================================
+# ESECUZIONE A FASI
+#
+# Un run unico faceva circa 7.000 richieste a Yahoo Finance:
+#   market context      36      Tier 2 fase 1     300
+#   Tier 1 fase 1      600      Tier 2 fase 2     920
+#   Tier 1 fase 2    3.738      Tier 3          1.290
+#   portafogli          90
+#
+# Dai log, Yahoo comincia a rifiutare l'handshake del crumb fra le 4.300 e le
+# 5.000 richieste cumulate: il Tier 1 arrivava in fondo e tutto il resto
+# trovava la porta chiusa. Il Tier 1 fase 2 da solo e' il 54% del totale, per
+# questo e' diviso in tre fette.
+#
+# Ogni fascia resta sotto le ~2.000 richieste. Il vantaggio piu' grande pero'
+# non e' il conteggio: run separati girano su runner separati, quindi con
+# indirizzi IP separati. Ogni fascia riparte pulita sia come sessione sia come
+# provenienza.
+#
+# Le parti viaggiano nella cache di Actions, con chiave per data. L'ultima
+# fascia le assembla e genera i tre briefing. Se una fascia salta, le altre
+# proseguono e l'assemblaggio dichiara cosa manca: meglio un briefing senza
+# un tier che nessun briefing.
+#
+# Orari, pensati perche' tutto sia pronto per le 07:00 italiane sia d'estate
+# (CEST, UTC+2) sia d'inverno (CET, UTC+1). L'ultima fascia chiude verso le
+# 04:05 UTC, cioe' 06:05 d'estate e 05:05 d'inverno.
+# ============================================================================
 
 on:
   schedule:
-    # 3:00 UTC = 4:00 CET inverno / 5:00 CEST estate
-    - cron: '0 3 * * 1-5'
-    # Sabato: 3:30 UTC = 4:30 CET
-    - cron: '30 3 * * 6'
+    - cron: '30 0 * * 1-6'   # contesto + filiere  (nessuna richiesta pesante)
+    - cron: '0 1 * * 1-6'    # Tier 1, fetta 1/3
+    - cron: '30 1 * * 1-6'   # Tier 1, fetta 2/3
+    - cron: '0 2 * * 1-6'    # Tier 1, fetta 3/3
+    - cron: '30 2 * * 1-6'   # Tier 2
+    - cron: '0 3 * * 1-6'    # Tier 3
+    - cron: '30 3 * * 1-6'   # assemblaggio + i tre briefing
   workflow_dispatch:
     inputs:
-      force_rescreen:
-        description: 'Forza riesecuzione screener (ignora cache giornaliera)'
-        type: boolean
-        default: false
-      debug_filiere:
-        description: 'Debug filiere: testa solo lo screener filiere e stampa risultati (non genera briefing)'
-        type: boolean
-        default: false
-      debug_snapshot:
-        description: 'Debug market snapshot: verifica prezzi indici (non genera briefing)'
-        type: boolean
-        default: false
+      fase:
+        description: "Fase da eseguire a mano (tutto = vecchio run unico)"
+        type: choice
+        default: briefing
+        options: [tutto, contesto, tier1, tier2, tier3, filiere, briefing]
+      fetta:
+        description: "Solo per tier1: fetta i/n, es. 2/3 (vuoto = intero universo)"
+        type: string
+        default: ''
 
 permissions:
   contents: write
 
 jobs:
-  generate-and-publish:
+  fascia:
     runs-on: ubuntu-latest
-    timeout-minutes: 130
+    timeout-minutes: 90
 
     steps:
-      # Nessun `ref:` fisso: il workflow lavora sul branch da cui parte.
-      # Prima era inchiodato a claude/financial-briefing-pipeline-aVCmh, quindi
-      # i run schedulati usavano il YAML di main attorno al codice del branch.
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
@@ -41,6 +67,33 @@ jobs:
       - name: Calcola data
         id: date
         run: echo "today=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      # Il cron che ha innescato il run determina la fase. Con
+      # workflow_dispatch la fase la sceglie chi lancia.
+      - name: Determina la fase
+        id: fase
+        run: |
+          case "${{ github.event.schedule }}" in
+            "30 0 * * 1-6") F=contesto_filiere ; S='' ;;
+            "0 1 * * 1-6")  F=tier1            ; S='1/3' ;;
+            "30 1 * * 1-6") F=tier1            ; S='2/3' ;;
+            "0 2 * * 1-6")  F=tier1            ; S='3/3' ;;
+            "30 2 * * 1-6") F=tier2            ; S='' ;;
+            "0 3 * * 1-6")  F=tier3            ; S='' ;;
+            "30 3 * * 1-6") F=briefing         ; S='' ;;
+            *)              F="${{ github.event.inputs.fase }}"
+                            S="${{ github.event.inputs.fetta }}" ;;
+          esac
+          # Senza questa guardia un cron non riconosciuto cadrebbe nel ramo
+          # '*', dove gli input di dispatch sono vuoti: nessuno step
+          # corrisponderebbe e il run finirebbe verde senza aver fatto nulla.
+          if [ -z "$F" ]; then
+            echo "::error::Fase non determinata (schedule='${{ github.event.schedule }}'). Nessun ramo del case corrisponde: il calendario dei cron e la mappa delle fasi sono fuori sincrono."
+            exit 1
+          fi
+          echo "fase=$F"  >> $GITHUB_OUTPUT
+          echo "fetta=$S" >> $GITHUB_OUTPUT
+          echo "::notice::Fascia in esecuzione: $F ${S:+(fetta $S)}"
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
@@ -54,17 +107,21 @@ jobs:
       - name: Crea cartelle output
         run: |
           mkdir -p briefings
-          mkdir -p rassegna-stampa/data/screener_results
+          mkdir -p rassegna-stampa/data/screener_results/parts
           mkdir -p rassegna-stampa/data/edgar_cache
           mkdir -p rassegna-stampa/data/state
 
-      # Due cose diverse nella stessa cache:
-      #  - edgar_cache/ estratti normalizzati (~0.8 KB per emittente) e la
-      #    mappa ticker->CIK, per non riscaricare i companyfacts ogni volta;
-      #  - state/ lo storico di copertura, su cui si basa l'allerta di
-      #    degrado silenzioso. Senza persistenza la media mobile riparte da
-      #    zero a ogni run e l'allerta non puo' scattare: il crollo dei
-      #    candidati da 383 a 88 e' passato inosservato per questo.
+      # Le parti prodotte dalle fasi precedenti arrivano da qui. La chiave
+      # porta la data, cosi' le parti di ieri non contaminano oggi; il
+      # run_id la rende unica a ogni salvataggio, e restore-keys recupera
+      # comunque la piu' recente dello stesso giorno.
+      - name: Cache parti screener
+        uses: actions/cache@v4
+        with:
+          path: rassegna-stampa/data/screener_results/parts
+          key: parts-${{ steps.date.outputs.today }}-${{ github.run_id }}
+          restore-keys: parts-${{ steps.date.outputs.today }}-
+
       - name: Cache SEC EDGAR + stato screener
         uses: actions/cache@v4
         with:
@@ -76,21 +133,79 @@ jobs:
             screener-state-
             edgar-cache-
 
+      # ---------------------------------------------------------------- fasi
+
+      # Il cron le accorpa perche' insieme costano poco. A mano invece si
+      # possono lanciare singolarmente: 'contesto' e 'filiere' sono voci del
+      # menu di dispatch e devono fare qualcosa, non finire verdi a vuoto.
+      - name: "Fase: contesto + filiere"
+        if: ${{ contains(fromJSON('["contesto_filiere","contesto","filiere"]'), steps.fase.outputs.fase) }}
+        env:
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+        run: |
+          cd rassegna-stampa
+          F="${{ steps.fase.outputs.fase }}"
+          if [ "$F" = "contesto_filiere" ] || [ "$F" = "contesto" ]; then
+            python screener.py --stage contesto
+          fi
+          if [ "$F" = "contesto_filiere" ] || [ "$F" = "filiere" ]; then
+            python screener.py --stage filiere
+          fi
+
+      - name: "Fase: Tier 1"
+        if: ${{ steps.fase.outputs.fase == 'tier1' }}
+        env:
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+        run: |
+          cd rassegna-stampa
+          python screener.py --stage tier1 ${{ steps.fase.outputs.fetta && format('--slice {0}', steps.fase.outputs.fetta) || '' }}
+
+      - name: "Fase: Tier 2"
+        if: ${{ steps.fase.outputs.fase == 'tier2' }}
+        env:
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+        run: |
+          cd rassegna-stampa
+          python screener.py --stage tier2
+
+      - name: "Fase: Tier 3"
+        if: ${{ steps.fase.outputs.fase == 'tier3' }}
+        env:
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+        run: |
+          cd rassegna-stampa
+          python screener.py --stage tier3
+
+      - name: "Fase: run unico (solo a mano)"
+        if: ${{ steps.fase.outputs.fase == 'tutto' }}
+        env:
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+        run: |
+          cd rassegna-stampa
+          python screener.py --stage tutto
+
+      # ------------------------------------------------------- briefing
+
       # Il saldo Anthropic si esaurisce senza preavviso: e' costato nove run
       # falliti e diciotto giorni senza briefing. Una chiamata da un token
-      # costa nulla e fa fallire il run in tre secondi con un messaggio
-      # chiaro, invece che dopo sei minuti di screener con uno stack trace.
+      # fa fallire la fascia in tre secondi con un messaggio chiaro.
       - name: Verifica credito Anthropic
         id: credito
-        if: ${{ github.event.inputs.debug_filiere != 'true' && github.event.inputs.debug_snapshot != 'true' }}
+        if: ${{ steps.fase.outputs.fase == 'briefing' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          cd rassegna-stampa
+          # Il modello lo dichiara la pipeline: scriverlo a mano qui vorrebbe
+          # dire, il giorno che cambia, verificare il credito su un modello
+          # diverso da quello che poi viene chiamato davvero.
+          MODELLO=$(python -c 'import briefing_pipeline as b; print(b.CLAUDE_MODEL)')
+          echo "Verifica credito sul modello $MODELLO"
           RISPOSTA=$(curl -sS -w '\n%{http_code}' https://api.anthropic.com/v1/messages \
             -H "x-api-key: ${ANTHROPIC_API_KEY}" \
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
-            -d '{"model":"claude-opus-4-6","max_tokens":1,"messages":[{"role":"user","content":"ok"}]}')
+            -d "{\"model\":\"${MODELLO}\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"ok\"}]}")
           CODICE=$(echo "$RISPOSTA" | tail -n1)
           CORPO=$(echo "$RISPOSTA" | sed '$d')
           if [ "$CODICE" = "200" ]; then
@@ -103,63 +218,52 @@ jobs:
             exit 1
           fi
 
-      - name: Cancella cache screener (solo se force_rescreen)
-        if: ${{ github.event.inputs.force_rescreen == 'true' }}
-        run: |
-          DATE=$(date +'%Y-%m-%d')
-          rm -f rassegna-stampa/data/screener_results/screener_${DATE}.json
-          echo "Cache screener ${DATE} rimossa — verrà rieseguito da zero."
-
-      - name: "[DEBUG] Test filiere screener"
-        if: ${{ github.event.inputs.debug_filiere == 'true' }}
+      - name: "Fase: assembla le parti"
+        if: ${{ steps.fase.outputs.fase == 'briefing' && steps.credito.outcome == 'success' }}
         run: |
           cd rassegna-stampa
-          python filiere_screener.py
-          echo "--- DEBUG TERMINATO: exit 0 intenzionale ---"
-
-      - name: "[DEBUG] Test market snapshot"
-        if: ${{ github.event.inputs.debug_snapshot == 'true' }}
-        run: |
-          cd rassegna-stampa
-          python briefing_pipeline.py --test-snapshot
-          echo "--- DEBUG TERMINATO: exit 0 intenzionale ---"
+          python screener.py --stage assembla
 
       - name: Genera briefing Alex
-        if: ${{ github.event.inputs.debug_filiere != 'true' && github.event.inputs.debug_snapshot != 'true' }}
+        if: ${{ steps.fase.outputs.fase == 'briefing' && steps.credito.outcome == 'success' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
           BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
-          # SEC EDGAR richiede uno User-Agent identificativo (nome + email).
-          # Senza, le richieste vengono rifiutate e il cross-check si limita
-          # a non eseguirsi: il pipeline resta sui dati yfinance con tag [V].
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
         run: |
           cd rassegna-stampa
-          python briefing_pipeline.py --user alex
+          python briefing_pipeline.py --user alex --skip-screener
 
-      # !cancelled() e non success(): un errore su Alex non deve azzerare
-      # anche Vale. E' successo il 17 agosto — un solo 400 sull'API ha
-      # lasciato entrambi gli utenti senza briefing.
+      # !cancelled(): un errore su un utente non deve azzerare gli altri due.
+      # E' successo il 17 agosto — un solo 400 sull'API ha lasciato tutti
+      # senza briefing.
       - name: Genera briefing Vale
-        if: ${{ !cancelled() && steps.credito.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.fase.outputs.fase == 'briefing' && steps.credito.outcome == 'success' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
           BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
-          # SEC EDGAR richiede uno User-Agent identificativo (nome + email).
-          # Senza, le richieste vengono rifiutate e il cross-check si limita
-          # a non eseguirsi: il pipeline resta sui dati yfinance con tag [V].
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
         run: |
           cd rassegna-stampa
-          python briefing_pipeline.py --user vale
+          python briefing_pipeline.py --user vale --skip-screener
 
-      # Pubblica quello che esiste: con un utente riuscito e uno fallito,
-      # meta' briefing e' meglio di nessuno. I cp sono condizionati, cosi'
-      # un file mancante non fa fallire lo step.
+      - name: Genera briefing Diana
+        if: ${{ !cancelled() && steps.fase.outputs.fase == 'briefing' && steps.credito.outcome == 'success' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
+          BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+        run: |
+          cd rassegna-stampa
+          python briefing_pipeline.py --user diana --skip-screener
+
+      # Pubblica quello che esiste: con un utente riuscito e due falliti,
+      # un terzo di briefing e' meglio di niente.
       - name: Commit briefing in docs/
-        if: ${{ !cancelled() && steps.credito.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.fase.outputs.fase == 'briefing' && steps.credito.outcome == 'success' }}
         run: |
           DATE="${{ steps.date.outputs.today }}"
           git config user.name "github-actions[bot]"
@@ -168,7 +272,7 @@ jobs:
           git pull origin "${GITHUB_REF_NAME}" --ff-only || true
           mkdir -p docs/archivio
           PUBBLICATI=""
-          for U in alex vale; do
+          for U in alex vale diana; do
             if [ -s "briefings/${DATE}-${U}.html" ]; then
               cp "briefings/${DATE}-${U}.html" "docs/${U}-latest.html"
               cp "briefings/${DATE}-${U}.html" "docs/archivio/${DATE}-${U}.html"

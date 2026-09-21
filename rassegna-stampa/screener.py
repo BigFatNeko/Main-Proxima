@@ -25,6 +25,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import threading
 import time
@@ -162,6 +163,12 @@ TV_TO_YF_SUFFIX = {
     "TADAWUL": ".SR",   # Riyadh
     "TASE": ".TA",      # Tel Aviv
 }
+
+# Azioni privilegiate su Yahoo: BAC-PK, JPM-PD, ORCL-PD. MVF v4.1 le
+# riconosce ma non le vota in fase di screening, quindi nei bucket del
+# Tier 3 occuperebbero budget senza poter diventare candidati.
+_PREFERRED_RE = re.compile(r"-P[A-Z]?$")
+
 
 # Venue senza copertura yfinance utilizzabile: scartati di proposito, non per
 # mappa mancante. Ogni voce è stata verificata interrogando Yahoo.
@@ -942,7 +949,8 @@ class _YFHealth:
         self.altri = 0
         self._cooldown_fino = 0.0
         self._passo = 0
-        self._speso_in_pausa = 0.0
+        self._speso_in_pausa = 0.0        # budget della fase corrente
+        self._speso_totale = 0.0          # intero run, non si azzera mai
         self._budget_esaurito_detto = False
 
     def record_ok(self) -> None:
@@ -992,6 +1000,7 @@ class _YFHealth:
                            self._BUDGET_PAUSA_S - self._speso_in_pausa)
             if restante > 0:
                 self._speso_in_pausa += restante
+                self._speso_totale += restante
         if restante > 0:
             time.sleep(restante)
 
@@ -1009,6 +1018,9 @@ class _YFHealth:
             self._cooldown_fino = 0.0
             self._passo = 0
             if anche_budget:
+                # Solo il budget della fase: _speso_totale resta, altrimenti
+                # il riepilogo di fine run dichiara "0s in pausa" dopo
+                # centinaia di rifiuti — ed e' successo nel run #162.
                 self._speso_in_pausa = 0.0
                 self._budget_esaurito_detto = False
 
@@ -1020,7 +1032,7 @@ class _YFHealth:
             return (f"yfinance — {self.ok} risposte piene, {self.vuoti} vuote, "
                     f"{self.non_trovati} titoli assenti, {self.altri} altri errori "
                     f"| segnalazioni di rate limiting: {self.rate_limited}"
-                    f" | tempo in pausa: {self._speso_in_pausa:.0f}s")
+                    f" | tempo in pausa: {self._speso_totale:.0f}s")
 
     @property
     def degradato(self) -> bool:
@@ -2151,9 +2163,21 @@ def _refresh_yfinance_session(attempts: int = 3, force: bool = False) -> bool:
     import time
 
     def _sessione_viva() -> bool:
+        """Sonda la stessa chiamata che fanno i tier, non una piu' facile.
+
+        Qui c'era `.history()`, che interroga l'endpoint chart: non richiede
+        cookie ne' crumb e Yahoo non lo limita. I tier invece usano `.info`
+        (quoteSummary), che il crumb lo richiede ed e' proprio cio' che viene
+        rifiutato sotto rate limiting. La sonda passava quindi sempre, e la
+        sessione non veniva mai ricostruita proprio quando serviva.
+
+        Nel run #160 si vede nero su bianco: alle 18:30:58 "sessione attuale
+        ancora valida", alle 18:31:00 il Tier 3 parte e tutte e 199 le
+        chiamate .info falliscono.
+        """
         try:
-            probe = yf.Ticker("AAPL").history(period="1d")
-            return probe is not None and not probe.empty
+            info = yf.Ticker("AAPL").info or {}
+            return info.get("marketCap") is not None
         except Exception as e:
             YF_HEALTH.record_error(e)
             return False
@@ -2186,15 +2210,17 @@ def _refresh_yfinance_session(attempts: int = 3, force: bool = False) -> bool:
         # subito dopo una raffica di 401.
         time.sleep(3 * tentativo)
 
-        # Verifica reale: senza questa, "refreshed OK" non significava nulla.
+        # Verifica reale, e sulla chiamata giusta: come per _sessione_viva,
+        # `.history()` non prova nulla perche' non passa dal crumb. Se la
+        # sessione ricostruita non risponde a `.info`, per i tier e' morta.
         try:
-            probe = yf.Ticker("AAPL").history(period="1d")
-            if probe is not None and not probe.empty:
+            info = yf.Ticker("AAPL").info or {}
+            if info.get("marketCap") is not None:
                 log.info("yfinance: sessione rinnovata e verificata (tentativo %d/%d)",
                          tentativo, attempts)
                 return True
-            log.warning("yfinance: handshake senza dati (tentativo %d/%d)",
-                        tentativo, attempts)
+            log.warning("yfinance: handshake riuscito ma .info senza dati "
+                        "(tentativo %d/%d)", tentativo, attempts)
         except Exception as e:
             YF_HEALTH.record_error(e)
             log.warning("yfinance: rinnovo sessione fallito (tentativo %d/%d): %s",
@@ -2820,6 +2846,7 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
         "deep_value_pe": [], "deep_value_pb": [], "fallen_angel": []
     }
     failed: list[str] = []
+    scartate_preferred: list[str] = []
 
     def query_market(mkt, filters, label):
         try:
@@ -2831,6 +2858,13 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
                  .where(
                      Column("market_cap_basic") > CONFIG["min_market_cap_million"] * 1_000_000,
                      Column("close") > CONFIG["min_price_usd"],
+                     # Il Tier 1 filtra per volume, il Tier 3 no: era l'unica
+                     # query senza. Senza questa soglia l'universo si riempie
+                     # di certificati di Milano su nomi esteri (1CMCSA.MI,
+                     # 1HON.MI, 1BMW.MI, 1PFE.MI...) che hanno P/E e P/B
+                     # distorti e finiscono dritti nei bucket deep value.
+                     # Misurato: elimina 148 ticker su 270, e sono tutti quelli.
+                     Column("volume") > 10000,
                      *filters,
                  )
                  .order_by("market_cap_basic", ascending=False)
@@ -2843,6 +2877,15 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
                 yf_tkr = tv_to_yf_ticker(row["ticker"], market=mkt)
                 if yf_tkr is None:
                     failed.append(row["ticker"])
+                    continue
+                # Le privilegiate affollano i bucket: il 15% di ognuno, e
+                # quasi tutte degli stessi tre emittenti (BAC, BML, JPM).
+                # MVF v4.1 le rileva ma non le vota — e' una scelta
+                # deliberata, il motore preferred non esiste in fase di
+                # screening. Qui consumerebbero budget senza poter
+                # produrre un solo candidato valutabile.
+                if _PREFERRED_RE.search(yf_tkr):
+                    scartate_preferred.append(yf_tkr)
                     continue
                 tickers.append(yf_tkr)
             return tickers
@@ -2871,13 +2914,35 @@ def build_special_situations_tv(region: str = "GLOBAL") -> dict[str, list[str]]:
 
     if failed:
         log.info("Tier 3: %d ticker non mappati skipped", len(failed))
+    if scartate_preferred:
+        log.info("Tier 3: %d privilegiate escluse (MVF non le vota in fase di "
+                 "screening)", len(scartate_preferred))
 
-    # Dedup each bucket
+    # Cap per bucket, stessa logica del Tier 2 e per lo stesso motivo. Nel
+    # run #143 il Tier 3 ha interrogato 990 ticker per tenerne 15: un
+    # rapporto peggiore di quello che avevamo appena corretto nel Tier 2.
+    # Sommato al resto portava il run a circa 15.000 richieste, e a pagarne
+    # il conto era Vale — che gira per ultimo e si e' ritrovato con 5
+    # posizioni su 14 senza prezzo, dopo esserne arrivato a 14/14.
+    #
+    # I ticker arrivano gia' ordinati per capitalizzazione decrescente dalla
+    # query TradingView, quindi il taglio tiene i piu' liquidi di ciascun
+    # bucket, che sono anche quelli con dati piu' affidabili.
+    try:
+        cap = int(os.environ.get("SPECIAL_BUCKET_CAP", "100"))
+    except ValueError:
+        cap = 100
+
     for k in buckets:
         seen: set[str] = set()
         unique = [t for t in buckets[k] if t not in seen and not seen.add(t)]  # type: ignore[func-returns-value]
+        if cap > 0 and len(unique) > cap:
+            log.info("Tier 3 bucket '%s': %d ticker, cappati a %d",
+                     k, len(unique), cap)
+            unique = unique[:cap]
+        else:
+            log.info("Tier 3 bucket '%s': %d ticker", k, len(unique))
         buckets[k] = unique
-        log.info("Tier 3 bucket '%s': %d ticker", k, len(unique))
 
     return buckets
 
@@ -2923,6 +2988,18 @@ def screen_special_situations(buckets: dict[str, list[str]],
             bucket = ticker_to_bucket.get(result["ticker"], "deep_value_pe")
             phase1.append((result["ticker"], info, bucket))
 
+    # Stessa distinzione del Tier 2: zero per selettivita' dei filtri e zero
+    # perche' la fonte non risponde sono due diagnosi opposte. Il Tier 3 gira
+    # per ultimo, dopo circa diecimila richieste, ed e' il primo a pagarne il
+    # prezzo — nel run #160 sono entrati 199 ticker e ne sono usciti zero.
+    if all_tickers and not phase1:
+        log.error("Tier 3: %d ticker interrogati, nessuno ha restituito dati. "
+                  "Non e' selettivita' dei filtri, e' la fonte che non risponde: "
+                  "il tier gira in coda e trova la sessione gia' esaurita.",
+                  len(all_tickers))
+    elif all_tickers:
+        log.info("Tier 3 Fase 1/2: %d/%d hanno restituito dati utilizzabili",
+                 len(phase1), len(all_tickers))
     log.info("Tier 3 Fase 2/2: fondamentali su %d ticker...", len(phase1))
     candidates: list[SpecialCandidate] = []
 
@@ -3009,6 +3086,53 @@ def screen_special_situations(buckets: dict[str, list[str]],
     return candidates[:top_n]
 
 
+def _porzioni_serializzate(cands, speculative_cands, special_cands):
+    """Serializza Tier 2 e Tier 3 nelle stesse identiche strutture del payload.
+
+    Estratto da output_results perche' lo usano anche le fasi separate: se la
+    serializzazione vivesse in due posti, prima o poi divergerebbero e
+    l'assemblaggio produrrebbe un JSON con chiavi diverse a seconda di come
+    e' stato lanciato il run.
+    """
+    spec_list = []
+    if speculative_cands:
+        for sc in speculative_cands:
+            spec_list.append({
+                "ticker": sc.ticker, "name": sc.name, "sector": sc.sector,
+                "industry": sc.industry, "market": sc.market,
+                "price": sc.price,
+                "market_cap_M": sc.market_cap_million,
+                "speculative_score": sc.speculative_score,
+                "signal_count": sc.signal_count,
+                "signals": sc.signal_labels,
+                "price_change_30d": sc.price_change_30d,
+                "price_change_90d": sc.price_change_90d,
+                "volume_ratio_3d": sc.volume_ratio_3d,
+                "revenue_growth_yoy": sc.revenue_growth_yoy,
+                "short_float": sc.short_float,
+                "notes": sc.notes,
+            })
+
+    special_list = []
+    if special_cands:
+        for sc in special_cands:
+            special_list.append({
+                "ticker": sc.ticker, "name": sc.name, "sector": sc.sector,
+                "industry": sc.industry, "market": sc.market,
+                "price": sc.price, "market_cap_M": sc.market_cap_million,
+                "situation_type": sc.situation_type,
+                "situation_score": sc.situation_score,
+                "pe": sc.pe_ratio, "pb": sc.pb_ratio,
+                "div_yield": sc.div_yield,
+                "price_change_1y": sc.price_change_1y,
+                "piotroski_f": sc.piotroski_f,
+                "fcf_positive": sc.fcf_positive,
+                "notes": sc.notes,
+            })
+
+    return None, None, spec_list, special_list
+
+
 def output_results(cands, out_dir, top_n=30,
                     speculative_cands: Optional[list] = None,
                     special_cands: Optional[list] = None,
@@ -3046,43 +3170,22 @@ def output_results(cands, out_dir, top_n=30,
     json_path = out_dir / f"screener_{date_tag}.json"
     df.to_csv(csv_path, index=False)
 
-    spec_list = []
-    if speculative_cands:
-        for sc in speculative_cands:
-            spec_list.append({
-                "ticker": sc.ticker, "name": sc.name, "sector": sc.sector,
-                "industry": sc.industry, "market": sc.market,
-                "price": sc.price,
-                "market_cap_M": sc.market_cap_million,
-                "speculative_score": sc.speculative_score,
-                "signal_count": sc.signal_count,
-                "signals": sc.signal_labels,
-                "price_change_30d": sc.price_change_30d,
-                "price_change_90d": sc.price_change_90d,
-                "volume_ratio_3d": sc.volume_ratio_3d,
-                "revenue_growth_yoy": sc.revenue_growth_yoy,
-                "short_float": sc.short_float,
-                "notes": sc.notes,
-            })
+    _, _, spec_list, special_list = _porzioni_serializzate(
+        cands, speculative_cands, special_cands)
 
-    special_list = []
-    if special_cands:
-        for sc in special_cands:
-            special_list.append({
-                "ticker": sc.ticker, "name": sc.name, "sector": sc.sector,
-                "industry": sc.industry, "market": sc.market,
-                "price": sc.price, "market_cap_M": sc.market_cap_million,
-                "situation_type": sc.situation_type,
-                "situation_score": sc.situation_score,
-                "pe": sc.pe_ratio, "pb": sc.pb_ratio,
-                "div_yield": sc.div_yield,
-                "price_change_1y": sc.price_change_1y,
-                "piotroski_f": sc.piotroski_f,
-                "fcf_positive": sc.fcf_positive,
-                "notes": sc.notes,
-            })
+    payload = _costruisci_payload(date_tag, cands, top, spec_list, special_list,
+                                  market_context, filiere_data)
+    with open(json_path, "w") as f:
+        json.dump(payload, f, indent=2, default=str)
+    return csv_path, json_path
 
-    payload = {
+
+def _costruisci_payload(date_tag, cands, top, spec_list, special_list,
+                        market_context, filiere_data) -> dict:
+    """Payload dello screener. Estratto da output_results perche' lo usano
+    anche le fasi separate: ognuna serializza la propria porzione con le
+    stesse identiche chiavi, cosi' l'assemblaggio non deve tradurre nulla."""
+    return {
         "date": date_tag, "n_screened": len(cands), "n_passing": len(top),
         "market_context": market_context or {},
         "candidates": [{
@@ -3123,14 +3226,181 @@ def output_results(cands, out_dir, top_n=30,
         "special_situations": special_list,
         "filiere_strategiche": filiere_data or {},
     }
-    with open(json_path, "w") as f:
-        json.dump(payload, f, indent=2, default=str)
-    return csv_path, json_path
+
+
+
+# =============================================================================
+# SEZIONE 8-bis — ESECUZIONE A FASI SEPARATE
+# =============================================================================
+#
+# Perche' esiste. Un run completo fa circa 7.000 richieste a Yahoo:
+#   market context      36        Tier 2 fase 1     300
+#   Tier 1 fase 1      600        Tier 2 fase 2     920
+#   Tier 1 fase 2    3.738        Tier 3          1.290
+#   portafogli          90
+# Dai log, Yahoo comincia a rifiutare l'handshake del crumb fra le 4.300 e le
+# 5.000 richieste cumulate: il Tier 1 arriva in fondo, tutto il resto trova la
+# porta chiusa. Il Tier 1 fase 2 da solo e' il 54% del totale.
+#
+# Spezzando il run in fasi lanciate a mezz'ora di distanza, ogni fascia resta
+# sotto le 2.000 richieste. E c'e' un secondo vantaggio, piu' importante:
+# run distinti girano su runner distinti, quindi con indirizzi IP distinti.
+# Ogni fascia riparte pulita sia come sessione sia come provenienza.
+#
+# Ogni fase scrive la propria porzione in parts/<data>/<fase>.json con le
+# stesse chiavi del payload finale; `assembla` le rimette insieme. Se una
+# fase manca, l'assemblaggio procede senza quella porzione e lo dichiara:
+# meglio un briefing con un tier in meno che nessun briefing.
+
+FASI = ("tutto", "contesto", "tier1", "tier2", "tier3", "filiere", "assembla")
+
+
+def _parts_dir(out_dir) -> Path:
+    return Path(out_dir) / "parts" / datetime.now().strftime("%Y-%m-%d")
+
+
+def _scrivi_parte(out_dir, nome: str, dati: dict) -> Path:
+    d = _parts_dir(out_dir)
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / f"{nome}.json"
+    f.write_text(json.dumps(dati, indent=2, default=str))
+    log.info("Fase '%s' salvata in %s", nome, f)
+    return f
+
+
+def _leggi_parti(out_dir) -> dict:
+    d = _parts_dir(out_dir)
+    if not d.exists():
+        return {}
+    parti = {}
+    for f in sorted(d.glob("*.json")):
+        try:
+            parti[f.stem] = json.loads(f.read_text())
+        except Exception as e:
+            log.error("Parte %s illeggibile: %s", f.name, e)
+    return parti
+
+
+def _affetta(tickers: list, spec: Optional[str]) -> list:
+    """`--slice 1/3` tiene un terzo dei ticker, a passo alternato.
+
+    Il passo alternato e non un taglio contiguo: la lista arriva ordinata per
+    punteggio TV, quindi una fetta contigua prenderebbe solo i migliori o solo
+    i peggiori. Cosi' ogni fetta e' rappresentativa dell'intero universo.
+    """
+    if not spec:
+        return tickers
+    try:
+        i, n = (int(x) for x in spec.split("/"))
+    except Exception:
+        log.error("--slice malformato (%r): atteso i/n, es. 1/3. Ignorato.", spec)
+        return tickers
+    if not (1 <= i <= n):
+        log.error("--slice %s fuori intervallo: atteso 1<=i<=n. Ignorato.", spec)
+        return tickers
+    fetta = tickers[i - 1::n]
+    log.info("Slice %d/%d: %d ticker su %d", i, n, len(fetta), len(tickers))
+    return fetta
 
 
 # =============================================================================
 # SEZIONE 9 — CLI
 # =============================================================================
+
+
+def _insiemi_da_parti(out_dir) -> tuple[set, set]:
+    """Ticker gia' coperti dalle fasi precedenti, letti dalle parti.
+
+    Il Tier 2 esclude quanto visto dal Tier 1 e il Tier 3 esclude entrambi,
+    per non rianalizzare gli stessi titoli. In modalita' a fasi quei due
+    insiemi non esistono in memoria — vivono nelle parti gia' scritte.
+    """
+    parti = _leggi_parti(out_dir)
+    t1: set = set()
+    for k, v in parti.items():
+        if k.startswith("tier1"):
+            t1.update(v.get("universo") or [])
+            t1.update(c.get("ticker") for c in v.get("candidates", []) if c.get("ticker"))
+    t2 = {c.get("ticker") for c in parti.get("tier2", {}).get("speculative_candidates", [])
+          if c.get("ticker")}
+    return t1, t2
+
+
+def _assembla(args) -> None:
+    """Ricompone le parti prodotte dalle fasi in un unico JSON.
+
+    Regole, tutte nella stessa direzione: una fase mancante non deve far
+    fallire il briefing. Se manca il Tier 2, il briefing esce senza tier
+    catalyst e lo dice; se manca il Tier 1 non c'e' briefing da fare e
+    l'assemblaggio fallisce, perche' pubblicare una rassegna senza candidati
+    di qualita' sarebbe peggio che non pubblicarla.
+    """
+    parti = _leggi_parti(args.output)
+    if not parti:
+        log.error("Nessuna parte trovata in %s: le fasi non hanno girato.",
+                  _parts_dir(args.output))
+        sys.exit(1)
+
+    candidati: list = []
+    n_screened = 0
+    universo = 0
+    fette = sorted(k for k in parti if k.startswith("tier1"))
+    for k in fette:
+        candidati.extend(parti[k].get("candidates", []))
+        n_screened += parti[k].get("n_screened", 0)
+        universo += parti[k].get("universo_interrogato", 0)
+
+    if not candidati:
+        log.error("Nessun candidato Tier 1 fra le parti (%s). Senza Tier 1 il "
+                  "briefing non ha basi: meglio fallire che pubblicare vuoto.",
+                  ", ".join(sorted(parti)) or "nessuna")
+        sys.exit(1)
+
+    # Le fette arrivano gia' valutate: qui si riordina e si taglia, come
+    # farebbe output_results su un run unico.
+    candidati.sort(key=lambda c: c.get("score") or 0, reverse=True)
+    candidati = candidati[:args.top]
+
+    date_tag = datetime.now().strftime("%Y-%m-%d")
+    payload = {
+        "date": date_tag,
+        "n_screened": n_screened,
+        "n_passing": len(candidati),
+        "market_context": parti.get("contesto", {}).get("market_context", {}),
+        "candidates": candidati,
+        "speculative_candidates": parti.get("tier2", {}).get("speculative_candidates", []),
+        "special_situations": parti.get("tier3", {}).get("special_situations", []),
+        "filiere_strategiche": parti.get("filiere", {}).get("filiere_strategiche", {}),
+        # Tracciabilita': chi legge il JSON deve poter sapere che e' stato
+        # costruito a pezzi, e quali pezzi mancano.
+        "assemblato_da": sorted(parti),
+    }
+
+    out_dir = Path(args.output)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    json_path = out_dir / f"screener_{date_tag}.json"
+    json_path.write_text(json.dumps(payload, indent=2, default=str))
+
+    if candidati:
+        colonne = ["ticker", "name", "sector", "market", "price", "score",
+                   "mvf_vote_1000", "instrument_class"]
+        righe = [{c: r.get(c) for c in colonne} for r in candidati]
+        pd.DataFrame(righe).to_csv(out_dir / f"screener_{date_tag}.csv", index=False)
+
+    attese = {"contesto", "tier2", "tier3", "filiere"}
+    mancanti = sorted(attese - set(parti))
+    log.info("ASSEMBLATO — T1:%d quality (da %d fette, universo %d) | T2:%d | "
+             "T3:%d | filiere:%d",
+             len(candidati), len(fette), universo,
+             len(payload["speculative_candidates"]),
+             len(payload["special_situations"]),
+             sum(len(v) for v in payload["filiere_strategiche"].values()))
+    if mancanti:
+        log.warning("Fasi assenti: %s. Il briefing uscira' senza quelle "
+                    "sezioni.", ", ".join(mancanti))
+    log.info("Output: %s", json_path)
+    _log_coverage(len(candidati), args.output)
+
 
 def main():
     p = argparse.ArgumentParser(description="MVF v3.0 Stock Screener (tre tier + market context)")
@@ -3154,59 +3424,117 @@ def main():
                    help="Disattiva screener filiere strategiche dedicato")
     p.add_argument("--sector", default=None)
     p.add_argument("--output", type=Path, default=Path("./data/screener_results"))
+    p.add_argument("--stage", choices=list(FASI), default="tutto",
+                   help="Esegue una sola fase e ne salva la porzione. "
+                        "'tutto' (default) e' il comportamento storico in un "
+                        "unico passaggio; 'assembla' ricompone le parti.")
+    p.add_argument("--slice", dest="fetta", default=None, metavar="i/n",
+                   help="Solo con --stage tier1: lavora la fetta i di n "
+                        "dell'universo, a passo alternato (es. 2/3).")
     args = p.parse_args()
+
+    fase = args.stage
+
+    if fase == "assembla":
+        _assembla(args)
+        return
 
     CONFIG["min_market_cap_million"] = args.min_mcap
 
-    # Inizializza sessione yfinance prima di qualsiasi chiamata
-    log.info("Inizializzazione sessione yfinance...")
-    _refresh_yfinance_session()
+    # Inizializza sessione yfinance prima di qualsiasi chiamata. La fase
+    # 'filiere' non ne ha bisogno: interroga solo TradingView, e aprire un
+    # handshake con Yahoo per poi non usarlo e' una richiesta regalata al
+    # contatore che stiamo cercando di non saturare.
+    if fase != "filiere":
+        log.info("Inizializzazione sessione yfinance...")
+        _refresh_yfinance_session()
 
     # ---- Market Context Layer (in parallelo con Tier 1 TV fetch) ----
     market_ctx: dict = {}
-    if not args.no_market_context:
+    if not args.no_market_context and fase in ("tutto", "contesto"):
         log.info("=== MARKET CONTEXT: fetch ETF settoriali e regionali ===")
         market_ctx = build_market_context()
         log.info("Market context: %d settori, %d regioni, %d macro",
                  len(market_ctx.get("sectors", {})),
                  len(market_ctx.get("regions", {})),
                  len(market_ctx.get("macro", {})))
+        if fase == "contesto":
+            _scrivi_parte(args.output, "contesto", {"market_context": market_ctx})
+            log.info(YF_HEALTH.riepilogo())
+            return
 
     # ---- Tier 1: Quality/Income Universe ----
-    log.info("=== TIER 1: Quality/Income Universe (mcap>%dM, limit/mkt=%d) ===",
-             args.min_mcap, args.limit_per_market)
-    tickers = build_universe_tradingview(
-        region=args.region, min_mcap_m=args.min_mcap,
-        min_price=CONFIG["min_price_usd"],
-        limit_per_market=args.limit_per_market,
-        sector_filter=args.sector,
-        total_limit=args.universe_cap,
-    )
-    if not tickers and args.region in ("US", "GLOBAL") and FINVIZ_OK:
-        log.warning("Tentativo fallback finvizfinance...")
-        tickers = build_universe_finviz_fallback(args.min_mcap, args.sector, args.limit_per_market)
-    if not tickers:
-        log.error("Universe Tier 1 vuoto.")
-        sys.exit(1)
+    # Gestito solo dalle fasi che lo riguardano. Senza questa guardia ogni
+    # fase rieseguiva l'intero Tier 1 prima della propria — cioe' 4.300
+    # richieste a Yahoo — annullando esattamente cio' che lo staging serve
+    # a ottenere. Preso eseguendo `--stage filiere` e vedendolo chiamare
+    # Yahoo, cosa che quella fase non deve fare affatto.
+    cands: list = []
+    tickers: list = []
+    if fase not in ("tutto", "tier1"):
+        tier1_set, tier2_set = _insiemi_da_parti(args.output)
+        log.info("Fase '%s': Tier 1 non rieseguito. Esclusioni dalle parti: "
+                 "%d ticker Tier 1, %d Tier 2.", fase, len(tier1_set), len(tier2_set))
+    else:
+        tier2_set = set()
+        log.info("=== TIER 1: Quality/Income Universe (mcap>%dM, limit/mkt=%d) ===",
+                 args.min_mcap, args.limit_per_market)
+        tickers = build_universe_tradingview(
+            region=args.region, min_mcap_m=args.min_mcap,
+            min_price=CONFIG["min_price_usd"],
+            limit_per_market=args.limit_per_market,
+            sector_filter=args.sector,
+            total_limit=args.universe_cap,
+        )
+        if not tickers and args.region in ("US", "GLOBAL") and FINVIZ_OK:
+            log.warning("Tentativo fallback finvizfinance...")
+            tickers = build_universe_finviz_fallback(args.min_mcap, args.sector, args.limit_per_market)
+        if not tickers:
+            log.error("Universe Tier 1 vuoto.")
+            sys.exit(1)
 
-    cands = screen_universe(tickers, strategy=args.strategy)
-    log.info("Tier 1 candidati post-filtri: %d", len(cands))
+        tickers = _affetta(tickers, args.fetta)
+        cands = screen_universe(tickers, strategy=args.strategy)
+        log.info("Tier 1 candidati post-filtri: %d", len(cands))
 
-    # Sector-relative scoring (aggiusta score in funzione del peer group)
-    compute_sector_relative_scores(cands)
-    log.info("Sector-relative scoring applicato")
+        compute_sector_relative_scores(cands)
+        log.info("Sector-relative scoring applicato")
+        tier1_set = set(tickers)
 
-    tier1_set = set(tickers)
+        if fase == "tier1":
+            top = sorted(cands, key=lambda c: c.composite_score or 0, reverse=True)[:args.top]
+            payload = _costruisci_payload(datetime.now().strftime("%Y-%m-%d"),
+                                          cands, top, [], [], {}, {})
+            nome = f"tier1_{args.fetta.replace('/', '-')}" if args.fetta else "tier1"
+            _scrivi_parte(args.output, nome, {
+                "candidates": payload["candidates"],
+                "n_screened": len(cands),
+                "universo_interrogato": len(tickers),
+                # Serve alle fasi successive per non rianalizzare gli stessi
+                # titoli: e' l'universo interrogato, non i soli superstiti.
+                "universo": tickers,
+            })
+            log.info(YF_HEALTH.riepilogo())
+            if YF_HEALTH.degradato:
+                log.error("RATE LIMITING durante il Tier 1: la fetta e' incompleta.")
+            return
 
     # Refresh sessione yfinance tra i tier per evitare 401 Unauthorized
-    # (il crumb Yahoo Finance si invalida dopo molte richieste parallele)
-    YF_HEALTH.azzera_pausa(anche_budget=True)
-    sessione_ok = _refresh_yfinance_session()
+    # (il crumb Yahoo Finance si invalida dopo molte richieste parallele).
+    # Solo per le fasi che poi Yahoo lo interrogano davvero: il refresh e'
+    # esso stesso una richiesta a Yahoo, e farla da 'filiere' — che parla
+    # solo con TradingView — significa bussare a una porta senza motivo.
+    sessione_ok = True
+    if fase in ("tutto", "tier2", "tier3"):
+        YF_HEALTH.azzera_pausa(anche_budget=True)
+        sessione_ok = _refresh_yfinance_session()
 
     # ---- Tier 2: Speculative / Catalyst Universe ----
+    # NB: tier2_set NON va reinizializzato qui. Nelle fasi successive alla
+    # tier2 arriva gia' popolato da _insiemi_da_parti(): azzerarlo faceva
+    # sparire l'esclusione che il log aveva appena dichiarato di aver letto.
     spec_cands: list[SpeculativeCandidate] = []
-    tier2_set: set[str] = set()
-    if not args.no_speculative:
+    if not args.no_speculative and fase in ("tutto", "tier2"):
         log.info("=== TIER 2: Speculative/Catalyst Universe ===")
         if not sessione_ok:
             # Senza sessione, macinare 800 ticker produce 800 errori 401 e
@@ -3235,12 +3563,19 @@ def main():
         elif sessione_ok:
             log.warning("Tier 2 universe vuoto.")
 
-    YF_HEALTH.azzera_pausa(anche_budget=True)
-    sessione_ok = _refresh_yfinance_session()
+    if fase == "tier2":
+        _, _, spec_list, _ = _porzioni_serializzate([], spec_cands, [])
+        _scrivi_parte(args.output, "tier2", {"speculative_candidates": spec_list})
+        log.info(YF_HEALTH.riepilogo())
+        return
+
+    if fase in ("tutto", "tier3"):
+        YF_HEALTH.azzera_pausa(anche_budget=True)
+        sessione_ok = _refresh_yfinance_session()
 
     # ---- Tier 3: Special Situations ----
     special_cands: list[SpecialCandidate] = []
-    if not args.no_special:
+    if not args.no_special and fase in ("tutto", "tier3"):
         log.info("=== TIER 3: Special Situations (deep value + fallen angels) ===")
         if not sessione_ok:
             log.error("Tier 3 SALTATO: sessione yfinance non disponibile.")
@@ -3259,9 +3594,15 @@ def main():
         elif sessione_ok:
             log.warning("Tier 3 universe vuoto.")
 
+    if fase == "tier3":
+        _, _, _, special_list = _porzioni_serializzate([], [], special_cands)
+        _scrivi_parte(args.output, "tier3", {"special_situations": special_list})
+        log.info(YF_HEALTH.riepilogo())
+        return
+
     # ---- Filiere strategiche (screener dedicato) ----
     filiere_data: dict = {}
-    if not args.no_filiere:
+    if not args.no_filiere and fase in ("tutto", "filiere"):
         log.info("=== FILIERE STRATEGICHE: screener dedicato ===")
         try:
             filiere_data = filiere_mod.run_all_filiere()
@@ -3270,6 +3611,10 @@ def main():
                      len(filiere_data), total_fil)
         except Exception as e:
             log.warning("Filiere screener fallito: %s", e)
+
+    if fase == "filiere":
+        _scrivi_parte(args.output, "filiere", {"filiere_strategiche": filiere_data})
+        return
 
     # ---- Output ----
     csv_path, json_path = output_results(
