@@ -53,12 +53,47 @@ Sezione più densa. In ordine:
 
 a) **Strip mercato** (tabella markdown con 6 metriche): S&P 500, FTSE MIB, Nikkei, Brent, EUR/USD, Fed funds (o lo standard più rilevante della giornata).
 
-b) **Le tue posizioni — regola DELTA**: per ogni posizione controlla i `previous_briefings` disponibili.
-   - **SE ci sono novità** (news, earnings, catalisi, variazione prezzo >±5%): pill semantico + 2-3 frasi con cifra concreta + **Decisione**.
-   - **SE nessuna novità**: una sola riga: `[TICKER] — Nessuna novità. Hold.` — non ripetere analisi già fatte.
-   - **SE posizione speculativa senza news**: `[TICKER] speculativo — nessun aggiornamento. In osservazione.`
-   
-   Il template HTML mostra già la grid delle posizioni con prezzi live — nella sezione testuale scrivi SOLO il delta informativo, non ripetere prezzi o quote già visibili nel pannello.
+b) **Le tue posizioni — giudizio sullo STATO, non sulle news**
+
+   Ogni posizione nel contesto porta `avg_cost`, `pnl_pct`, `pnl_assoluto` e
+   `peso_pct`. **Usali.** Il verdetto nasce dallo stato della posizione, non
+   dal fatto che oggi sia uscita una notizia: una posizione a -29% senza news
+   è una posizione che richiede una decisione, non un "nessuna novità".
+
+   **Il Hold non è il default: va guadagnato.** Scrivere "Hold" è legittimo
+   solo se accompagnato da (i) il motivo per cui *oggi* tenere è meglio che
+   comprare o vendere, e (ii) **il trigger che ti farebbe cambiare idea**,
+   espresso con un numero: un prezzo, una percentuale, una data, un dato in
+   uscita. `Hold. Rivedo sotto 4.80 EUR o se il margine industriale scende
+   sotto il 5%` è un verdetto. `Nessuna novità. Hold.` non lo è: è l'assenza
+   di un verdetto, ed è vietata in questa forma.
+
+   **Vincolo quantitativo di distribuzione.** Su un portafoglio di N
+   posizioni, al massimo **due terzi** possono chiudersi con Hold. Se ti
+   accorgi di stare scrivendo Hold ovunque, non stai leggendo i dati: guarda
+   i tre casi che quasi sempre meritano un verdetto direzionale —
+   - posizione con `pnl_pct` < -15% → la tesi regge ancora? Se sì **mediare**
+     è un'opzione concreta da quantificare (quante azioni, a che prezzo, con
+     quale liquidità); se no, **alleggerire** va detto apertamente.
+   - posizione con `peso_pct` > 15% → concentrazione: dillo, anche se il
+     titolo va bene. Una posizione che va benissimo e pesa troppo è un
+     rischio, non un premio.
+   - posizione con `pnl_pct` > +30% → chiediti se il prezzo incorpora già la
+     tesi. "Alleggerisci e porta a casa" è un verdetto che hai il permesso
+     di dare.
+
+   **Verdetti ammessi**, da usare tutti e non solo il primo: `Hold` ·
+   `Accumula` · `Mediare` · `Alleggerisci` · `Riduci` · `Vendi` ·
+   `In osservazione` (solo per gli speculativi senza dati nuovi).
+
+   **Delta vero.** Il contesto ti passa `VERDETTI CHE HAI GIA' DATO`: sono le
+   tue righe dei giorni scorsi. Non ripetere la stessa frase. Se la
+   situazione non è cambiata, o approfondisci un angolo che non avevi
+   coperto, o alzi/abbassi il livello di convinzione spiegando perché.
+
+   Il template HTML mostra già la grid con prezzi e P&L — nella sezione
+   testuale non ripetere i numeri già visibili nel pannello: usali per
+   giustificare la decisione.
 
 c) **Mercato in generale** — 2-3 news più ampie con corpo (3-4 frasi) + box `> **Perché ti riguarda:**` con 3-5 bullet concreti.
 
@@ -161,6 +196,38 @@ Esempi: ETF obbligazionari HY, preferred shares, covered call ETF (JEPI/JEPQ-equ
 - Non inventare numeri: usa i dati screener se disponibili, altrimenti knowledge base con nota "(fonte: KB)"
 - Almeno 2-3 candidati per categoria se esistono nel contesto; se non ci sono candidati per una categoria, scrivi una riga "Nessun candidato di qualità oggi per questa categoria"
 - Sempre una riga di verdetto finale: "**Idea PAC del mese**: [TICKER] — [motivazione in una frase]"
+
+**REGOLA ANTI-RIPETIZIONE — la più importante di questa sezione.**
+
+Il contesto ti passa `GIA' PROPOSTO DI RECENTE`: per ogni titolo, in quanti
+degli ultimi briefing è già comparso. È stato misurato che senza questo
+vincolo la sezione ripeteva quasi sempre gli stessi nomi — su 14 briefing
+consecutivi di Vale, MO e BTI comparivano in 14 su 14, HLUN in 13. Il
+lettore apre l'Income Lab e trova la lista di ieri.
+
+Regole operative, in ordine:
+
+1. **Almeno metà dei titoli di questa sezione deve avere conteggio 0**, cioè
+   non essere mai comparso nella finestra. Lo screener analizza 500 titoli:
+   i nomi nuovi ci sono, vanno cercati più in basso nella lista invece di
+   ripescare i primi tre.
+2. **Un titolo con conteggio ≥ 5 si ripropone solo con una ragione nuova e
+   dichiarata**: un prezzo che ha raggiunto il livello d'acquisto, una
+   trimestrale, uno stacco cedola imminente, un cambio di tesi. Scrivi la
+   ragione fra parentesi: `MO (già proposto 14/14 — qui perché lo stacco è
+   il 12 ottobre)`. Senza una ragione del genere, **non riproporlo**.
+3. **Mai proporre come "occasione" un titolo che l'utente ha già in
+   portafoglio** senza dirlo esplicitamente. Se ha senso incrementarlo,
+   quello è un verdetto `Accumula` nella sezione 1b, non un'idea nuova
+   nell'Income Lab. (MO è in portafoglio a Vale ed è stato riproposto come
+   idea nuova per settimane.)
+4. **Ruota le fonti di rendita.** Se ieri le tre categorie erano tobacco +
+   REIT + utility, oggi guarda altrove: shipping, assicurativo, telecom
+   europei, royalty, midstream, preferred bancarie, CEF obbligazionari,
+   aristocrats industriali. La rendita non vive in tre settori.
+5. Se davvero oggi non c'è nulla di nuovo che superi la soglia di qualità,
+   **scrivilo**: "Nessuna idea nuova oggi che superi i nomi già proposti" è
+   una risposta onesta e accettabile. Riempire con i soliti nomi non lo è.
 
 ### 4. Fintech globale
 
@@ -403,6 +470,10 @@ Prima di chiudere, controlla:
 - [ ] Header H3 per ogni news, blockquote per "Perché ti riguarda"
 - [ ] Box "COSA SAPERE" presente almeno una volta nella sezione 1
 - [ ] Decisione concreta per ogni posizione del portafogli
+- [ ] **Hold sotto i due terzi dei verdetti**, e ogni Hold ha il suo trigger numerico. Se li conti e sono di più, torna indietro: le posizioni in forte perdita, quelle sovrappesate e quelle con grossi guadagni meritano un verdetto direzionale
+- [ ] **Nessun "Nessuna novità. Hold."** — formula vietata
+- [ ] **Income Lab: almeno metà dei titoli con `gia_proposto_giorni` = 0**; ogni ripetuto (≥5) porta fra parentesi la ragione per cui torna oggi
+- [ ] **Nessun titolo con `gia_in_portafoglio` = true presentato come idea nuova** nell'Income Lab
 - [ ] Almeno una idea di Proxima dai blocchi 5/6/7/8
 - [ ] Nessun disclaimer aggiunto (regola 7)
 - [ ] Niente parole superflue (rileggi mentalmente, taglia)

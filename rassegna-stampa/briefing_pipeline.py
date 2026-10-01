@@ -37,12 +37,15 @@ import json
 import logging
 import os
 import subprocess
+import re
 import sys
 import webbrowser
 import xml.etree.ElementTree as ET
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime as _parse_rfc2822
+from html import unescape
 from pathlib import Path
 from typing import Optional
 
@@ -154,11 +157,21 @@ def load_portfolio(user: str) -> dict:
         elif ticker == "PAC":
             pac += shares
         else:
-            positions.append({
+            # Il costo medio e' opzionale: i CSV che non ce l'hanno restano
+            # validi e la posizione semplicemente non avra' P&L calcolato.
+            try:
+                avg = float(row.get("avg_cost") or 0) or None
+            except (TypeError, ValueError):
+                avg = None
+            pos = {
                 "ticker": ticker, "shares": shares,
                 "currency": str(row.get("currency", "EUR")).strip(),
                 "notes": str(row.get("notes", "")).strip() if "notes" in row else "",
-            })
+            }
+            if avg:
+                pos["avg_cost"] = round(avg, 4)
+                pos["cost_basis"] = round(avg * shares, 2)
+            positions.append(pos)
     return {"user": user, "positions": positions, "cash": cash, "pac_monthly": pac, "gender": gender}
 
 
@@ -196,6 +209,18 @@ def enrich_portfolio_prices(user_data: dict) -> dict:
                 if price and price > 0:
                     pos["current_price"] = round(float(price), 2)
                     pos["market_value"] = round(float(price) * pos["shares"], 2)
+                    # La valuta della quotazione deve combaciare con quella
+                    # dichiarata nel CSV, altrimenti il costo medio e il
+                    # prezzo vivono in due valute diverse e il P&L che ne
+                    # esce e' sbagliato della differenza di cambio — un
+                    # errore a doppia cifra, non un arrotondamento.
+                    try:
+                        quot = (fi.get("currency") if isinstance(fi, dict)
+                                else getattr(fi, "currency", None))
+                    except Exception:
+                        quot = None
+                    if quot:
+                        pos["quote_currency"] = str(quot).upper()
                 return
             except Exception as e:
                 if attempt < 2:
@@ -249,7 +274,81 @@ def enrich_portfolio_prices(user_data: dict) -> dict:
                     enriched, len(positions), ", ".join(mancanti))
     else:
         log.info("Portfolio prices enriched: %d/%d posizioni", enriched, len(positions))
+
+    _calcola_stato_posizioni(user_data)
     return user_data
+
+
+def _calcola_stato_posizioni(user_data: dict) -> None:
+    """P&L e peso di ogni posizione, calcolati invece che raccontati.
+
+    Senza questi numeri il modello vede ticker, quantita' e prezzo, e non ha
+    alcuna base quantitativa per dire altro che "Hold": e infatti nei dodici
+    briefing precedenti Hold era il 65% dei verdetti, mentre "alleggerisci"
+    non compariva mai. Il peso serve a rendere visibile la concentrazione,
+    il P&L a distinguere una posizione che va male da una che va bene.
+    """
+    positions = user_data.get("positions", [])
+    totale = 0.0
+    for p in positions:
+        mv = p.get("market_value")
+        if mv:
+            totale += float(mv)
+    # La liquidita' fa parte del patrimonio: ignorarla gonfia i pesi di chi
+    # tiene molto cash, e Vale dopo l'iniezione ne tiene parecchio.
+    totale_con_cash = totale + float(user_data.get("cash") or 0)
+
+    discordanti = []
+    for p in positions:
+        mv, avg = p.get("market_value"), p.get("avg_cost")
+        prezzo = p.get("current_price")
+        if mv and totale_con_cash > 0:
+            p["peso_pct"] = round(100.0 * float(mv) / totale_con_cash, 1)
+
+        # Se la quotazione e' in una valuta diversa da quella del costo
+        # medio, meglio nessun P&L che un P&L falso: un numero sbagliato in
+        # una griglia ha l'aria di un numero giusto, e qui guiderebbe una
+        # decisione di acquisto.
+        quot, dichiarata = p.get("quote_currency"), (p.get("currency") or "").upper()
+        if quot and dichiarata and quot != dichiarata:
+            p["pnl_non_calcolabile"] = (
+                f"costo medio in {dichiarata} ma {p['ticker']} quota in {quot}: "
+                f"il ticker nel CSV non e' la linea che possiedi")
+            discordanti.append(f"{p['ticker']} ({dichiarata} vs {quot})")
+            continue
+
+        if avg and prezzo:
+            p["pnl_pct"] = round(100.0 * (float(prezzo) - float(avg)) / float(avg), 1)
+            p["pnl_assoluto"] = round((float(prezzo) - float(avg)) * p["shares"], 2)
+
+    if discordanti:
+        log.error("VALUTA DISCORDANTE su %d posizioni — P&L non calcolato per "
+                  "non mostrare numeri falsi: %s. Va corretto il ticker nel "
+                  "CSV con la linea effettivamente posseduta.",
+                  len(discordanti), ", ".join(discordanti))
+
+    user_data["valore_posizioni"] = round(totale, 2)
+    user_data["patrimonio_totale"] = round(totale_con_cash, 2)
+    if totale_con_cash > 0:
+        user_data["peso_liquidita_pct"] = round(
+            100.0 * float(user_data.get("cash") or 0) / totale_con_cash, 1)
+
+    con_pnl = [p for p in positions if "pnl_pct" in p]
+    if con_pnl:
+        pnl_tot = sum(p["pnl_assoluto"] for p in con_pnl)
+        peggiore = min(con_pnl, key=lambda p: p["pnl_pct"])
+        migliore = max(con_pnl, key=lambda p: p["pnl_pct"])
+        user_data["pnl_totale_posizioni_note"] = round(pnl_tot, 2)
+        log.info("Stato portafoglio: %d/%d posizioni con costo medio | "
+                 "P&L %+.0f | peggiore %s %+.1f%% | migliore %s %+.1f%% | "
+                 "liquidita %.1f%%",
+                 len(con_pnl), len(positions), pnl_tot,
+                 peggiore["ticker"], peggiore["pnl_pct"],
+                 migliore["ticker"], migliore["pnl_pct"],
+                 user_data.get("peso_liquidita_pct", 0))
+    else:
+        log.warning("Nessuna posizione ha avg_cost nel CSV: il briefing non "
+                    "potra' calcolare P&L e i verdetti resteranno generici.")
 
 
 def load_todo() -> str:
@@ -275,6 +374,104 @@ def load_previous_briefings(user: str, days: int = 30) -> list[dict]:
                 out.append({"date": date, "path": str(p)})
                 break
     return out
+
+
+# Sigle che somigliano a ticker ma non lo sono. Senza questo filtro
+# l'estrazione restituisce IQI, MVF, REIT, BTP e meta' del glossario.
+_NON_TICKER = frozenset("""
+A B C D E I O S P T Q H N X Y Z AI IT UK US USA UE EU EUR USD GBP CHF JPY CNY
+IQI MVF PAC ETF ETC REIT BDC CEF MLP HY IG BTP BOT CCT OAT BUND TIPS
+CAGR PE PEG EV EBITDA ROE ROIC FCF DY MOS KB TV DM EM ESG SCF SIM OCF TUF
+CEO CFO CTO YTD QOQ YOY TTM FY NAV AUM IPO MA SPA SRL PLC INC LTD NYSE NASDAQ
+LSE SIX ASX TSX OMX MIB FTSE SP DAX CAC AEX IBEX TOPIX MSCI BCE FED ECB BOE BOJ
+PIL IVA IRPEF ISEE SPID PMI PIR TFR NO SI OK KO HOLD BUY SELL
+DKK SEK NOK PLN CZK HUF TRY BRL MXN ZAR INR KRW SGD HKD AUD CAD NZD RUB ILS
+DCF DDM WACC CAPM NPV IRR EPS BPS DPS PB PS PFCF SOTP LBO
+""".split())
+# Volutamente NON filtrati: sigle di borsa come VIE o TSE, che sono anche
+# ticker veri (VIE.PA e' Veolia). Questa lista non e' un divieto ma un
+# conteggio di ricorrenza: un falso positivo costa nulla, escludere per
+# sbaglio un titolo legittimo costerebbe un'idea.
+
+_CHIUSURA_SEZIONE = re.compile(r"<h[12][^>]*>", re.I)
+
+
+def _html_in_testo(html: str) -> str:
+    """HTML -> testo piano, senza dipendenze esterne."""
+    testo = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.S | re.I)
+    testo = re.sub(r"<[^>]+>", "\n", testo)
+    return unescape(testo)
+
+
+def _sezione_dopo_titolo(html: str, frammento: str) -> str:
+    """Il corpo che segue il PRIMO titolo contenente `frammento`.
+
+    Ancorato al titolo e non al testo: "Income Lab" compare anche come
+    rimando dentro altre sezioni, e prendere quella occorrenza restituiva
+    la sezione sbagliata.
+    """
+    for m in re.finditer(r"<h([1-4])[^>]*>(.*?)</h\1>", html, re.S | re.I):
+        if frammento.lower() in re.sub(r"<[^>]+>", "", m.group(2)).lower():
+            resto = html[m.end():]
+            fine = _CHIUSURA_SEZIONE.search(resto)
+            return resto[:fine.start()] if fine else resto
+    return ""
+
+
+def _ticker_nel_testo(testo: str) -> set[str]:
+    grezzi = re.findall(r"\b([A-Z]{1,6}(?:\.[A-Z]{1,2})?)\b", testo)
+    return {t for t in grezzi
+            if len(t) > 1 and t.split(".")[0] not in _NON_TICKER}
+
+
+def estrai_storico_proposte(previous: list[dict], giorni: int = 14) -> dict:
+    """Cosa e' gia' stato proposto e deciso nei briefing recenti.
+
+    Esisteva un vuoto preciso: al modello veniva passato solo l'elenco delle
+    DATE dei briefing precedenti, mentre il system prompt gli chiedeva di
+    non ripetere analisi gia' fatte e di scrivere solo il delta. Gli si
+    chiedeva un confronto senza dargli il termine di paragone, e il
+    risultato misurato era quello prevedibile: nell'Income Lab gli stessi
+    nomi quasi ogni giorno (MO nel 92% dei briefing, BTI nell'83%) e Hold
+    nel 65% dei verdetti sulle posizioni.
+    """
+    recenti = previous[:giorni]
+    conteggio: Counter = Counter()
+    per_data: dict[str, list[str]] = {}
+    verdetti: list[str] = []
+
+    for p in recenti:
+        try:
+            html = Path(p["path"]).read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+
+        proposti: set[str] = set()
+        for titolo in ("Income Lab", "Occasioni", "Special Situations"):
+            sezione = _sezione_dopo_titolo(html, titolo)
+            if sezione:
+                proposti |= _ticker_nel_testo(_html_in_testo(sezione))
+        if proposti:
+            conteggio.update(proposti)
+            per_data[p["date"]] = sorted(proposti)
+
+        # I verdetti sulle posizioni servono al delta: senza, il modello non
+        # sa cosa ha gia' detto e ripiega su "nessuna novita'".
+        pos = _sezione_dopo_titolo(html, "posizioni")
+        if pos:
+            for riga in _html_in_testo(pos).split("\n"):
+                riga = riga.strip()
+                if 15 < len(riga) < 400 and re.search(
+                        r"\b(hold|accumula|vendi|compra|alleggeris|increment|riduci|"
+                        r"osservazione|mediare|mediazione)\w*\b", riga, re.I):
+                    verdetti.append(f"{p['date']} · {riga}")
+
+    return {
+        "giorni_coperti": len(recenti),
+        "gia_proposti": conteggio.most_common(40),
+        "per_data": per_data,
+        "verdetti_posizioni": verdetti[:60],
+    }
 
 
 def detect_mode_auto(previous: list[dict]) -> str:
@@ -589,7 +786,9 @@ def fetch_news_rss(max_per_feed: int = 8, max_age_hours: int = 36) -> list[dict]
     return all_items
 
 
-def build_user_prompt(user_data, screener_data, market, todo, previous, mode, news: list[dict] | None = None):
+def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
+                      news: list[dict] | None = None, storico: dict | None = None):
+    storico = storico or estrai_storico_proposte(previous)
     tier1 = screener_data.get("candidates", [])
     tier2 = screener_data.get("speculative_candidates", [])
     tier3 = screener_data.get("special_situations", [])
@@ -599,6 +798,48 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode, ne
     # Top 40 per la rassegna stampa (di 500 analizzati), in formato MVF v3.0 sintetico
     tier1_top = sorted(tier1, key=lambda c: c.get("mvf_vote_100") or 0, reverse=True)[:40]
     tier1_mvf = [_mvf_synthesis(c) for c in tier1_top]
+
+    # Lista dedicata all'Income Lab.
+    #
+    # Prima la sezione pescava dagli stessi top 40 ordinati per voto MVF: un
+    # ordinamento che cambia pochissimo da un giorno all'altro, quindi i nomi
+    # erano gli stessi e nessuna regola anti-ripetizione avrebbe potuto farci
+    # molto — non c'era altro fra cui scegliere. Questa lista ordina l'INTERO
+    # Tier 1 per rendimento netto Italia e porta con se' il conteggio di
+    # quante volte ogni nome e' gia' stato proposto, cosi' la novita' e'
+    # leggibile a colpo d'occhio invece che da indovinare.
+    gia_visti = dict(storico["gia_proposti"])
+    in_portafoglio = {p.get("ticker", "").split(".")[0]
+                      for p in user_data.get("positions", [])}
+    income_pool = []
+    for c in tier1:
+        ny = (c.get("net_yield") or {}).get("net_italy")
+        if not ny or ny <= 0:
+            continue
+        tkr = c.get("ticker", "")
+        base = tkr.split(".")[0]
+        income_pool.append({
+            "ticker": tkr,
+            "nome": (c.get("name") or "")[:45],
+            "settore": c.get("sector"),
+            "rendimento_netto_italia": round(float(ny), 2),
+            "rendimento_lordo": (c.get("net_yield") or {}).get("gross_yield"),
+            "voto_mvf_1000": c.get("mvf_vote_1000"),
+            "iqi_100": (c.get("iqi_score") or {}).get("score"),
+            "gate_attivi": (c.get("quality_gates") or {}).get("active", []),
+            "caso_speciale": (c.get("net_yield") or {}).get("special_case"),
+            "gia_proposto_giorni": gia_visti.get(base, 0),
+            "gia_in_portafoglio": base in in_portafoglio,
+        })
+    # Ordine: prima i mai proposti, poi per rendimento netto. Cosi' la novita'
+    # sta in cima e il modello non deve scorrere per trovarla.
+    income_pool.sort(key=lambda r: (r["gia_proposto_giorni"] > 0,
+                                    -r["rendimento_netto_italia"]))
+    income_pool = income_pool[:35]
+    nuovi = sum(1 for r in income_pool if r["gia_proposto_giorni"] == 0)
+    log.info("Income Lab: %d candidati con rendimento netto, di cui %d mai "
+             "proposti negli ultimi %d briefing", len(income_pool), nuovi,
+             storico["giorni_coperti"])
 
     # Lookup Tier 1 per ticker symbol (per cross-reference filiere ↔ MVF)
     tier1_lookup: dict = {}
@@ -722,8 +963,28 @@ lettore — il calcolo è stato fatto, ma l'output è volutamente compatto.
 TODO DEL GIORNO:
 {todo[:3000]}
 
-BRIEFING PRECEDENTI ({len(previous)} disponibili):
-{json.dumps([p['date'] for p in previous], indent=2)}
+BRIEFING PRECEDENTI ({len(previous)} disponibili): {", ".join(p['date'] for p in previous[:14])}
+
+GIA' PROPOSTO DI RECENTE — su {storico['giorni_coperti']} briefing.
+Numero di giorni in cui ogni titolo e' comparso nelle sezioni Occasioni,
+Special Situations e Income Lab. Questo e' il metro della ripetitivita':
+un titolo a 12/14 e' un titolo che il lettore ha gia' letto dodici volte.
+{json.dumps(dict(storico['gia_proposti']), indent=1, ensure_ascii=False)}
+
+CANDIDATI PER L'INCOME LAB (sezione 3b) — tutto il Tier 1 che paga una
+cedola, ordinato mettendo in cima i MAI PROPOSTI e poi per rendimento netto
+Italia. `gia_proposto_giorni` = 0 significa nome nuovo: parti da questi.
+`gia_in_portafoglio` = true significa che l'utente lo possiede gia' e NON e'
+un'idea nuova. Se un titolo ha `gate_attivi` non vuoto e' NO-BUY: non
+proporlo come occasione di rendita per quanto alto sia il rendimento.
+{json.dumps(income_pool, indent=1, ensure_ascii=False, default=str)[:9000]}
+
+VERDETTI CHE HAI GIA' DATO sulle posizioni (i piu' recenti):
+Servono per il delta: non ripetere lo stesso verdetto con le stesse parole.
+Se un verdetto qui sotto era "Hold" e da allora non e' cambiato nulla,
+NON riscriverlo — approfondisci un aspetto diverso o alza/abbassa il
+livello di convinzione dicendo perche'.
+{json.dumps(storico['verdetti_posizioni'][:40], indent=1, ensure_ascii=False)}
 
 Produci markdown strutturato secondo le specifiche del system prompt.
 Per la sezione "Occasioni in filiere strategiche e colli di bottiglia":
