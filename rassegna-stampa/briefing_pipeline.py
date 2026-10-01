@@ -395,6 +395,29 @@ DCF DDM WACC CAPM NPV IRR EPS BPS DPS PB PS PFCF SOTP LBO
 
 _CHIUSURA_SEZIONE = re.compile(r"<h[12][^>]*>", re.I)
 
+# Mercati sviluppati, per suffisso Yahoo. Lista di ammessi e non di esclusi:
+# un mercato emergente nuovo non deve poter entrare per dimenticanza.
+# Il ticker senza suffisso e' USA.
+_SUFFISSI_SVILUPPATI = frozenset("""
+L AS PA BR LS IR MI MC DE F BE HM MU SG DU VI SW EB ST CO OL HE IC
+TO V NE CN AX NZ T HK SI TA
+""".split())
+
+
+def _mercato_sviluppato(ticker: str) -> bool:
+    """Vero se il ticker e' di un mercato sviluppato (MSCI World / FTSE Dev).
+
+    Serve perche' la regola "solo mercati sviluppati" non puo' restare solo
+    nel system prompt: spingendo l'Income Lab verso nomi mai proposti, il
+    modello e' andato a cercare la novita' proprio dove i rendimenti sono
+    piu' alti — Indonesia, Turchia, Vietnam — e ha violato la regola che il
+    prompt dichiara inviolabile. Sette ticker EM nell'Income Lab di Alex il
+    1 ottobre. Se una regola conta, va applicata nei dati, non raccomandata.
+    """
+    if "." not in ticker:
+        return True                      # nessun suffisso = USA
+    return ticker.rsplit(".", 1)[1].upper() in _SUFFISSI_SVILUPPATI
+
 
 def _html_in_testo(html: str) -> str:
     """HTML -> testo piano, senza dipendenze esterne."""
@@ -812,11 +835,15 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
     in_portafoglio = {p.get("ticker", "").split(".")[0]
                       for p in user_data.get("positions", [])}
     income_pool = []
+    scartati_em = []
     for c in tier1:
         ny = (c.get("net_yield") or {}).get("net_italy")
         if not ny or ny <= 0:
             continue
         tkr = c.get("ticker", "")
+        if not _mercato_sviluppato(tkr):
+            scartati_em.append(tkr)
+            continue
         base = tkr.split(".")[0]
         income_pool.append({
             "ticker": tkr,
@@ -840,6 +867,11 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
     log.info("Income Lab: %d candidati con rendimento netto, di cui %d mai "
              "proposti negli ultimi %d briefing", len(income_pool), nuovi,
              storico["giorni_coperti"])
+    if scartati_em:
+        log.info("Income Lab: %d candidati esclusi perche' di mercati non "
+                 "sviluppati (%s%s)", len(scartati_em),
+                 ", ".join(scartati_em[:8]),
+                 "..." if len(scartati_em) > 8 else "")
 
     # Lookup Tier 1 per ticker symbol (per cross-reference filiere ↔ MVF)
     tier1_lookup: dict = {}

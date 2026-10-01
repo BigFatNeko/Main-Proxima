@@ -207,6 +207,13 @@ lettore apre l'Income Lab e trova la lista di ieri.
 
 Regole operative, in ordine:
 
+0. **La novità non si cerca MAI nei mercati emergenti.** La regola sui
+   mercati sviluppati batte questa sezione e ogni altra: meglio ripetere un
+   nome già visto che proporne uno nuovo da Indonesia, Turchia, Vietnam,
+   India, Brasile o Arabia Saudita. È già successo — il 1 ottobre, spinto a
+   trovare nomi nuovi, il briefing di Alex ha pescato sette titoli EM ad
+   alto rendimento. La lista `CANDIDATI PER L'INCOME LAB` è già filtrata
+   sui soli mercati sviluppati: non aggiungere nomi da altre fonti.
 1. **Almeno metà dei titoli di questa sezione deve avere conteggio 0**, cioè
    non essere mai comparso nella finestra. Lo screener analizza 500 titoli:
    i nomi nuovi ci sono, vanno cercati più in basso nella lista invece di
