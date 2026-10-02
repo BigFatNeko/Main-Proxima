@@ -88,7 +88,7 @@ CLAUDE_MAX_TOKENS = 24000
 
 def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
     """Esegue screener.py come subprocess e ritorna il path del JSON output."""
-    date_tag = datetime.now().strftime("%Y-%m-%d")
+    date_tag = data_briefing()
     json_path = SCREENER_OUTPUT_DIR / f"screener_{date_tag}.json"
 
     # Cache giornaliera: se il JSON di oggi esiste già, riusalo
@@ -135,6 +135,29 @@ def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
 # esplicita nel profilo di Vale in system_prompt.md).
 _FEMININE_USERS: frozenset[str] = frozenset({"diana"})
 
+
+
+def data_briefing() -> str:
+    """La giornata a cui il briefing si riferisce, non quella in cui gira.
+
+    Le fasce partono la sera prima: GitHub consegna i cron di questo repo con
+    5-7 ore di ritardo (60 fasce misurate: mediana 5.5h, massimo 6.8h), quindi
+    per avere il briefing alle 07:00 italiane la catena va avviata di sera.
+    Senza questa distinzione le fasce serali scriverebbero le proprie parti
+    sotto la data di ieri e l'assemblaggio del mattino non le troverebbe.
+
+    Il workflow calcola la data una volta sola e la passa a tutte le fasce in
+    PROXIMA_DATA, cosi' l'intera catena concorda su che giorno sta producendo.
+    """
+    scelta = os.environ.get("PROXIMA_DATA", "").strip()
+    if scelta:
+        try:
+            datetime.strptime(scelta, "%Y-%m-%d")
+            return scelta
+        except ValueError:
+            log.warning("PROXIMA_DATA='%s' non e' una data valida: uso oggi.",
+                        scelta)
+    return datetime.now().strftime("%Y-%m-%d")
 
 def load_portfolio(user: str) -> dict:
     """Carica portafoglio utente da CSV locale."""
@@ -1090,7 +1113,7 @@ def render_html(markdown_briefing: str, user: str, mode: str,
                 user_data: dict | None = None) -> Path:
     log.info("Step 5/6: render HTML...")
     DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    date_tag = datetime.now().strftime("%Y-%m-%d")
+    date_tag = data_briefing()
     md_path = DEFAULT_OUTPUT_DIR / f"{date_tag}-{user}.md"
     md_path.write_text(markdown_briefing, encoding="utf-8")
 
@@ -1203,7 +1226,7 @@ def main():
         if sp:
             screener_data = json.loads(sp.read_text())
     elif args.skip_screener:
-        date_tag = datetime.now().strftime("%Y-%m-%d")
+        date_tag = data_briefing()
         existing = SCREENER_OUTPUT_DIR / f"screener_{date_tag}.json"
         if existing.exists():
             screener_data = json.loads(existing.read_text())

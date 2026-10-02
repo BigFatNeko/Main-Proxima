@@ -29,15 +29,37 @@ name: Proxima — Briefing Mattutino (Alex + Vale + Diana)
 # 04:05 UTC, cioe' 06:05 d'estate e 05:05 d'inverno.
 # ============================================================================
 
+# ORARI: perche' la catena parte la sera prima
+#
+# GitHub consegna i cron di questo repo con molto ritardo. Misurato su 60
+# fasce reali fra il 26 settembre e il 2 ottobre:
+#   minimo 4.7h | mediana 5.5h | 90esimo percentile 6.4h | massimo 6.8h
+# e il ritardo cresce lungo la catena (prima fascia ~5.4h, ultima ~6.5h),
+# quindi le tre ore di arco programmato diventano quattro.
+#
+# Con i vecchi orari (00:30-03:30) l'ultima fascia partiva alle 09:30-10:20
+# UTC e il briefing era pronto a mezzogiorno italiano invece che alle 07:00.
+#
+# Lavorando a ritroso dalle 07:00 italiane D'ESTATE (= 05:00 UTC, il caso
+# peggiore fra ora legale e solare), togliendo ~20 minuti di generazione e
+# il ritardo massimo osservato di 6.8h, l'ultima fascia deve avere il cron
+# alle 20:30 UTC DELLA SERA PRIMA. Da li' a ritroso le altre sei.
+#
+#   caso tipico (5.5-6.5h):  briefing pronto ~03:20 UTC = 05:20 italiane
+#   caso peggiore (6.8h):    briefing pronto ~03:40 UTC = 05:40 italiane
+#   se GitHub e' puntuale:   briefing pronto ~20:50 UTC della sera prima
+#
+# In tutti e tre i casi arriva prima delle 07:00. Girando la sera, la catena
+# ha anche la chiusura americana completa invece che a meta'.
 on:
   schedule:
-    - cron: '30 0 * * 1-6'   # contesto + filiere  (nessuna richiesta pesante)
-    - cron: '0 1 * * 1-6'    # Tier 1, fetta 1/3
-    - cron: '30 1 * * 1-6'   # Tier 1, fetta 2/3
-    - cron: '0 2 * * 1-6'    # Tier 1, fetta 3/3
-    - cron: '30 2 * * 1-6'   # Tier 2
-    - cron: '0 3 * * 1-6'    # Tier 3
-    - cron: '30 3 * * 1-6'   # assemblaggio + i tre briefing
+    - cron: '30 17 * * 0-5'  # contesto + filiere  (nessuna richiesta pesante)
+    - cron: '0 18 * * 0-5'   # Tier 1, fetta 1/3
+    - cron: '30 18 * * 0-5'  # Tier 1, fetta 2/3
+    - cron: '0 19 * * 0-5'   # Tier 1, fetta 3/3
+    - cron: '30 19 * * 0-5'  # Tier 2
+    - cron: '0 20 * * 0-5'   # Tier 3
+    - cron: '30 20 * * 0-5'  # assemblaggio + i tre briefing
   workflow_dispatch:
     inputs:
       fase:
@@ -49,6 +71,23 @@ on:
         description: "Solo per tier1: fetta i/n, es. 2/3 (vuoto = intero universo)"
         type: string
         default: ''
+      data:
+        description: "Giornata del briefing AAAA-MM-GG (vuoto = calcolata in automatico)"
+        type: string
+        default: ''
+
+# Le fasce non devono MAI girare in parallelo: condividono la cache delle
+# parti, e due run concorrenti la restaurano entrambi, ci aggiungono la
+# propria porzione e la risalvano — l'ultimo che scrive cancella il lavoro
+# dell'altro. Visto accadere il 2 ottobre, quando una fascia programmata
+# arrivata con sei ore di ritardo si e' sovrapposta per una quindicina di
+# secondi a una lanciata a mano.
+#
+# cancel-in-progress: false perche' la fascia in corso va lasciata finire:
+# e' quella che sta producendo una porzione, non una da sostituire.
+concurrency:
+  group: briefing-fasce
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -64,9 +103,29 @@ jobs:
         with:
           fetch-depth: 0
 
+      # La giornata del briefing NON e' quella in cui la fascia gira: la
+      # catena parte la sera prima, quindi le fasce serali devono scrivere
+      # le proprie parti sotto la data del mattino dopo, altrimenti
+      # l'assemblaggio non le trova.
+      #
+      # Regola: la giornata e' quella della prossima scadenza delle 05:00
+      # UTC (le 07:00 italiane d'estate). Prima delle 05:00 siamo gia' nel
+      # giorno giusto; dopo, stiamo preparando il giorno dopo. Vale per
+      # tutte le fasce, sia che girino alle 22:48 sia alle 03:00, percio'
+      # l'intera catena concorda anche con ritardi molto diversi fra loro.
       - name: Calcola data
         id: date
-        run: echo "today=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+        run: |
+          D="${{ github.event.inputs.data }}"
+          if [ -z "$D" ]; then
+            if [ "$((10#$(date -u +%H%M)))" -lt 500 ]; then
+              D=$(date -u +'%Y-%m-%d')
+            else
+              D=$(date -u -d 'tomorrow' +'%Y-%m-%d')
+            fi
+          fi
+          echo "today=$D" >> $GITHUB_OUTPUT
+          echo "::notice::Giornata del briefing: $D (adesso $(date -u +'%Y-%m-%d %H:%M') UTC)"
 
       # Il cron che ha innescato il run determina la fase. Con
       # workflow_dispatch la fase la sceglie chi lancia.
@@ -74,13 +133,13 @@ jobs:
         id: fase
         run: |
           case "${{ github.event.schedule }}" in
-            "30 0 * * 1-6") F=contesto_filiere ; S='' ;;
-            "0 1 * * 1-6")  F=tier1            ; S='1/3' ;;
-            "30 1 * * 1-6") F=tier1            ; S='2/3' ;;
-            "0 2 * * 1-6")  F=tier1            ; S='3/3' ;;
-            "30 2 * * 1-6") F=tier2            ; S='' ;;
-            "0 3 * * 1-6")  F=tier3            ; S='' ;;
-            "30 3 * * 1-6") F=briefing         ; S='' ;;
+            "30 17 * * 0-5") F=contesto_filiere ; S='' ;;
+            "0 18 * * 0-5")  F=tier1            ; S='1/3' ;;
+            "30 18 * * 0-5") F=tier1            ; S='2/3' ;;
+            "0 19 * * 0-5")  F=tier1            ; S='3/3' ;;
+            "30 19 * * 0-5") F=tier2            ; S='' ;;
+            "0 20 * * 0-5")  F=tier3            ; S='' ;;
+            "30 20 * * 0-5") F=briefing         ; S='' ;;
             *)              F="${{ github.event.inputs.fase }}"
                             S="${{ github.event.inputs.fetta }}" ;;
           esac
@@ -142,6 +201,7 @@ jobs:
         if: ${{ contains(fromJSON('["contesto_filiere","contesto","filiere"]'), steps.fase.outputs.fase) }}
         env:
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+          PROXIMA_DATA: ${{ steps.date.outputs.today }}
         run: |
           cd rassegna-stampa
           F="${{ steps.fase.outputs.fase }}"
@@ -156,6 +216,7 @@ jobs:
         if: ${{ steps.fase.outputs.fase == 'tier1' }}
         env:
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+          PROXIMA_DATA: ${{ steps.date.outputs.today }}
         run: |
           cd rassegna-stampa
           python screener.py --stage tier1 ${{ steps.fase.outputs.fetta && format('--slice {0}', steps.fase.outputs.fetta) || '' }}
@@ -164,6 +225,7 @@ jobs:
         if: ${{ steps.fase.outputs.fase == 'tier2' }}
         env:
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+          PROXIMA_DATA: ${{ steps.date.outputs.today }}
         run: |
           cd rassegna-stampa
           python screener.py --stage tier2
@@ -172,6 +234,7 @@ jobs:
         if: ${{ steps.fase.outputs.fase == 'tier3' }}
         env:
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+          PROXIMA_DATA: ${{ steps.date.outputs.today }}
         run: |
           cd rassegna-stampa
           python screener.py --stage tier3
@@ -180,6 +243,7 @@ jobs:
         if: ${{ steps.fase.outputs.fase == 'tutto' }}
         env:
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+          PROXIMA_DATA: ${{ steps.date.outputs.today }}
         run: |
           cd rassegna-stampa
           python screener.py --stage tutto
@@ -220,6 +284,11 @@ jobs:
 
       - name: "Fase: assembla le parti"
         if: ${{ steps.fase.outputs.fase == 'briefing' && steps.credito.outcome == 'success' }}
+        env:
+          # Senza questa, l'assemblaggio cercherebbe le parti nella cartella
+          # del giorno in cui gira invece che in quella della giornata che
+          # sta producendo, e non troverebbe nulla.
+          PROXIMA_DATA: ${{ steps.date.outputs.today }}
         run: |
           cd rassegna-stampa
           python screener.py --stage assembla
@@ -231,6 +300,7 @@ jobs:
           BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
           BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+          PROXIMA_DATA: ${{ steps.date.outputs.today }}
         run: |
           cd rassegna-stampa
           python briefing_pipeline.py --user alex --skip-screener
@@ -245,6 +315,7 @@ jobs:
           BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
           BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+          PROXIMA_DATA: ${{ steps.date.outputs.today }}
         run: |
           cd rassegna-stampa
           python briefing_pipeline.py --user vale --skip-screener
@@ -256,6 +327,7 @@ jobs:
           BRIEFING_PORTFOLIO_DIR: ${{ github.workspace }}/rassegna-stampa/portafogli_examples
           BRIEFING_OUTPUT_DIR: ${{ github.workspace }}/briefings
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+          PROXIMA_DATA: ${{ steps.date.outputs.today }}
         run: |
           cd rassegna-stampa
           python briefing_pipeline.py --user diana --skip-screener

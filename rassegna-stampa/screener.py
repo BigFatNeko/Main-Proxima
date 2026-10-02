@@ -3165,7 +3165,7 @@ def output_results(cands, out_dir, top_n=30,
         })
     df = pd.DataFrame(rows)
     out_dir.mkdir(parents=True, exist_ok=True)
-    date_tag = datetime.now().strftime("%Y-%m-%d")
+    date_tag = data_briefing()
     csv_path = out_dir / f"screener_{date_tag}.csv"
     json_path = out_dir / f"screener_{date_tag}.json"
     df.to_csv(csv_path, index=False)
@@ -3255,8 +3255,31 @@ def _costruisci_payload(date_tag, cands, top, spec_list, special_list,
 FASI = ("tutto", "contesto", "tier1", "tier2", "tier3", "filiere", "assembla")
 
 
+
+def data_briefing() -> str:
+    """La giornata a cui il briefing si riferisce, non quella in cui gira.
+
+    Le fasce partono la sera prima: GitHub consegna i cron di questo repo con
+    5-7 ore di ritardo (60 fasce misurate: mediana 5.5h, massimo 6.8h), quindi
+    per avere il briefing alle 07:00 italiane la catena va avviata di sera.
+    Senza questa distinzione le fasce serali scriverebbero le proprie parti
+    sotto la data di ieri e l'assemblaggio del mattino non le troverebbe.
+
+    Il workflow calcola la data una volta sola e la passa a tutte le fasce in
+    PROXIMA_DATA, cosi' l'intera catena concorda su che giorno sta producendo.
+    """
+    scelta = os.environ.get("PROXIMA_DATA", "").strip()
+    if scelta:
+        try:
+            datetime.strptime(scelta, "%Y-%m-%d")
+            return scelta
+        except ValueError:
+            log.warning("PROXIMA_DATA='%s' non e' una data valida: uso oggi.",
+                        scelta)
+    return datetime.now().strftime("%Y-%m-%d")
+
 def _parts_dir(out_dir) -> Path:
-    return Path(out_dir) / "parts" / datetime.now().strftime("%Y-%m-%d")
+    return Path(out_dir) / "parts" / data_briefing()
 
 
 def _scrivi_parte(out_dir, nome: str, dati: dict) -> Path:
@@ -3361,7 +3384,7 @@ def _assembla(args) -> None:
     candidati.sort(key=lambda c: c.get("score") or 0, reverse=True)
     candidati = candidati[:args.top]
 
-    date_tag = datetime.now().strftime("%Y-%m-%d")
+    date_tag = data_briefing()
     payload = {
         "date": date_tag,
         "n_screened": n_screened,
@@ -3503,7 +3526,7 @@ def main():
 
         if fase == "tier1":
             top = sorted(cands, key=lambda c: c.composite_score or 0, reverse=True)[:args.top]
-            payload = _costruisci_payload(datetime.now().strftime("%Y-%m-%d"),
+            payload = _costruisci_payload(data_briefing(),
                                           cands, top, [], [], {}, {})
             nome = f"tier1_{args.fetta.replace('/', '-')}" if args.fetta else "tier1"
             _scrivi_parte(args.output, nome, {
