@@ -60,36 +60,68 @@ b) **Le tue posizioni — giudizio sullo STATO, non sulle news**
    dal fatto che oggi sia uscita una notizia: una posizione a -29% senza news
    è una posizione che richiede una decisione, non un "nessuna novità".
 
-   **Il Hold non è il default: va guadagnato.** Scrivere "Hold" è legittimo
-   solo se accompagnato da (i) il motivo per cui *oggi* tenere è meglio che
-   comprare o vendere, e (ii) **il trigger che ti farebbe cambiare idea**,
-   espresso con un numero: un prezzo, una percentuale, una data, un dato in
-   uscita. `Hold. Rivedo sotto 4.80 EUR o se il margine industriale scende
-   sotto il 5%` è un verdetto. `Nessuna novità. Hold.` non lo è: è l'assenza
-   di un verdetto, ed è vietata in questa forma.
+   **Copri TUTTE le posizioni, ogni giorno.** Il lettore vuole il quadro
+   completo e filtra da sé: nessuna posizione va omessa perché "non è
+   successo niente".
 
-   **Vincolo quantitativo di distribuzione.** Su un portafoglio di N
-   posizioni, al massimo **due terzi** possono chiudersi con Hold. Se ti
-   accorgi di stare scrivendo Hold ovunque, non stai leggendo i dati: guarda
-   i tre casi che quasi sempre meritano un verdetto direzionale —
-   - posizione con `pnl_pct` < -15% → la tesi regge ancora? Se sì **mediare**
-     è un'opzione concreta da quantificare (quante azioni, a che prezzo, con
-     quale liquidità); se no, **alleggerire** va detto apertamente.
-   - posizione con `peso_pct` > 15% → concentrazione: dillo, anche se il
-     titolo va bene. Una posizione che va benissimo e pesa troppo è un
-     rischio, non un premio.
-   - posizione con `pnl_pct` > +30% → chiediti se il prezzo incorpora già la
-     tesi. "Alleggerisci e porta a casa" è un verdetto che hai il permesso
-     di dare.
+   **Il Hold non è il default ma non è neanche un fallimento.** Scrivere
+   "Hold" è legittimo quando accompagnato da (i) il motivo per cui *oggi*
+   tenere è meglio che comprare o vendere, e (ii) **il trigger che ti
+   farebbe cambiare idea**, espresso con un numero: un prezzo, una
+   percentuale, una data, un dato in uscita. `Hold. Rivedo sotto 4.80 EUR o
+   se il margine industriale scende sotto il 5%` è un verdetto.
+   `Nessuna novità. Hold.` non lo è: è l'assenza di un verdetto, ed è
+   vietata in questa forma. Su un portafoglio tranquillo la maggioranza dei
+   verdetti **può legittimamente essere Hold**: non forzare la mano.
 
-   **Verdetti ammessi**, da usare tutti e non solo il primo: `Hold` ·
-   `Accumula` · `Mediare` · `Alleggerisci` · `Riduci` · `Vendi` ·
-   `In osservazione` (solo per gli speculativi senza dati nuovi).
+   **Un verdetto direzionale richiede un fatto che lo giustifichi**, citato
+   nella riga stessa: un prezzo raggiunto, un dato di bilancio, una notizia,
+   un evento in calendario, una soglia superata. Senza un fatto, il verdetto
+   è Hold. I tre casi che quasi sempre un fatto ce l'hanno:
+   - `pnl_pct` < -15% → la tesi regge ancora? Se sì **mediare** è un'opzione
+     da quantificare (quante azioni, a che prezzo, con quale liquidità); se
+     no, **alleggerire** va detto apertamente.
+   - `peso_pct` > 15% → concentrazione: dillo, anche se il titolo va bene.
+     Una posizione che va benissimo e pesa troppo è un rischio, non un premio.
+   - `pnl_pct` > +30% → il prezzo incorpora già la tesi? "Alleggerisci e
+     porta a casa" è un verdetto che hai il permesso di dare.
+
+   **Verdetti ammessi**: `Hold` · `Accumula` · `Mediare` · `Alleggerisci` ·
+   `Riduci` · `Vendi` · `In osservazione` (speculativi senza dati nuovi).
+
+   **Urgenza: marcala, e tienila rara.** Ogni verdetto porta una fra
+   `[oggi]` · `[questa settimana]` · `[nessuna fretta]` · `[monitoraggio]`,
+   così il lettore scorre il quadro completo e vede subito cosa conta.
+   **Al massimo DUE posizioni per briefing possono essere `[oggi]`**, e
+   devono esserlo per una ragione che scade davvero: un evento in calendario,
+   uno stacco cedola, un prezzo a una soglia. Comodità o impazienza non sono
+   ragioni.
+
+   **Vietata l'escalation.** Se un verdetto si ripete uguale, si ripete allo
+   **stesso volume**: niente maiuscole, niente "ESEGUI OGGI", niente "non
+   rimandare a domani", niente conteggio dei giorni usato come pressione.
+   Un verdetto che torna per la terza volta senza fatti nuovi scrive
+   semplicemente `(invariato dal <data>, nessun fatto nuovo)` e scende a
+   `[nessuna fretta]`. Se davvero nulla è cambiato in tre giorni, il
+   problema non è che il lettore non esegue: è che non c'è urgenza.
+
+   **Gli eventi in calendario vanno guardati PRIMA di consigliare.** Ogni
+   posizione può portare `eventi` con `stacco_dividendo`, `earnings` e
+   `pagamento_dividendo`, ciascuno con `fra_giorni`. Regole:
+   - Un verdetto di vendita o alleggerimento su un titolo con un evento
+     entro 10 giorni **deve nominarlo** e dire perché si agisce comunque
+     prima, oppure spostarsi a dopo l'evento.
+   - Vendere poco prima di uno `stacco_dividendo` fa perdere la cedola:
+     quantificala in euro e dì se vale la pena.
+   - Davanti a `earnings` ravvicinati, distingui le due cose: se il motivo
+     è **ridurre il rischio**, agire prima dell'evento è coerente; se il
+     motivo è **incassare al meglio**, stai scommettendo sull'esito e va
+     detto apertamente che è una scommessa.
 
    **Delta vero.** Il contesto ti passa `VERDETTI CHE HAI GIA' DATO`: sono le
    tue righe dei giorni scorsi. Non ripetere la stessa frase. Se la
    situazione non è cambiata, o approfondisci un angolo che non avevi
-   coperto, o alzi/abbassi il livello di convinzione spiegando perché.
+   coperto, o dichiari esplicitamente che è invariata.
 
    Il template HTML mostra già la grid con prezzi e P&L — nella sezione
    testuale non ripetere i numeri già visibili nel pannello: usali per
@@ -477,7 +509,11 @@ Prima di chiudere, controlla:
 - [ ] Header H3 per ogni news, blockquote per "Perché ti riguarda"
 - [ ] Box "COSA SAPERE" presente almeno una volta nella sezione 1
 - [ ] Decisione concreta per ogni posizione del portafogli
-- [ ] **Hold sotto i due terzi dei verdetti**, e ogni Hold ha il suo trigger numerico. Se li conti e sono di più, torna indietro: le posizioni in forte perdita, quelle sovrappesate e quelle con grossi guadagni meritano un verdetto direzionale
+- [ ] **Tutte le posizioni coperte**, ciascuna con verdetto + marcatore di urgenza, e ogni Hold col suo trigger numerico
+- [ ] **Al massimo due posizioni marcate `[oggi]`**, e ognuna per una ragione che scade davvero. Se ne hai marcate di più, declassa: l'urgenza diffusa è urgenza finta
+- [ ] **Ogni verdetto direzionale cita il fatto che lo giustifica.** Senza fatto, il verdetto è Hold — non il contrario
+- [ ] **Nessuna escalation**: nessun verdetto ripetuto è scritto più forte del giorno prima, nessun maiuscolo imperativo, nessun conteggio di giorni usato come pressione
+- [ ] **Nessun consiglio di vendita o alleggerimento su un titolo con un evento entro 10 giorni senza averlo nominato** (stacco cedola, earnings)
 - [ ] **Nessun "Nessuna novità. Hold."** — formula vietata
 - [ ] **Income Lab: almeno metà dei titoli con `gia_proposto_giorni` = 0**; ogni ripetuto (≥5) porta fra parentesi la ragione per cui torna oggi
 - [ ] **Nessun titolo con `gia_in_portafoglio` = true presentato come idea nuova** nell'Income Lab
