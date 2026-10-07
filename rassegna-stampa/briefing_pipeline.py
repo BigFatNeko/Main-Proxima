@@ -182,10 +182,19 @@ def load_portfolio(user: str) -> dict:
         else:
             # Il costo medio e' opzionale: i CSV che non ce l'hanno restano
             # validi e la posizione semplicemente non avra' P&L calcolato.
+            #
+            # Attenzione al NaN: pandas legge un campo vuoto come NaN, e in
+            # Python NaN e' VERO. La guardia `float(x or 0) or None` quindi
+            # non lo intercettava e il NaN finiva nel P&L, nel totale e nel
+            # prompt — "P&L +nan" nel riepilogo di Alex e Diana.
+            avg = None
+            grezzo = row.get("avg_cost")
             try:
-                avg = float(row.get("avg_cost") or 0) or None
+                v = float(grezzo)
+                if v == v and v > 0:      # v == v e' falso solo per NaN
+                    avg = v
             except (TypeError, ValueError):
-                avg = None
+                pass
             pos = {
                 "ticker": ticker, "shares": shares,
                 "currency": str(row.get("currency", "EUR")).strip(),
@@ -196,6 +205,57 @@ def load_portfolio(user: str) -> dict:
                 pos["cost_basis"] = round(avg * shares, 2)
             positions.append(pos)
     return {"user": user, "positions": positions, "cash": cash, "pac_monthly": pac, "gender": gender}
+
+
+def _eventi_in_arrivo(ticker_yf, pos: dict) -> None:
+    """Stacco dividendo, earnings e pagamento cedola di una posizione.
+
+    Senza questi dati il briefing consigliava operazioni senza sapere cosa
+    avesse davanti il titolo. Il 7 ottobre ha chiesto di vendere Accenture
+    "oggi, non rimandare" con lo stacco del dividendo sei giorni dopo, e lo
+    stesso giorno ha consigliato di comprare Comcast nel giorno stesso del
+    suo stacco (chi compra allo stacco la cedola non la prende). Nessuna
+    delle due date e' mai arrivata al modello, perche' la parola "earnings"
+    non compariva da nessuna parte in questo file: non era un errore di
+    giudizio, era un dato mancante.
+
+    Yahoo li ha gia': e' una chiamata in piu' per posizione, su quindici o
+    venti posizioni, fatta quando la sessione e' ancora fresca.
+    """
+    try:
+        cal = ticker_yf.calendar
+    except Exception as e:
+        log.debug("calendario %s non disponibile: %s", pos.get("ticker"), e)
+        return
+    if not isinstance(cal, dict):
+        return
+
+    oggi = datetime.now().date()
+
+    def _giorni(v):
+        """Data -> giorni da oggi. Yahoo restituisce date o liste di date."""
+        if isinstance(v, (list, tuple)):
+            v = v[0] if v else None
+        if v is None:
+            return None, None
+        d = getattr(v, "date", lambda: v)() if hasattr(v, "date") else v
+        try:
+            return d.isoformat(), (d - oggi).days
+        except Exception:
+            return None, None
+
+    eventi = {}
+    for chiave, etichetta in (("Ex-Dividend Date", "stacco_dividendo"),
+                              ("Dividend Date", "pagamento_dividendo"),
+                              ("Earnings Date", "earnings")):
+        iso, gg = _giorni(cal.get(chiave))
+        # Solo il futuro, e non oltre il trimestre: una data a sei mesi non
+        # cambia nessuna decisione di oggi e allungherebbe solo il prompt.
+        if iso and gg is not None and 0 <= gg <= 95:
+            eventi[etichetta] = {"data": iso, "fra_giorni": gg}
+
+    if eventi:
+        pos["eventi"] = eventi
 
 
 def enrich_portfolio_prices(user_data: dict) -> dict:
@@ -244,6 +304,7 @@ def enrich_portfolio_prices(user_data: dict) -> dict:
                         quot = None
                     if quot:
                         pos["quote_currency"] = str(quot).upper()
+                    _eventi_in_arrivo(t, pos)
                 return
             except Exception as e:
                 if attempt < 2:
@@ -297,6 +358,24 @@ def enrich_portfolio_prices(user_data: dict) -> dict:
                     enriched, len(positions), ", ".join(mancanti))
     else:
         log.info("Portfolio prices enriched: %d/%d posizioni", enriched, len(positions))
+
+    # Il calendario e' best-effort: Yahoo lo nega agli ETF (nessun dato
+    # fondamentale) e ogni tanto lo rifiuta anche alle azioni. Vale la pena
+    # dirlo a voce: se un giorno scende a zero, il briefing torna a
+    # consigliare alla cieca senza che nessuno se ne accorga.
+    con_eventi = [p["ticker"] for p in positions if p.get("eventi")]
+    imminenti = [f"{p['ticker']} {k} fra {v['fra_giorni']}gg"
+                 for p in positions
+                 for k, v in (p.get("eventi") or {}).items()
+                 if v["fra_giorni"] <= 10]
+    if con_eventi:
+        log.info("Calendario: %d/%d posizioni con eventi entro 95 giorni",
+                 len(con_eventi), len(positions))
+    else:
+        log.warning("Calendario: nessuna posizione con eventi. Se si ripete, "
+                    "il briefing sta consigliando senza vedere le scadenze.")
+    if imminenti:
+        log.info("Eventi entro 10 giorni: %s", " | ".join(imminenti))
 
     _calcola_stato_posizioni(user_data)
     return user_data
