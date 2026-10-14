@@ -428,7 +428,40 @@ def enrich_portfolio_prices(user_data: dict) -> dict:
     return user_data
 
 
-def _calcola_stato_posizioni(user_data: dict) -> None:
+def _cambi_eur(valute) -> dict:
+    """Quante unita' di ciascuna valuta valgono 1 EUR (Yahoo, EUR<VAL>=X).
+
+    EUR vale 1.0. Le quotazioni in pence (GBp, GBX), tipiche delle linee di
+    Londra, usano il cambio della sterlina per 100. Una valuta di cui non si
+    riesce a ottenere il cambio MANCA dal risultato: chi lo usa deve trattarla
+    come "non convertibile" e non inventare un valore.
+    """
+    cambi = {}
+    try:
+        import yfinance as yf
+    except ImportError:
+        return {"EUR": 1.0} if "EUR" in valute else {}
+    import time as _time
+    for v in valute:
+        if v.upper() == "EUR":
+            cambi[v] = 1.0
+            continue
+        pence = v in ("GBp", "GBX")
+        base = "GBP" if pence else v.upper()
+        for tentativo in range(2):
+            try:
+                h = yf.Ticker(f"EUR{base}=X").history(period="5d")
+                r = float(h["Close"].dropna().iloc[-1])
+                if r > 0:
+                    cambi[v] = r * (100.0 if pence else 1.0)
+                    break
+            except Exception as e:
+                log.debug("cambio EUR%s non disponibile (tentativo %d): %s", base, tentativo + 1, e)
+            _time.sleep(2)
+    return cambi
+
+
+def _calcola_stato_posizioni(user_data: dict, cambi: dict | None = None) -> None:
     """P&L e peso di ogni posizione, calcolati invece che raccontati.
 
     Senza questi numeri il modello vede ticker, quantita' e prezzo, e non ha
@@ -436,23 +469,46 @@ def _calcola_stato_posizioni(user_data: dict) -> None:
     briefing precedenti Hold era il 65% dei verdetti, mentre "alleggerisci"
     non compariva mai. Il peso serve a rendere visibile la concentrazione,
     il P&L a distinguere una posizione che va male da una che va bene.
+
+    VALUTE. Pesi e totali sono in EUR: ogni controvalore viene convertito col
+    cambio di Yahoo prima di sommare. La prima versione sommava invece
+    controvalori in valute diverse come se fossero euro: su Alex Maersk
+    (corone danesi) risultava al 32.6% quando pesa il 6.9%, e per Vale China
+    Telecom (yuan) all'8.8% contro l'1.3% reale. Se manca il cambio di anche
+    una sola valuta, pesi e totali NON vengono calcolati: un totale parziale
+    sarebbe sbagliato allo stesso modo. Il P&L percentuale di ogni posizione
+    non dipende dalla valuta e si calcola comunque.
+
+    `cambi` serve ai test: se omesso, si scaricano da Yahoo.
     """
     positions = user_data.get("positions", [])
-    totale = 0.0
-    for p in positions:
-        mv = p.get("market_value")
-        if mv:
-            totale += float(mv)
+    con_valore = [p for p in positions if p.get("market_value")]
+    valute = {p.get("currency") or "EUR" for p in con_valore}
+    if cambi is None:
+        cambi = _cambi_eur(valute)
+    mancanti = sorted(v for v in valute if v not in cambi)
+    cambi_ok = not mancanti
+
+    if mancanti:
+        log.error("CAMBIO NON DISPONIBILE per %s: pesi e totali in EUR non "
+                  "calcolati (un totale parziale sarebbe sbagliato). Il P&L "
+                  "percentuale resta valido.", ", ".join(mancanti))
+    else:
+        for p in con_valore:
+            p["market_value_eur"] = round(float(p["market_value"]) / cambi[p.get("currency") or "EUR"], 2)
+
+    cash = float(user_data.get("cash") or 0)         # il cash dei CSV e' sempre in EUR
+    totale = sum(p["market_value_eur"] for p in con_valore) if cambi_ok else None
     # La liquidita' fa parte del patrimonio: ignorarla gonfia i pesi di chi
-    # tiene molto cash, e Vale dopo l'iniezione ne tiene parecchio.
-    totale_con_cash = totale + float(user_data.get("cash") or 0)
+    # tiene molto cash.
+    totale_con_cash = (totale + cash) if cambi_ok else None
 
     discordanti = []
     for p in positions:
-        mv, avg = p.get("market_value"), p.get("avg_cost")
+        avg = p.get("avg_cost")
         prezzo = p.get("current_price")
-        if mv and totale_con_cash > 0:
-            p["peso_pct"] = round(100.0 * float(mv) / totale_con_cash, 1)
+        if cambi_ok and p.get("market_value_eur") and totale_con_cash > 0:
+            p["peso_pct"] = round(100.0 * p["market_value_eur"] / totale_con_cash, 1)
 
         # Se la quotazione e' in una valuta diversa da quella del costo
         # medio, meglio nessun P&L che un P&L falso: un numero sbagliato in
@@ -469,6 +525,8 @@ def _calcola_stato_posizioni(user_data: dict) -> None:
         if avg and prezzo:
             p["pnl_pct"] = round(100.0 * (float(prezzo) - float(avg)) / float(avg), 1)
             p["pnl_assoluto"] = round((float(prezzo) - float(avg)) * p["shares"], 2)
+            if cambi_ok:
+                p["pnl_assoluto_eur"] = round(p["pnl_assoluto"] / cambi[p.get("currency") or "EUR"], 2)
 
     if discordanti:
         log.error("VALUTA DISCORDANTE su %d posizioni — P&L non calcolato per "
@@ -476,25 +534,31 @@ def _calcola_stato_posizioni(user_data: dict) -> None:
                   "CSV con la linea effettivamente posseduta.",
                   len(discordanti), ", ".join(discordanti))
 
-    user_data["valore_posizioni"] = round(totale, 2)
-    user_data["patrimonio_totale"] = round(totale_con_cash, 2)
-    if totale_con_cash > 0:
-        user_data["peso_liquidita_pct"] = round(
-            100.0 * float(user_data.get("cash") or 0) / totale_con_cash, 1)
+    if cambi_ok:
+        user_data["valuta_riferimento"] = "EUR"
+        user_data["cambi_usati"] = {v: round(c, 4) for v, c in cambi.items() if v.upper() != "EUR"}
+        user_data["valore_posizioni"] = round(totale, 2)
+        user_data["patrimonio_totale"] = round(totale_con_cash, 2)
+        if totale_con_cash > 0:
+            user_data["peso_liquidita_pct"] = round(100.0 * cash / totale_con_cash, 1)
 
     con_pnl = [p for p in positions if "pnl_pct" in p]
     if con_pnl:
-        pnl_tot = sum(p["pnl_assoluto"] for p in con_pnl)
         peggiore = min(con_pnl, key=lambda p: p["pnl_pct"])
         migliore = max(con_pnl, key=lambda p: p["pnl_pct"])
-        user_data["pnl_totale_posizioni_note"] = round(pnl_tot, 2)
+        if cambi_ok:
+            pnl_tot = sum(p["pnl_assoluto_eur"] for p in con_pnl)
+            user_data["pnl_totale_posizioni_note"] = round(pnl_tot, 2)   # in EUR
+            testo_pnl = f"P&L {pnl_tot:+.0f} EUR"
+        else:
+            testo_pnl = "P&L totale non calcolabile (cambio mancante)"
         log.info("Stato portafoglio: %d/%d posizioni con costo medio | "
-                 "P&L %+.0f | peggiore %s %+.1f%% | migliore %s %+.1f%% | "
-                 "liquidita %.1f%%",
-                 len(con_pnl), len(positions), pnl_tot,
+                 "%s | peggiore %s %+.1f%% | migliore %s %+.1f%% | "
+                 "liquidita %s",
+                 len(con_pnl), len(positions), testo_pnl,
                  peggiore["ticker"], peggiore["pnl_pct"],
                  migliore["ticker"], migliore["pnl_pct"],
-                 user_data.get("peso_liquidita_pct", 0))
+                 f"{user_data['peso_liquidita_pct']:.1f}%" if "peso_liquidita_pct" in user_data else "n/d")
     else:
         log.warning("Nessuna posizione ha avg_cost nel CSV: il briefing non "
                     "potra' calcolare P&L e i verdetti resteranno generici.")
