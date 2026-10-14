@@ -412,14 +412,13 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale/diana), `user_data.p
 
 ### Vale
 - **Vale è un uomo** — usa il genere maschile in tutta la narrativa italiana (es. "analizzato", "investito", "preoccupato", "soddisfatto" etc.)
-- Portafogli più piccolo, posizioni più contenute, tilt income + alcune scommesse speculative
-- Portafoglio totale ~6.556€ (titoli ~6.123 + liquidità 433), aggiornato 7 agosto 2026. P&L non realizzato +471€
-- 432,88€ liquidità (EUR 96.76 + GBP 92.90 + USD 262.46) — è la overlay reserve residua dopo il primo scaglione
-- **OVERLAY ATTIVATO 7 agosto**: MITT è scesa del 13% in una seduta a seguito di un'acquisizione. Eseguito il primo scaglione (-7%): +29 azioni per 180,30 USD (~155€), posizione portata da 37 a 66 azioni, costo medio sceso a 6,83. Restano disponibili gli scaglioni -14% (150€) e -21% (300€). **Da monitorare**: se MITT scende ancora, il secondo scaglione è armato
+- Portafoglio medio-piccolo (nell'ordine dei **7.000€**, il secondo dei tre per dimensione), posizioni contenute, tilt income + alcune scommesse speculative. Dati da estratto IBKR aggiornato al 14 ottobre 2026
+- **Liquidità minima (circa 100€)**: l'overlay reserve è di fatto esaurita. Tre acquisti e una mediazione in pochi giorni di inizio ottobre hanno consumato quasi tutta l'iniezione di liquidità. Ogni acquisto proposto va finanziato dal prossimo conferimento PAC o da una vendita, e **va detto da dove viene il denaro**: non proporre acquisti come se ci fosse cassa
+- **Movimenti recenti**: 7 agosto, primo scaglione dell'overlay su MITT dopo il -13% in una seduta per un'acquisizione; settembre, STLAP da 67 a 167 azioni; 1-2 ottobre, aperta REN (RELX), MITT da 66 a 93 azioni, SAN da 5 a 7; dopo il 2 ottobre, CMCSA da 15 a 22 azioni (la mediazione annunciata a settembre è stata eseguita)
 - INSW venduto interamente a 85.3 il 29/05/2026 senza incassare il dividendo
 - WEN (Wendy's, 59 az.) venduto interamente a ~9.40 USD — posizione chiusa, non citarla più
-- PAC giugno deployato: CS.PA (AXA, 20 az.) e CMCSA (Comcast, 15 az.)
-- **Acquisti luglio 2026 in drawdown** (fuori dal PAC ordinario): ACN (Accenture, 4 az. su Xetra, costo 119.11€/az, il 3 luglio) e WKL.AS (Wolters Kluwer, 10 az., costo 59.55€/az, il 7 luglio). Entrambi comprati vicino ai minimi 52 settimane, entrambi ~+21% in tre settimane. Sono il motore della performance MTD di luglio.
+- PAC giugno 2026: CS.PA (AXA) e CMCSA (Comcast)
+- **Acquisti luglio 2026 in drawdown** (fuori dal PAC ordinario): ACN (Accenture, 4 az., il 3 luglio) e WKL.AS (Wolters Kluwer, 10 az., il 7 luglio), entrambi comprati vicino ai minimi a 52 settimane
 - **Strategia PAC strutturata (400€/mese)**:
   - 300€ → ETF/azioni income anticicliche (DCA mensile fisso)
   - 100€ → riserva trading (accumula; quando raggiunge 300€ → acquisto titolo "trading")
@@ -428,11 +427,11 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale/diana), `user_data.p
     - Drawdown -14%: 150€ in più
     - Drawdown -21%: 300€ in più
   - La reserve non va consumata per trading speculativo né per nuovo DCA ordinario
-  - **PAC agosto 2026 già deployato**: SAN.PA portata da 1 a 5 azioni (+4 az., ~302€), il resto è confluito in liquidità completando quasi la reserve
+  - PAC agosto 2026: SAN.PA portata da 1 a 5 azioni (+4 az., ~302€)
 - Tono: piano di accumulo strutturato, attenzione concentrazioni
-- **Concentrazione da monitorare**: CS (AXA) ~14%, WKL ~11%, 601728 ~10%, ACN ~9% del portafoglio. Le prime quattro pesano ~44%.
-- **Posizione più in perdita**: STLAP (Stellantis) −165€ su 484€ di costo (−34%). È la sola perdita rilevante; MITT è ora −30€ dopo la mediazione.
-- Posizioni note: CS.PA (AXA), WKL.AS (Wolters Kluwer), ACN (Accenture), ENI, IMAE, MO, 601728, IJPA, CMCSA, MITT, SAN (Sanofi), NKLR, SGMT, STLAP
+- **Sovrapposizione da non perdere di vista**: REN (RELX) e WKL (Wolters Kluwer) fanno lo stesso mestiere — informazione professionale e analytics — e insieme sono una delle concentrazioni principali. Una notizia di settore colpisce entrambe: trattala come **un'unica scommessa, non due**
+- **Chi è in guadagno e chi in perdita: non fidarti di questo profilo, leggi il contesto.** Ogni posizione porta `pnl_pct` e `pnl_assoluto` calcolati dal prezzo live (nella valuta della posizione). Non ricopiare cifre di P&L o di peso da nessuna parte: quelle scritte a mano in questo profilo erano ferme ad agosto e sbagliate
+- **Ticker diversi dal nome che Vale vede sul broker**: ACN è Accenture sulla **linea di Vienna in EUR** (il broker la chiama CSA; non è quella di New York in USD); REN è RELX sulla linea di Amsterdam in EUR; SAN è Sanofi (SAN1 sul broker); 601728 è China Telecom Shanghai (il broker la quota in CNH)
 
 ### Diana
 - **Diana è una donna** — usa il genere femminile in tutta la narrativa italiana (es. "analizzata", "investita", "preoccupata", "soddisfatta"). Il pipeline lo passa anche in `user_data.gender`
