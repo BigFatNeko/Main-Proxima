@@ -432,8 +432,8 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale/diana), `user_data.p
 
 ### Diana
 - **Diana è una donna** — usa il genere femminile in tutta la narrativa italiana (es. "analizzata", "investita", "preoccupata", "soddisfatta"). Il pipeline lo passa anche in `user_data.gender`
-- Portafoglio ~2.529€ di titoli (costo base 2.450€), P&L non realizzato **+79€**, da estratto IBKR del 19 settembre 2026. È il portafoglio più piccolo dei tre: **la scala conta**, non proporre operazioni che abbiano senso solo su cifre più grandi
-- **8 posizioni, ma il peso è tutto in una**: VUAA (S&P 500 acc) vale 1.134€, cioè il **45% del portafoglio**. Il resto è una coda di posizioni da 2-3 azioni. Qualunque discorso di diversificazione parte da qui
+- Portafoglio nell'ordine dei **2.000-2.500€**, da estratto IBKR aggiornato al 14 ottobre 2026. È il portafoglio più piccolo dei tre: **la scala conta**, non proporre operazioni che abbiano senso solo su cifre più grandi
+- **9 posizioni, ma il peso è concentrato in una**: VUAA (S&P 500 acc) pesa **più di 4/10 del portafoglio**. Il resto è una coda di posizioni piccole (2-3 azioni, o frazioni). Qualunque discorso di diversificazione parte da qui
 - **Le commissioni sono il vincolo dominante**: con posizioni da 70-500€, un'operazione da 2-3€ di commissione pesa quanto mesi di dividendi. Non suggerire ribilanciamenti frequenti, acquisti frazionati ripetuti o rotazioni tattiche: su questa scala l'attrito mangia il rendimento. Preferire poche operazioni più grandi
 - **Niente liquidità a giacenza, niente PAC — per scelta**: Diana non tiene cash sul conto e non ha un piano di accumulo. **Versa quando decide di comprare qualcosa.** Questo è l'opposto del vincolo di Alex: lui è bloccato perché ha esaurito le munizioni, lei può finanziare un acquisto in qualunque momento se c'è una ragione valida. Quindi:
   - **sì** a proposte di acquisto motivate, purché la ragione giustifichi un versamento e la relativa commissione
@@ -441,10 +441,9 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale/diana), `user_data.p
   - **no** a suggerimenti di "cash management" o di costruire una riserva: è una scelta deliberata, non una svista. Non riproporla
   - il CASH a zero nel contesto **non** va letto come portafoglio investito integralmente
 - **Le quattro card dei suggerimenti vanno riadattate**: per Diana la card 🟢 "PAC mensile" e la card 🔵 "Cash management" non hanno oggetto. Non riempirle con formule ipotetiche del tipo "se hai un versamento attivo": usale invece come 🟢 **Prossimo conferimento** (se oggi valesse la pena versare, su cosa e perché — altrimenti "nessuna ragione per conferire questa settimana") e 🔵 **Costo dell'operazione** (quanto peserebbe la commissione sull'importo proposto). Le altre due card restano come sono
-- In guadagno: PST (+33€, +32% — la migliore in percentuale), VUAA (+126€)
-- In perdita: TTWO (−38€, −8%), MCD (−31€, −6%), NKE (−8€, −10%), EIMI (−2€), RUI (−3€)
-- **IBKR 0,1032 azioni (7,80€)** è una frazione simbolica sul proprio broker, non un'allocazione: va costruita o chiusa, non lasciata a metà. Stesso trattamento delle posizioni da 1 azione di Alex
-- **EIMI e VUAA sono le linee di Londra in USD** (EIMI.L, VUAA.L), non quelle di Milano: Diana vede prezzi in dollari nel suo broker. Attenzione al cambio quando si ragiona in euro
+- **Chi è in guadagno e chi in perdita: non fidarti di questo profilo, leggi il contesto.** Ogni posizione porta `pnl_pct` e `pnl_assoluto` calcolati dal prezzo live (nella valuta della posizione). Le cifre di P&L scritte a mano qui erano ferme al 19 settembre e a metà ottobre non corrispondevano più: non vanno ricopiate da nessuna parte
+- **IBKR è oggi 1 azione intera** (a settembre era una frazione simbolica da 0,1032): la frazione non c'è più, non c'è nulla da "costruire o chiudere". **IGLN (iShares Physical Gold ETC, 0,6221 azioni)** è la posizione nuova, comprata fra il 19 settembre e il 14 ottobre: è un **ETC su oro fisico, senza utili né dividendi**, quindi non applicargli ragionamenti da azienda (P/E, margine di sicurezza, voto MVF). Si giudica su oro, dollaro e tassi reali, e sul suo peso, che è piccolo
+- **EIMI, VUAA e IGLN sono le linee di Londra in USD** (EIMI.L, VUAA.L, IGLN.L), non quelle di Milano: Diana vede prezzi in dollari nel suo broker. Attenzione al cambio quando si ragiona in euro
 - Unica esposizione italiana: PST (Poste). Unica esposizione Francia: RUI (Rubis)
 - Tono: portafoglio in costruzione, poche posizioni, ogni euro di commissione conta. Didattico dove serve, mai paternalistico
 
