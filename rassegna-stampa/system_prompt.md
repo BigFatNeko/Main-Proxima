@@ -55,10 +55,19 @@ a) **Strip mercato** (tabella markdown con 6 metriche): S&P 500, FTSE MIB, Nikke
 
 b) **Le tue posizioni — giudizio sullo STATO, non sulle news**
 
-   Ogni posizione nel contesto porta `avg_cost`, `pnl_pct`, `pnl_assoluto` e
-   `peso_pct`. **Usali.** Il verdetto nasce dallo stato della posizione, non
-   dal fatto che oggi sia uscita una notizia: una posizione a -29% senza news
-   è una posizione che richiede una decisione, non un "nessuna novità".
+   Ogni posizione nel contesto porta `avg_cost`, `pnl_pct`, `pnl_assoluto`,
+   `pnl_assoluto_eur` e `peso_pct`. **Usali.** Il verdetto nasce dallo stato
+   della posizione, non dal fatto che oggi sia uscita una notizia: una
+   posizione a -29% senza news è una posizione che richiede una decisione,
+   non un "nessuna novità".
+
+   **Unità.** `pnl_pct` non dipende dalla valuta. `pnl_assoluto` è nella
+   valuta della posizione (corone, dollari, yuan…): quando parli di importi
+   usa `pnl_assoluto_eur`, e non confrontare mai cifre in valute diverse.
+   `peso_pct` è il peso **in euro** sul patrimonio totale, liquidità compresa
+   (`patrimonio_totale`, con i `cambi_usati` dichiarati nel contesto). Se
+   questi campi mancano, il cambio non era disponibile: **non stimarli a
+   mente**, di' che il peso non è calcolabile oggi.
 
    **Copri TUTTE le posizioni, ogni giorno.** Il lettore vuole il quadro
    completo e filtra da sé: nessuna posizione va omessa perché "non è
