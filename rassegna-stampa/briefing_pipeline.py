@@ -207,6 +207,39 @@ def load_portfolio(user: str) -> dict:
     return {"user": user, "positions": positions, "cash": cash, "pac_monthly": pac, "gender": gender}
 
 
+def _scegli_prezzo(prezzo_fast, prev_close_fast, chiusura_hist):
+    """Sceglie fra la quotazione di fast_info e l'ultima chiusura di history().
+
+    fast_info e' la fonte preferita ma a volte restituisce una quotazione
+    DEGENERE: un last_price con tutti gli altri campi vuoti (nessuna chiusura
+    precedente, nessun massimo o minimo del giorno), cioe' un valore fermo e
+    non un prezzo vivo. Capita sui titoli poco scambiati. Caso reale: il GDR
+    Samsung SMSD.L risultava a 1072 su fast_info, mentre history() ne dava
+    3280 (serie coerente, con volumi) e il broker 3255. Con il costo medio
+    nel CSV quel valore avrebbe prodotto un P&L del -39.7% al posto del reale
+    +82%: un numero falso e verosimile, il peggior tipo.
+
+    La regola e' volutamente stretta, per non cambiare il comportamento sui
+    titoli sani (quelli con una chiusura precedente non vengono mai toccati):
+      - quotazione degenere e history() diverge di oltre il 25% -> history
+      - quotazione degenere e history() non disponibile -> NESSUN prezzo.
+        Una quotazione che non si e' potuta verificare non va usata: senza
+        prezzo la posizione entra nel ciclo di nuovi tentativi gia' presente,
+        mentre un 1072 al posto di 3280 produrrebbe un -40% falso.
+    Restituisce (prezzo, fonte).
+    """
+    if not prezzo_fast:
+        return chiusura_hist, ("history" if chiusura_hist else None)
+    if prev_close_fast:
+        return prezzo_fast, "fast_info"
+    # da qui la quotazione e' degenere
+    if not chiusura_hist:
+        return None, None
+    if abs(prezzo_fast - chiusura_hist) / chiusura_hist > 0.25:
+        return chiusura_hist, "history (fast_info degenere e discordante)"
+    return prezzo_fast, "fast_info"
+
+
 def _eventi_in_arrivo(ticker_yf, pos: dict) -> None:
     """Stacco dividendo, earnings e pagamento cedola di una posizione.
 
@@ -282,13 +315,27 @@ def enrich_portfolio_prices(user_data: dict) -> dict:
             try:
                 t = yf.Ticker(tkr)
                 fi = getattr(t, "fast_info", None)
-                price = None
+                price = prev = None
                 if fi is not None:
                     price = getattr(fi, "last_price", None) or getattr(fi, "regularMarketPrice", None)
-                if not price:
-                    hist = t.history(period="3d")
+                    try:
+                        prev = getattr(fi, "previous_close", None)
+                    except Exception:
+                        prev = None
+                # history() serve se manca il prezzo, o se la quotazione e'
+                # sospetta (nessuna chiusura precedente): in quel caso fa da
+                # controprova. Sui titoli sani non costa nessuna chiamata in piu'.
+                hp = None
+                if not price or not prev:
+                    hist = t.history(period="5d")
                     if not hist.empty:
-                        price = float(hist["Close"].dropna().iloc[-1])
+                        hp = float(hist["Close"].dropna().iloc[-1])
+                price, fonte = _scegli_prezzo(price, prev, hp)
+                if fonte and fonte.startswith("history (") :
+                    log.warning("Prezzo %s: fast_info %s scartato, uso history %.2f "
+                                "(quotazione senza chiusura precedente e discordante)",
+                                tkr, getattr(fi, "last_price", None), price)
+                    pos["fonte_prezzo"] = fonte
                 if price and price > 0:
                     pos["current_price"] = round(float(price), 2)
                     pos["market_value"] = round(float(price) * pos["shares"], 2)
