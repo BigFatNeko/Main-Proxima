@@ -396,15 +396,19 @@ Quando gap > 1 giorno feriale dall'ultimo briefing (info passata nel contesto co
 Il pipeline passa nel contesto: `user_data.user` (alex/vale/diana), `user_data.positions` (lista), `user_data.cash`, `user_data.pac_monthly`, `user_data.gender`.
 
 ### Alex
-- Portafoglio ~320.129€ (dati IBKR 11 agosto 2026), P&L non realizzato **+47.544€**. 23 posizioni, diversificazione marcata
+- Portafoglio nell'ordine dei **300.000€**, da estratto IBKR aggiornato al 14 ottobre 2026. 26 posizioni più un warrant, diversificazione marcata
 - Allocation aspirazionale 50/30/20 (income/growth/bond), bond ancora da implementare
 - Tono: strategie più ambiziose, può tollerare drawdown ciclici
-- **Liquidità 2,04€ — azzerata**: il portafoglio è investito integralmente. Zero capacità di manovra: nessuna possibilità di mediare, di cogliere occasioni o di rispondere a un drawdown finché non entra nuova liquidità. È il vincolo operativo dominante: **non proporre alcun acquisto senza indicare da dove viene il denaro** (vendita di una posizione, dividendo in arrivo, versamento)
+- **Liquidità praticamente nulla (circa 4€) — azzerata**: il portafoglio è investito integralmente. Zero capacità di manovra: nessuna possibilità di mediare, di cogliere occasioni o di rispondere a un drawdown finché non entra nuova liquidità. È il vincolo operativo dominante: **non proporre alcun acquisto senza indicare da dove viene il denaro** (vendita di una posizione, dividendo in arrivo, versamento)
 - **Movimenti agosto 2026**: TGYM da 118 a 304 azioni; aperta PFE (Pfizer, 1 az.); chiuse ABNB e NIQ
-- **Posizioni da 1 azione** (PFE, TSLA, SMSD): sono aperture di monitoraggio, non allocazioni. Vanno costruite o chiuse, non lasciate a metà — segnalarlo quando emerge una notizia rilevante sul titolo
+- **Movimenti fra l'11 agosto e il 14 ottobre 2026**: aperte IGLN (oro fisico), TTWO, AKAM e BKR; R2US da 228 a 239 azioni; chiusa GME; PSKY ora quota come SKYD e compaiono 9 warrant SKYD-WT a costo zero
+- **Posizioni da 1 azione** (PFE, TSLA, SMSD, AKAM): sono aperture di monitoraggio, non allocazioni. Vanno costruite o chiuse, non lasciate a metà — segnalarlo quando emerge una notizia rilevante sul titolo
 - **SMSD è un preferred (Samsung Electronics REGS GDR PFD)**, non un ETF: se si applica MVF, va instradato sul motore preferred, non su quello azionario
-- Posizioni per peso: VUAA (prima posizione), MAERSK.A, EIMI, RIO, EQNR, INSW, R2US, BLK, PST, RMS, JNJ, MMM, ENI, KO, TGYM, SMSD, TKO, STLAP, 601728, TSLA, PSKY, GME
-- In perdita: STLAP, 601728, TSLA, PSKY, GME (le ultime tre sono posizioni speculative minime)
+- **VUAA, EIMI e R2US sono le linee di Londra in USD** (VUAA.L, EIMI.L, R2US.L), non quelle di Milano: Alex vede prezzi in dollari nel suo broker. Fino al 14 ottobre erano registrate per errore come linee di Milano
+- **IGLN (iShares Physical Gold ETC)** è un **ETC su oro fisico, senza utili né dividendi**: non applicargli ragionamenti da azienda (P/E, margine di sicurezza, voto MVF). Si giudica su oro, dollaro e tassi reali, e sul suo peso
+- **SKYD (ex PSKY) e i 9 warrant SKYD-WT**: il 14 ottobre Yahoo mostra un calo da 9,27 a circa 7, ma il broker calcola −4,83% e Alex ha 9 warrant a costo zero. Lo scarto è coerente con una distribuzione di warrant, **da confermare**. Non descriverlo come un crollo di quasi un quarto senza averlo verificato: azione e warrant si valutano insieme
+- **VUAA è di gran lunga la prima posizione per peso** (circa 3/10 del portafoglio)
+- **Chi è in guadagno e chi in perdita: non fidarti di questo profilo, leggi il contesto.** Ogni posizione porta `pnl_pct` e `pnl_assoluto` calcolati dal prezzo live (nella valuta della posizione). Non ricopiare cifre di P&L da nessuna parte
 
 ### Vale
 - **Vale è un uomo** — usa il genere maschile in tutta la narrativa italiana (es. "analizzato", "investito", "preoccupato", "soddisfatto" etc.)
@@ -449,7 +453,7 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale/diana), `user_data.p
 
 ### Posizioni overlap
 - **Alex ∩ Vale**: ENI, 601728, STLAP
-- **Alex ∩ Diana**: VUAA, EIMI, PST (Alex li ha su Milano, Diana VUAA/EIMI su Londra in USD)
+- **Alex ∩ Diana**: VUAA, EIMI, PST, TTWO, IGLN (VUAA ed EIMI sono sulle stesse linee di Londra in USD per entrambi)
 - Quando esce una notizia rilevante, coprila da angoli diversi in base alla dimensione della posizione: la stessa news su PST pesa in modo molto diverso su 653 azioni di Alex e 5 di Diana
 
 ---
