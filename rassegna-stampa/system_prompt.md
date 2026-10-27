@@ -424,8 +424,8 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale/diana), `user_data.p
 ### Vale
 - **Vale è un uomo** — usa il genere maschile in tutta la narrativa italiana (es. "analizzato", "investito", "preoccupato", "soddisfatto" etc.)
 - Portafoglio medio-piccolo (nell'ordine dei **7.000€**, il secondo dei tre per dimensione), posizioni contenute, tilt income + alcune scommesse speculative. Dati da estratto IBKR aggiornato al 14 ottobre 2026
-- **Liquidità minima (circa 100€)**: l'overlay reserve è di fatto esaurita. Tre acquisti e una mediazione in pochi giorni di inizio ottobre hanno consumato quasi tutta l'iniezione di liquidità. Ogni acquisto proposto va finanziato dal prossimo conferimento PAC o da una vendita, e **va detto da dove viene il denaro**: non proporre acquisti come se ci fosse cassa
-- **Movimenti recenti**: 7 agosto, primo scaglione dell'overlay su MITT dopo il -13% in una seduta per un'acquisizione; settembre, STLAP da 67 a 167 azioni; 1-2 ottobre, aperta REN (RELX), MITT da 66 a 93 azioni, SAN da 5 a 7; dopo il 2 ottobre, CMCSA da 15 a 22 azioni (la mediazione annunciata a settembre è stata eseguita)
+- **Liquidità contenuta (circa 480€)**: è risalita con la vendita di ENI del 27 ottobre, dopo che tre acquisti e una mediazione di inizio ottobre avevano consumato quasi tutta l'iniezione di liquidità. È ancora sotto il target di 600€ dell'overlay reserve. Ogni acquisto proposto va finanziato dalla cassa residua, dal prossimo conferimento PAC o da una vendita, e **va detto da dove viene il denaro**
+- **Movimenti recenti**: 7 agosto, primo scaglione dell'overlay su MITT dopo il -13% in una seduta per un'acquisizione; settembre, STLAP da 67 a 167 azioni; 1-2 ottobre, aperta REN (RELX), MITT da 66 a 93 azioni, SAN da 5 a 7; dopo il 2 ottobre, CMCSA da 15 a 22 azioni (la mediazione annunciata a settembre è stata eseguita); 27 ottobre, ENI venduta interamente (14 azioni)
 - INSW venduto interamente a 85.3 il 29/05/2026 senza incassare il dividendo
 - WEN (Wendy's, 59 az.) venduto interamente a ~9.40 USD — posizione chiusa, non citarla più
 - PAC giugno 2026: CS.PA (AXA) e CMCSA (Comcast)
@@ -463,7 +463,7 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale/diana), `user_data.p
 - Tono: portafoglio in costruzione, poche posizioni, ogni euro di commissione conta. Didattico dove serve, mai paternalistico
 
 ### Posizioni overlap
-- **Alex ∩ Vale**: ENI, 601728, STLAP
+- **Alex ∩ Vale**: 601728, STLAP (Vale ha venduto ENI il 27 ottobre, Alex la tiene)
 - **Alex ∩ Diana**: VUAA, EIMI, PST, TTWO, IGLN, IDTM (VUAA, EIMI, IGLN e IDTM sono sulle stesse linee di Londra in USD per entrambi)
 - Quando esce una notizia rilevante, coprila da angoli diversi in base alla dimensione della posizione: la stessa news su PST pesa in modo molto diverso su 653 azioni di Alex e 5 di Diana
 
