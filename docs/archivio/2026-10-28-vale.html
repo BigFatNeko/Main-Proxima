@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>Proxima Daily — Vale</title>
+  <style>
+    :root {
+      --bg:       #f5f4f0;
+      --bg-card:  #ffffff;
+      --bg-2:     #eeece6;
+      --text:     #1a1a18;
+      --text-2:   #555550;
+      --text-3:   #96948e;
+      --border:   #d6d4cc;
+      --border-s: #e8e6de;
+      --link:     #1a5ba8;
+      --up-bg:    #e6f3e8;
+      --up:       #1a7a3e;
+      --dn-bg:    #fce8e7;
+      --dn:       #b02020;
+      --warn-bg:  #fdf3d8;
+      --warn:     #8a6400;
+      --pill-r:   #fce8e7;
+      --pill-r-t: #b02020;
+      --pill-g:   #e6f3e8;
+      --pill-g-t: #1a7a3e;
+      --pill-y:   #fdf3d8;
+      --pill-y-t: #8a6400;
+      --pill-b:   #e3edf8;
+      --pill-b-t: #1a5ba8;
+      --serif: "Source Serif Pro","Crimson Pro",Georgia,serif;
+      --sans:  -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+      --mono:  ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    }
+    /* dark mode intentionally disabled — briefing is always light/newspaper style */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .paper {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 1.5rem 1.5rem 4rem;
+    }
+
+    /* ── MASTHEAD ── */
+    .masthead {
+      text-align: center;
+      border-top: 3px solid var(--text);
+      border-bottom: 1px solid var(--border);
+      padding: 1.2rem 0 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+    .masthead h1 {
+      font-family: var(--serif);
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      line-height: 1;
+      margin-bottom: 5px;
+    }
+    .masthead .sub {
+      font-size: 10.5px;
+      color: var(--text-3);
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+    }
+
+    /* ── MARKET STRIP ── */
+    .market-strip {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 1.2rem;
+    }
+    .mchip {
+      flex: 1 1 90px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-s);
+      border-radius: 10px;
+      padding: 8px 10px;
+      text-align: center;
+      min-width: 80px;
+    }
+    .mchip.up  { background: var(--up-bg);  border-color: rgba(26,122,62,.25); }
+    .mchip.dn  { background: var(--dn-bg);  border-color: rgba(176,32,32,.25); }
+    .mchip-lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-2); margin-bottom: 2px; font-weight: 600; }
+    .mchip-val { font-size: 15px; font-weight: 700; }
+    .mchip-chg { font-size: 12.5px; font-weight: 600; margin-top: 2px; }
+    .mchip.up  .mchip-chg { color: var(--up); }
+    .mchip.dn  .mchip-chg { color: var(--dn); }
+    .mchip     .mchip-chg { color: var(--text-3); }
+
+    /* ── PORTFOLIO GRID ── */
+    .port-section { margin-bottom: 1.4rem; }
+    .section-label {
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-3);
+      margin-bottom: 6px;
+    }
+    .port-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 8px;
+    }
+    .pcard {
+      background: var(--bg-card);
+      border: 1px solid var(--border-s);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .pcard.cash-card { border-style: dashed; }
+    .pcard-ticker { font-size: 13px; font-weight: 700; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+    .pcard-meta  { font-size: 11px; color: var(--text-2); margin-top: 2px; }
+    .pcard-price { font-size: 14px; font-weight: 700; margin-top: 6px; color: var(--text); }
+    .pcard-mval  { font-size: 11.5px; color: var(--text-2); margin-top: 1px; }
+    .pcard-nodata { font-size: 11px; color: var(--text-3); margin-top: 6px; }
+    .pcard-pnl   { font-size: 11.5px; font-weight: 600; margin-top: 3px; }
+    .pnl-up      { color: #1a7f4b; }
+    .pnl-down    { color: #b3261e; }
+    .pcard-peso  { font-size: 10.5px; color: var(--text-3); margin-top: 1px; }
+    .pcard-evento{ font-size: 10px; margin-top: 3px; padding: 1px 5px; border-radius: 3px;
+                   display: inline-block; background: #fff3cd; color: #7a5c00; font-weight: 600; }
+    @media (prefers-color-scheme: dark) {
+      .pcard-evento { background: #4a3c00; color: #ffd966; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .pnl-up   { color: #4ade80; }
+      .pnl-down { color: #f87171; }
+    }
+
+    /* ── ARTICLE ── */
+    article h2 {
+      font-family: var(--serif);
+      font-size: 21px;
+      font-weight: 700;
+      margin: 2rem 0 .7rem;
+      padding-bottom: 5px;
+      border-bottom: 1px solid var(--border);
+    }
+    article h2:first-of-type { margin-top: .3rem; }
+    article h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 1.3rem 0 .4rem;
+      line-height: 1.35;
+    }
+    article p { margin: 0 0 .75rem; font-size: 14.5px; line-height: 1.65; }
+    article a { color: var(--link); text-decoration: none; }
+    article a:hover { text-decoration: underline; }
+    article ul, article ol { margin: .4rem 0 .9rem; padding-left: 1.5rem; }
+    article li { margin: .25rem 0; font-size: 14.5px; line-height: 1.6; }
+
+    /* Blockquote — "Perché ti riguarda" box */
+    article blockquote {
+      margin: .7rem 0 1.1rem;
+      padding: .7rem 1rem;
+      background: var(--bg-2);
+      border-left: 3px solid var(--border);
+      border-radius: 0 8px 8px 0;
+      font-size: 13.5px;
+      color: var(--text-2);
+    }
+    article blockquote strong { color: var(--text); }
+    article blockquote p { margin: .2rem 0; font-size: 13.5px; }
+    article blockquote ul { margin: .3rem 0 0; padding-left: 1.1rem; }
+    article blockquote li { font-size: 13px; margin: .15rem 0; }
+
+    /* Tables — use proper HTML tables, NOT code blocks */
+    article table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: .8rem 0 1.2rem;
+      font-size: 13px;
+      border: 1px solid var(--border-s);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    article table th {
+      background: var(--bg-2);
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--text-2);
+      font-weight: 600;
+      padding: 7px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    article table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border-s);
+      line-height: 1.45;
+    }
+    article table tr:last-child td { border-bottom: none; }
+    article table tr:hover td { background: var(--bg-2); }
+
+    /* Code */
+    article code {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: var(--bg-2);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--text-2);
+    }
+    article pre {
+      background: var(--bg-2);
+      padding: .8rem 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 12px;
+      margin: .5rem 0 1rem;
+    }
+    article hr {
+      border: none;
+      border-top: 1px solid var(--border-s);
+      margin: 1.8rem 0;
+    }
+    article strong { font-weight: 600; }
+    article em { font-style: italic; color: var(--text-2); }
+
+    /* Pill semantici nel testo: 🔴🟡🟢🔵 */
+    .pill {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 1px 7px;
+      border-radius: 20px;
+      vertical-align: middle;
+    }
+    .pill-r { background: var(--pill-r); color: var(--pill-r-t); }
+    .pill-g { background: var(--pill-g); color: var(--pill-g-t); }
+    .pill-y { background: var(--pill-y); color: var(--pill-y-t); }
+    .pill-b { background: var(--pill-b); color: var(--pill-b-t); }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      font-size: 10.5px;
+      color: var(--text-3);
+      margin-top: 2.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-s);
+      font-style: italic;
+    }
+
+    /* Print */
+    @media print {
+      body, .paper { background: #fff; color: #000; }
+      .market-strip, .port-section { display: none; }
+      .paper { max-width: 100%; padding: 0; }
+      a::after { content: " [" attr(href) "]"; font-size: 9pt; color: #555; }
+    }
+
+    /* Mobile */
+    @media (max-width: 560px) {
+      .paper { padding: 1rem .9rem 3rem; }
+      .masthead h1 { font-size: 28px; }
+      .port-grid { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); }
+      article table { font-size: 12px; }
+      article table th, article table td { padding: 5px 7px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="paper">
+
+    <!-- ── MASTHEAD ── -->
+    <div class="masthead">
+      <h1>Proxima Daily</h1>
+      <div class="sub">Mercoledì 28 Ottobre 2026 &middot; Vale &middot; daily</div>
+    </div>
+
+    <!-- ── MARKET STRIP ── -->
+    
+    <div class="market-strip">
+      
+        
+        
+      <div class="mchip up">
+        <div class="mchip-lbl">S&P 500</div>
+        
+        <div class="mchip-val">7722.60</div>
+        
+        
+        <div class="mchip-chg">+0.60%</div>
+        
+      </div>
+      
+        
+        
+      <div class="mchip up">
+        <div class="mchip-lbl">FTSE MIB</div>
+        
+        <div class="mchip-val">49627.95</div>
+        
+        
+        <div class="mchip-chg">+0.90%</div>
+        
+      </div>
+      
+        
+        
+      <div class="mchip dn">
+        <div class="mchip-lbl">Nikkei</div>
+        
+        <div class="mchip-val">62189.65</div>
+        
+        
+        <div class="mchip-chg">-0.80%</div>
+        
+      </div>
+      
+        
+        
+      <div class="mchip dn">
+        <div class="mchip-lbl">Brent</div>
+        
+        <div class="mchip-val">109.74</div>
+        
+        
+        <div class="mchip-chg">-5.24%</div>
+        
+      </div>
+      
+        
+        
+      <div class="mchip dn">
+        <div class="mchip-lbl">EUR/USD</div>
+        
+        <div class="mchip-val">1.11</div>
+        
+        
+        <div class="mchip-chg">-0.80%</div>
+        
+      </div>
+      
+        
+        
+      <div class="mchip up">
+        <div class="mchip-lbl">10Y UST</div>
+        
+        <div class="mchip-val">4.99</div>
+        
+        
+        <div class="mchip-chg">+0.14%</div>
+        
+      </div>
+      
+    </div>
+    
+
+    <!-- ── PORTFOLIO GRID ── -->
+    
+    
+    
+    <div class="port-section">
+      <div class="section-label">Portafoglio · 14 posizioni · Cash 481 EUR</div>
+      <div class="port-grid">
+        
+        <div class="pcard">
+          <div class="pcard-ticker">CS</div>
+          <div class="pcard-meta">20 az. · EUR</div>
+          
+          <div class="pcard-price">42.46</div>
+          <div class="pcard-mval">≈ 849 EUR</div>
+          
+          <div class="pcard-pnl pnl-up">
+            +8.5% · +67
+          </div>
+          
+          
+          <div class="pcard-peso">11.8% del totale</div>
+          
+          
+          
+          
+          
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">WKL</div>
+          <div class="pcard-meta">10 az. · EUR</div>
+          
+          <div class="pcard-price">86.06</div>
+          <div class="pcard-mval">≈ 861 EUR</div>
+          
+          <div class="pcard-pnl pnl-up">
+            +44.5% · +265
+          </div>
+          
+          
+          <div class="pcard-peso">12.0% del totale</div>
+          
+          
+          
+          
+          
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">REN</div>
+          <div class="pcard-meta">17 az. · EUR</div>
+          
+          <div class="pcard-price">35.16</div>
+          <div class="pcard-mval">≈ 598 EUR</div>
+          
+          <div class="pcard-pnl pnl-up">
+            +17.8% · +90
+          </div>
+          
+          
+          <div class="pcard-peso">8.3% del totale</div>
+          
+          
+          
+          
+          
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">ACN</div>
+          <div class="pcard-meta">4 az. · EUR</div>
+          
+          <div class="pcard-price">211.50</div>
+          <div class="pcard-mval">≈ 846 EUR</div>
+          
+          <div class="pcard-pnl pnl-up">
+            +77.6% · +370
+          </div>
+          
+          
+          <div class="pcard-peso">11.8% del totale</div>
+          
+          
+          
+          
+          
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">IMAE</div>
+          <div class="pcard-meta">5 az. · EUR</div>
+          
+          <div class="pcard-price">104.72</div>
+          <div class="pcard-mval">≈ 524 EUR</div>
+          
+          <div class="pcard-pnl pnl-up">
+            +7.0% · +34
+          </div>
+          
+          
+          <div class="pcard-peso">7.3% del totale</div>
+          
+          
+          
+          
+          
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">MO</div>
+          <div class="pcard-meta">2 az. · USD</div>
+          
+          <div class="pcard-price">73.49</div>
+          <div class="pcard-mval">≈ 147 USD</div>
+          
+          <div class="pcard-pnl pnl-up">
+            +25.9% · +30
+          </div>
+          
+          
+          <div class="pcard-peso">1.8% del totale</div>
+          
+          
+          
+          
+          
+          <div class="pcard-evento">earnings domani</div>
+          
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">601728</div>
+          <div class="pcard-meta">100 az. · CNY</div>
+          
+          <div class="pcard-price">6.95</div>
+          <div class="pcard-mval">≈ 695 CNY</div>
+          
+          <div class="pcard-pnl pnl-up">
+            +15.3% · +92
+          </div>
+          
+          
+          <div class="pcard-peso">1.3% del totale</div>
+          
+          
+          
+          
+          
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">IJPA</div>
+          <div class="pcard-meta">7 az. · EUR</div>
+          
+          <div class="pcard-price">73.75</div>
+          <div class="pcard-mval">≈ 516 EUR</div>
+          
+          <div class="pcard-pnl pnl-up">
+            +14.1% · +64
+          </div>
+          
+          
+          <div class="pcard-peso">7.2% del totale</div>
+          
+          
+          
+          
+          
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">CMCSA</div>
+          <div class="pcard-meta">22 az. · USD</div>
+          
+          <div class="pcard-price">21.84</div>
+          <div class="pcard-mval">≈ 480 USD</div>
+          
+          <div class="pcard-pnl pnl-down">
+            -4.5% · -23
+          </div>
+          
+          
+          <div class="pcard-peso">6.0% del totale</div>
+          
+          
+          
+          
+          
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">MITT</div>
+          <div class="pcard-meta">93 az. · USD</div>
+          
+          <div class="pcard-price">5.54</div>
+          <div class="pcard-mval">≈ 515 USD</div>
+          
+          <div class="pcard-pnl pnl-down">
+            -14.9% · -90
+          </div>
+          
+          
+          <div class="pcard-peso">6.4% del totale</div>
+          
+          
+          
+          
+          
+          <div class="pcard-evento">earnings fra 6g</div>
+          
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">SAN</div>
+          <div class="pcard-meta">7 az. · EUR</div>
+          
+          <div class="pcard-price">75.15</div>
+          <div class="pcard-mval">≈ 526 EUR</div>
+          
+          <div class="pcard-pnl pnl-down">
+            -0.3% · -1
+          </div>
+          
+          
+          <div class="pcard-peso">7.3% del totale</div>
+          
+          
+          
+          
+          
+          <div class="pcard-evento">earnings fra 2g</div>
+          
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">NKLR</div>
+          <div class="pcard-meta">3 az. · USD</div>
+          
+          <div class="pcard-price">2.12</div>
+          <div class="pcard-mval">≈ 6 USD</div>
+          
+          <div class="pcard-pnl pnl-down">
+            -76.0% · -20
+          </div>
+          
+          
+          <div class="pcard-peso">0.1% del totale</div>
+          
+          
+          
+          
+          
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">SGMT</div>
+          <div class="pcard-meta">26 az. · USD</div>
+          
+          <div class="pcard-price">10.42</div>
+          <div class="pcard-mval">≈ 271 USD</div>
+          
+          <div class="pcard-pnl pnl-up">
+            +19.5% · +44
+          </div>
+          
+          
+          <div class="pcard-peso">3.4% del totale</div>
+          
+          
+          
+          
+          
+          
+        </div>
+        
+        <div class="pcard">
+          <div class="pcard-ticker">STLAP</div>
+          <div class="pcard-meta">167 az. · EUR</div>
+          
+          <div class="pcard-price">3.71</div>
+          <div class="pcard-mval">≈ 620 EUR</div>
+          
+          <div class="pcard-pnl pnl-down">
+            -32.1% · -292
+          </div>
+          
+          
+          <div class="pcard-peso">8.6% del totale</div>
+          
+          
+          
+          
+          
+          <div class="pcard-evento">earnings oggi</div>
+          
+          
+        </div>
+        
+        
+        <div class="pcard cash-card">
+          <div class="pcard-ticker">CASH</div>
+          <div class="pcard-meta">liquidità</div>
+          <div class="pcard-price">481</div>
+          <div class="pcard-mval">EUR</div>
+        </div>
+        
+      </div>
+    </div>
+    
+
+    <!-- ── ARTICLE (markdown → HTML) ── -->
+    <article>
+      <h1>Proxima Daily — Buongiorno Vale</h1>
+<p><strong>2026-10-28 · Vale · DAILY</strong></p>
+<h2>In breve</h2>
+<ol>
+<li><strong>Stellantis riporta oggi</strong>: il verdetto sulla guidance decide se vendere 50 azioni o tenere — hai già l'ordine limit a 3,20€?</li>
+<li><strong>MO earnings domani, SAN dopodomani, MITT il 3/11</strong>: settimana di fuoco, non mediare nulla pre-numeri</li>
+<li><strong>Intesa–MPS</strong>: la BCE ha dato il via libera all'OPAS — il titolo MPS sarà il tema bancario italiano della settimana, con ricadute su tutto il settore</li>
+</ol>
+<hr />
+<h2>1. Mercati &amp; Portfolio Vale</h2>
+<h3>Strip mercato</h3>
+<table>
+<thead>
+<tr>
+<th>Indice</th>
+<th>Valore</th>
+<th>Var. %</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>S&amp;P 500</td>
+<td>7.722,6</td>
+<td>+0,6%</td>
+</tr>
+<tr>
+<td>FTSE MIB</td>
+<td>49.627,9</td>
+<td>+0,9%</td>
+</tr>
+<tr>
+<td>Nikkei</td>
+<td>62.189,7</td>
+<td>−0,8%</td>
+</tr>
+<tr>
+<td>Brent</td>
+<td>$109,74</td>
+<td>−5,2%</td>
+</tr>
+<tr>
+<td>EUR/USD</td>
+<td>1,11</td>
+<td>−0,8%</td>
+</tr>
+<tr>
+<td>10Y UST</td>
+<td>4,99%</td>
+<td>+0,14%</td>
+</tr>
+</tbody>
+</table>
+<p>Oro sopra $4.000, Fed in arrivo mercoledì, AI trade che si riaccende con Anthropic IPO e SK Hynix sopra le stime. L'euro si indebolisce (−0,8%): per te il lato positivo è che CMCSA, MO e MITT valgono un po' di più in euro. Il FTSE MIB rimbalza +0,9% dopo un mese orribile (−6,96%): il via libera BCE a Intesa su MPS muove il comparto bancario.</p>
+<h3>Le tue posizioni</h3>
+<p><strong>STLAP.PA — Stellantis · 167 az. · −32,1% · −292€ · peso 8,6%</strong> <code>[oggi]</code></p>
+<p>Earnings oggi. Il verdetto che ti avevo dato sabato e ieri è intatto: <strong>se la guidance viene tagliata, vendi 50 azioni al market</strong> (ricavo stimato ~185€ al prezzo attuale di 3,71€, riduce il peso al ~5,6%). Se i numeri sorprendono (margine operativo &gt;5%), tieni tutto e rivaluta a fine anno. <strong>Domanda operativa</strong>: hai piazzato l'ordine limit di vendita a 3,20€ su 50 azioni come stop? Se non l'hai fatto, fallo prima dell'apertura di Parigi (ore 9:00). Il titolo può muoversi del 10% in entrambe le direzioni su numeri come questi. Urgenza: la reazione al report si esaurisce nelle prime ore.</p>
+<p><strong>WKL.AS — Wolters Kluwer · 10 az. · +44,5% · +265€ · peso 12,0%</strong> <code>[questa settimana]</code></p>
+<p>Alleggerisci 3 azioni a ~87€ (invariato dal 26/10; nessun fatto nuovo, il titolo non si è mosso in modo significativo). Ricavo ~261€ → ricostituisce l'overlay e finanzia gli accumuli post-earnings su MO/SAN. Il peso combinato WKL+REN è al 20,3%: è la tua concentrazione maggiore, più grande di qualunque singola posizione. Sotto 82€: sospendi la vendita. Sopra 92€: vendi 4 anziché 3.</p>
+<p><strong>REN.AS — RELX · 17 az. · +17,8% · +90€ · peso 8,3%</strong> <code>[nessuna fretta]</code></p>
+<p>(Invariato, nessun fatto nuovo.) Con l'alleggerimento WKL, REN da sola all'8,3% è ragionevole e il peso combinato informazione-professionale scende verso il 17%. Se WKL non viene toccata entro venerdì, REN diventa il candidato sacrificabile. Trigger: sopra 37€ senza alleggerimento WKL → vendi 5 azioni (~185€). Sotto 31€ → rivedi la tesi.</p>
+<p><strong>ACN.VI — Accenture · 4 az. · +77,6% · +370€ · peso 11,8%</strong> <code>[questa settimana]</code></p>
+<p>Alleggerisci 1 azione a ~220€ (invariato dal 26/10). Porta il peso al ~9%. Earnings lontani (17 dicembre, 50 giorni). Il ricavato va alla cassa per operare su MO/SAN post-earnings. Il guadagno di 370€ su un portafoglio da 7.185€ è il 5,1% del patrimonio — cristallizzarne una parte è igiene. Sotto 190€: tieni tutto. Sopra 240€: vendi 1 ulteriore.</p>
+<p><strong>CS.PA — AXA · 20 az. · +8,5% · +67€ · peso 11,8%</strong> <code>[nessuna fretta]</code></p>
+<p>Posizione income-core in salute. Il FTSE MIB rimbalza e l'Eurozona sembra trovare un pavimento dopo il −4,5% mensile. Lo spread BTP-Bund resta contenuto (area 112), positivo per il settore finanziario-assicurativo. Il peso all'11,8% è adeguato. Trigger: sopra 44€ → alleggerisci 4 azioni (~176€) per ricostituire l'overlay. Sotto 38€ → rivedi la tesi.</p>
+<p><strong>SAN.PA — Sanofi · 7 az. · −0,3% · −1,47€ · peso 7,3%</strong> <code>[monitoraggio]</code></p>
+<p><strong>Earnings dopodomani (30 ottobre).</strong> La posizione è piatta, nessun motivo di agire prima dei numeri. Il pharma europeo è stato relativamente resiliente nel mese (healthcare globale underperforma meno di tech e industriali). Post-earnings: se il guidance 2027 conferma il margine operativo &gt;28%, accumula 3 azioni col ricavato di WKL/ACN (~225€). Se taglia, tieni e rivaluta a fine anno.</p>
+<p><strong>MO — Altria · 2 az. · +25,9% · +27€ · peso 1,8%</strong> <code>[monitoraggio]</code></p>
+<p><strong>Earnings domani (29 ottobre).</strong> Posizione minuscola ma in salute. Consumer staples è il terzo settore leader a 1 mese negli USA: il vento è a favore. Post-earnings: se i numeri confermano (EPS stabile, guidance invariata), accumula 3 azioni a ~$75 (~201€, finanziato dall'alleggerimento WKL/ACN). Il peso salirebbe al ~4,5% — ancora lontano dalla concentrazione. Se i numeri deludono (taglio dividendo o guidance in calo), tieni le 2 azioni e basta.</p>
+<p><strong>CMCSA — Comcast · 22 az. · −4,5% · −20€ · peso 6,0%</strong> <code>[nessuna fretta]</code></p>
+<p>(Invariato dal 27/10.) La mediazione a 22 azioni è fresca, il prezzo è essenzialmente al costo medio. Stacco cedola lontano (6 gennaio, 70 giorni). Nessun catalizzatore a breve. Comms &amp; Media è tra i settori laggard a 1 mese (−1,63% US CommSvc) ma la posizione è strutturale. Trigger: sotto $19,50 (−12%) → usa l'overlay per mediare 5 azioni (~$98). Sopra $26 → prendi profitto parziale.</p>
+<p><strong>MITT — AG Mortgage Investment Trust · 93 az. · −14,9% · −81€ · peso 6,4%</strong> <code>[monitoraggio]</code></p>
+<p><strong>Pagamento dividendo il 30 ottobre (fra 2 giorni), circa 10,44€ netti.</strong> Earnings il 3 novembre (fra 6 giorni). Il 10Y UST è salito a 4,99% (+14 bps): non è il contesto ideale per un mortgage REIT. La Fed mercoledì potrebbe complicare ulteriormente se il tono è hawkish. <strong>Non mediare pre-earnings.</strong> Trigger post-earnings: book value per share stabile → tieni. BV/share in calo &gt;10% o taglio dividendo → vendi 30 azioni per ridurre l'esposizione.</p>
+<p><strong>IMAE.AS — ETF Europa EMU · 5 az. · +7,0% · +34€ · peso 7,3%</strong> <code>[nessuna fretta]</code></p>
+<p>L'Eurozona ha perso −4,5% nel mese ma il rimbalzo di oggi (+0,9% FTSE MIB) è un primo segnale. La posizione è strutturale e a un peso ragionevole. La Bank Lending Survey BCE di ottobre, uscita ieri, sarà il dato da guardare per capire se il credito migliora. Trigger: sotto 97€ (−7%) → accumula 1 azione (~97€). Sopra 115€ → prendi profitto su 2.</p>
+<p><strong>IJPA.AS — ETF Japan · 7 az. · +14,1% · +64€ · peso 7,2%</strong> <code>[nessuna fretta]</code></p>
+<p>Il Nikkei perde −0,8% oggi, −5,1% nel mese. La BoJ si riunisce oggi-domani: il consensus è hold sui tassi ma tono hawkish, con rialzo atteso in dicembre-gennaio. Lo yen debole sostiene le esportazioni ma un rialzo BoJ a dicembre rafforzerebbe lo yen e peserebbe sull'azionario export. Trigger: Nikkei sotto 59.000 → accumula 1 azione. Sopra 70.000 → prendi profitto su 2.</p>
+<p><strong>601728.SS — China Telecom · 100 az. · +15,3% · +12€ · peso 1,3%</strong> <code>[nessuna fretta]</code></p>
+<p>(Invariato.) Cina −4,9% a 1 mese. Market value in EUR circa 93€, P&amp;L assoluto 12€. Posizione di osservazione sul ciclo cinese, peso irrilevante. Il rischio geopolitico resta il driver principale (non i fondamentali del titolo). Trigger: sotto 5,50 CNY (−21%) → vendi tutto e riallocare la minusvalenza.</p>
+<p><strong>SGMT — Sagimet Biosciences · 26 az. · +19,5% · +40€ · peso 3,4%</strong> <code>[monitoraggio]</code></p>
+<p>In osservazione. Earnings il 12 novembre (15 giorni). Il titolo è in territorio positivo — raro per le speculative. Nessun catalizzatore specifico questa settimana. L'FDA non ha comunicazioni in calendar per Sagimet prima di fine anno (fonte: KB). Peso contenuto, rischio accettabile.</p>
+<p><strong>NKLR — Terra Innovatum · 3 az. · −76,0% · −18€ · peso 0,1%</strong> <code>[nessuna fretta]</code></p>
+<p>In osservazione a lungo termine. Market value 5,69€. Earnings il 16 novembre (19 giorni). Candidata alla vendita fiscale di fine anno per generare minusvalenza compensabile con i gain di WKL (+265€) e ACN (+370€). Il peso è inesistente — la decisione è contabile, non di investimento. Se vuoi usarla per compensare, vendila prima del 15 dicembre per essere sicuro che il regolamento cada nel 2026.</p>
+<blockquote>
+<p><strong>COSA SAPERE — settimana earnings</strong><br />
+28/10: STLAP earnings (oggi)<br />
+29/10: MO earnings<br />
+30/10: SAN.PA earnings + pagamento dividendo MITT<br />
+03/11: MITT earnings<br />
+Azione: non mediare nessuna di queste posizioni prima dei numeri. Tieni un foglio con i trigger post-earnings per ciascuna.</p>
+</blockquote>
+<h3>Mercato in generale</h3>
+<h3>SK Hynix batte le stime: la memoria AI è il motore</h3>
+<p>SK Hynix ha riportato un terzo trimestre nettamente sopra le attese, trainato dalla domanda di memoria HBM (High Bandwidth Memory) per i data center AI. Il titolo ha reagito al rialzo, trascinando il sentiment sui semiconduttori. L'IPO di Anthropic — la più grande della storia tech — conferma che il capex AI non rallenta. I retail trader hanno comprato chip stocks "on the dip" secondo Robinhood.</p>
+<blockquote>
+<p><strong>Perché ti riguarda:</strong><br />
+- Non hai esposizione diretta ai semiconduttori. Se vuoi entrarci, la sezione 3 ha candidati<br />
+- La ripresa dell'AI trade spiega perché tech USA rimbalza (+0,6% S&amp;P) nonostante il mese negativo (−1,63% CommSvc)<br />
+- Se ACN beneficia dell'onda AI (consulenza tech → implementazione), il rally dei chip aiuta indirettamente la tua posizione più profittevole<br />
+- La Fed mercoledì è il vero test: se i tassi restano alti, il rally AI potrebbe essere effimero</p>
+</blockquote>
+<h3>Boeing: perdite ridotte ma consegne 737 Max sotto le attese</h3>
+<p>Boeing ha riportato ricavi per $24,2 miliardi con perdite ridotte, ma le consegne del 737 Max restano sotto pressione. La difesa cresce del 15%. Gli analisti temono che il turnaround del programma commerciale richieda più tempo del previsto. Il titolo scende.</p>
+<blockquote>
+<p><strong>Perché ti riguarda:</strong><br />
+- Non hai Boeing, ma il settore difesa (+15% nel trimestre) conferma la forza della filiera<br />
+- La criticità della filiera aeronautica (catena di fornitura ancora in difficoltà) è un segnale di bottleneck industriale da monitorare<br />
+- Stellantis oggi riporta: le dinamiche di filiera industriale sotto pressione (supply chain, costi) sono un tema trasversale. Leggi i numeri STLAP con la stessa lente</p>
+</blockquote>
+<h3>Suggerimenti per il portafoglio</h3>
+<p>🔴 <strong>Da rivedere</strong> — STLAP oggi: il trigger è la guidance. Esegui il piano (50 azioni se taglio, hold se sorpresa). WKL e ACN da alleggerire questa settimana per ricostruire la cassa.</p>
+<p>🟡 <strong>Da monitorare</strong> — MO (domani), SAN (dopodomani), MITT (3/11). Non toccare nulla. Prepara i trigger post-earnings per ciascuna.</p>
+<p>🟢 <strong>PAC novembre</strong> — I 300€ DCA vanno su CMCSA (5 azioni a ~$23, ~103€) + 1 azione IMAE (~105€). Il resto liquido per ricostruire l'overlay. I 100€ trading si accumulano in attesa di un'opportunità post-earnings.</p>
+<p>🔵 <strong>Cash management</strong> — Cassa a 481€ dopo la vendita ENI. L'overlay è vicina al target (600€) ma non ancora piena. Se WKL viene alleggerita (261€) + ACN (220€), la cassa sale a ~960€: c'è respiro per operare post-earnings. Senza quelle vendite, rimani bloccato.</p>
+<hr />
+<h2>2. Macro &amp; Geopolitica</h2>
+<h3>BCE autorizza Intesa Sanpaolo all'acquisizione di MPS</h3>
+<p>Francoforte ha dato il via libera a Intesa Sanpaolo per detenere una partecipazione di controllo in Banca MPS nell'ambito dell'OPAS volontaria. L'assemblea MPS ha registrato il 70% del capitale. È il più grande consolidamento bancario italiano degli ultimi anni — ridisegna la mappa del settore.</p>
+<blockquote>
+<p><strong>Perché ti riguarda:</strong><br />
+- Non hai MPS né ISP in portafoglio, ma l'evento muove tutto il comparto bancario italiano, incluso il FTSE MIB (+0,9% oggi)<br />
+- IMAE (ETF Europa EMU) cattura il rimbalzo bancario italiano indirettamente<br />
+- Per l'Income Lab: ISP e BMPS erano candidati a dividendo — ISP diventa meno attraente post-acquisizione (cassa assorbita dal deal), BMPS scompare come ticker autonomo nel medio termine<br />
+- <strong>Idea da girare ad Alex</strong>: PST (Poste) e il comparto finanziario italiano beneficiano del sentiment positivo. Alex ha 653 azioni PST<br />
+- Fonte: Il Sole 24 Ore, ANSA Economia, Repubblica Economia</p>
+</blockquote>
+<h3>Manovra italiana 2027: flat tax giovani, card anziani, niente taglio Irpef</h3>
+<p>Il Consiglio dei Ministri discute la manovra. Le misure annunciate: flat tax per i giovani, fondo da 1 miliardo per pensioni anticipate, card per gli anziani, aiuto alle mamme. Il taglio Irpef resta in bilico. L'opposizione parla di "mancette elettorali" pre-midterm.</p>
+<blockquote>
+<p><strong>Perché ti riguarda:</strong><br />
+- La manovra non tocca direttamente il tuo portafoglio, ma il contesto fiscale italiano è lo sfondo di IMAE e di qualunque posizione bancaria/finanziaria tu consideri<br />
+- Se il taglio Irpef salta, il potere d'acquisto dei consumatori italiani non migliora — negativo per consumer domestici<br />
+- Per Proxima: la discussione sulla tassazione finanziaria (capital gain, tassazione ETF, PIR) potrebbe emergere nell'iter parlamentare. Da monitorare<br />
+- Fonte: ANSA Economia, Repubblica Economia</p>
+</blockquote>
+<h3>Petrolio in calo, Russia e USA trattano su Ukraine e diesel</h3>
+<p>Il Brent perde −5,2% a $109,74. L'amministrazione Trump sta discutendo di lasciar entrare più diesel russo sul mercato come parte dei negoziati di pace Ucraina-Russia. Nel frattempo Washington propone accordi postbellici per le major petrolifere USA. Le elezioni israeliane (oggi) influenzano il corso della guerra con l'Iran, con impatto diretto sulla supply oil.</p>
+<blockquote>
+<p><strong>Perché ti riguarda:</strong><br />
+- Non hai esposizione diretta oil, ma il calo del petrolio è positivo per i margini di Stellantis (costi energetici e logistici)<br />
+- SAN (Sanofi) è neutrale al petrolio, ma il calo del Brent alleggerisce i costi di produzione pharma (packaging, logistica)<br />
+- Iran–Israele resta il rischio coda: un'escalation riporta il Brent sopra $120, un cessate il fuoco lo porta a $95. Per il tuo portafoglio senza esposizione oil, entrambi gli scenari sono gestibili<br />
+- Fonte: Bloomberg Markets, FT Markets, MarketWatch</p>
+</blockquote>
+<hr />
+<h2>3. Occasioni MVF v4.1 — tutti i settori, colli di bottiglia e filiere strategiche</h2>
+<h3>Healthcare / Pharma specialty — Lundbeck e il monopolio delle neuroscienze</h3>
+<p>Il pharma specialty è uno dei pochi settori difensivi con crescita strutturale: le neuroscienze (Alzheimer, depressione, schizofrenia) hanno pipeline più lunghe e meno concorrenza generica. La concentrazione in pochi player con molecole brevettate crea un bottleneck naturale.</p>
+<p><strong>Candidati screener (MVF)</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Voto /1000</th>
+<th>V. intrinseco</th>
+<th>V. relativo (PE / EV-EBITDA)</th>
+<th>Dividendo (lordo → netto IT)</th>
+<th>Prezzo ideale (MoS)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HLUN-A.CO</td>
+<td>H. Lundbeck</td>
+<td>927/1000</td>
+<td>1.630 DKK</td>
+<td>7,0x / 7,0x</td>
+<td>2,35% → 1,48% netto</td>
+<td>1.223 DKK (25%)</td>
+</tr>
+</tbody>
+</table>
+<p>Convergenza MVF/IQI (76,6/100): business e prezzo allineati. A 48,55 DKK, il titolo è a un 97% di sconto rispetto al fair value medio dei modelli (trainato dal DCF a 4.254 DKK). Il dividend growth a 5 anni è +25,6% CAGR — un compounder. Payout al 29%: margine enorme per crescere.</p>
+<p><strong>Verdetto filiera</strong>: osserva. Il prezzo è già molto sotto il fair value ma il titolo quota in corone danesi (DKK), il che aggiunge un layer valutario. Per un portafoglio da 7k€ e con il tuo attuale vincolo di cassa, è una watchlist — non un acquisto immediato.</p>
+<hr />
+<h3>Consumer Cyclical / Retail — Jumbo SA, il discount greco che cresce</h3>
+<p>Il retail discount in Europa meridionale beneficia del contesto inflazionistico: i consumatori scendono nella scala di prezzo. Jumbo (Grecia) ha margini da best-in-class e crescita solida.</p>
+<p><strong>Candidati screener (MVF)</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Voto /1000</th>
+<th>V. intrinseco</th>
+<th>V. relativo (PE / EV-EBITDA)</th>
+<th>Dividendo (lordo → netto IT)</th>
+<th>Prezzo ideale (MoS)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BELA.AT</td>
+<td>Jumbo SA</td>
+<td>919/1000</td>
+<td>90,16€</td>
+<td>7,6x / 7,6x</td>
+<td>2,57% → 1,62% netto</td>
+<td>67,62€ (25%)</td>
+</tr>
+</tbody>
+</table>
+<p>Convergenza MVF/IQI (76,2/100). A 27,40€, lo sconto sul fair value è del 70%. Payout al 21%, FCF yield 7%. È un retailer con pricing power in un mercato dove i competitor non possono competere sulla scala. Quota in EUR su Atene (BELA.AT).</p>
+<p><strong>Verdetto filiera</strong>: interessante per accumulo graduale. Il rischio è la liquidità del titolo (Atene, non Euronext), ma per un PAC a piccoli importi in EUR è gestibile. Tienilo in watchlist per il PAC di dicembre se la cassa si ricostruisce.</p>
+<hr />
+<h3>Shipping marittimo — Iran, Hormuz e tanker in scarsità</h3>
+<p>L'Iran ha minacciato la compagnia sudcoreana Sinokor per "violazioni di transito" nello Stretto di Hormuz (fonte: FT Markets). I tanker sono il collo di bottiglia: la flotta invecchia, i nuovi ordini non arrivano prima del 2028, e ogni escalation nel Golfo riduce la capacità disponibile. Il Brent scende −5,2% oggi, ma i noli tanker restano elevati perché il problema è l'offerta di stiva, non il prezzo del greggio.</p>
+<p><strong>Candidati screener (TV)</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Market Cap</th>
+<th>PE</th>
+<th>Div. Yield</th>
+<th>Rel. Vol</th>
+<th>Upside analisti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OMXSTO:SNIO</td>
+<td>Stena International</td>
+<td>$19,6B</td>
+<td>7,4x</td>
+<td>11,3%</td>
+<td>6,6x</td>
+<td>+20%</td>
+</tr>
+<tr>
+<td>OMXSTO:WAWIO</td>
+<td>Wallenius Wilhelmsen</td>
+<td>$80,8B</td>
+<td>10,6x</td>
+<td>1,4%</td>
+<td>8,4x</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>SNIO a PE 7,4x e yield 11,3% è il profilo classico dello shipping ciclico: paga enormemente oggi, il rischio è la ciclicità. WAWIO è più diversificata (RoRo, non solo tanker) ma il rendimento è basso.</p>
+<p><strong>Verdetto filiera</strong>: aspetta per ora. Lo shipping è ciclico e i noli possono crollare in 6 mesi se il conflitto Iran-Israele si risolve. Ma se il conflitto persiste, i tanker sono i vincitori. Per il tuo portafoglio, la sezione Income Lab cattura meglio queste opportunità (vedi sotto).</p>
+<hr />
+<h3>Difesa — Boeing difesa +15%, Airbus stabile, Rolls-Royce corre</h3>
+<p>La difesa resta il settore con il vento più forte: i budget NATO crescono, la guerra Iran-Israele accelera gli ordini, e Boeing stessa cresce del 15% nel segmento. Il bottleneck è la capacità produttiva: non ci sono abbastanza linee per soddisfare gli ordini.</p>
+<p><strong>Candidati screener (TV)</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Market Cap</th>
+<th>PE</th>
+<th>Div. Yield</th>
+<th>Rel. Vol</th>
+<th>Upside analisti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OTC:EADSY</td>
+<td>Airbus (ADR USA)</td>
+<td>$171B</td>
+<td>24,4x</td>
+<td>1,3%</td>
+<td>2,2x</td>
+<td>+22%</td>
+</tr>
+<tr>
+<td>OTC:RYCEY</td>
+<td>Rolls-Royce (ADR USA)</td>
+<td>$136B</td>
+<td>34,1x</td>
+<td>0,9%</td>
+<td>2,0x</td>
+<td>+45%</td>
+</tr>
+</tbody>
+</table>
+<p>Airbus è il proxy difesa/aviazione più liquido in mercato sviluppato. Rolls-Royce ha corso troppo (PE 34x) ma il turnaround è reale. Entrambi quotano in USD come ADR — le linee europee (EPA:AIR, LSE:RR.) sono un'alternativa.</p>
+<p><strong>Verdetto filiera</strong>: watchlist. I multipli sono elevati dopo il rally. Per entrare, aspetta un ritracciamento del 10-15%. Non è una priorità per il tuo portafoglio oggi.</p>
+<hr />
+<h3>Consumer Staples — BTI, il tobacco europeo income</h3>
+<p>Il tabacco è il settore leader a 1 mese negli USA (US_ConsStaples tra i top 3). Hai MO a +26%, ma il peso è minuscolo (1,8%). BTI (British American Tobacco) è il peer europeo con yield più alto.</p>
+<p><strong>Candidati screener (TV)</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Market Cap</th>
+<th>PE</th>
+<th>Div. Yield</th>
+<th>Rel. Vol</th>
+<th>Upside analisti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NYSE:BTI</td>
+<td>British American Tobacco</td>
+<td>$129B</td>
+<td>15,3x</td>
+<td>5,5%</td>
+<td>0,8x</td>
+<td>+20%</td>
+</tr>
+</tbody>
+</table>
+<p>BTI è stato proposto 12/14 volte nell'ultimo mese. <strong>Non lo ripropongo come idea nuova.</strong> Il motivo per cui lo menziono qui è contestuale: è il peer di MO, e MO riporta domani. Se MO delude e vuoi ruotare verso un tobacco europeo, BTI è il candidato — ma questa è un'eventualità, non un'azione.</p>
+<p><strong>Verdetto filiera</strong>: aspetta i numeri MO domani. Se confermano, accumula MO (già in portafoglio). Se deludono, BTI è l'alternativa.</p>
+<hr />
+<h3>Siderurgia &amp; Metalli speciali — Norsk Hydro, l'alluminio green</h3>
+<p>L'alluminio a basse emissioni è un bottleneck crescente: le case auto europee (Stellantis inclusa) devono ridurre l'impronta carbonica della supply chain. Norsk Hydro (NHY) è il leader dell'alluminio riciclato/idroelettrico.</p>
+<p><strong>Candidati screener (MVF)</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Voto /1000</th>
+<th>V. intrinseco</th>
+<th>V. relativo (PE / EV-EBITDA)</th>
+<th>Dividendo (lordo → netto IT)</th>
+<th>Prezzo ideale (MoS)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OSL:NHY</td>
+<td>Norsk Hydro</td>
+<td>617/1000</td>
+<td>299 NOK</td>
+<td>10,4x / 10,4x</td>
+<td>4,4% lordo → dato netto non calcolato (NO)</td>
+<td>209 NOK (30%)</td>
+</tr>
+</tbody>
+</table>
+<p>Voto MVF modesto (617/1000) ma fair value a 299 NOK vs prezzo attuale implicito nel prezzo ideale a 209 NOK. L'alluminio è ciclico e il prezzo attuale riflette la debolezza industriale europea.</p>
+<p><strong>Verdetto filiera</strong>: saldo reale se scende ai 200 NOK. Per il tuo portafoglio, è un'idea a medio termine — non prioritaria con la cassa attuale.</p>
+<hr />
+<h3>Packaging &amp; Foreste — UFPI, il legname strutturale USA</h3>
+<p>Il packaging sostenibile e il legname ingegnerizzato sono sotto-coperti dagli analisti. UFPI (UFP Industries) è il leader USA del legname composito e strutturale, con PE 18x e yield 1,8%.</p>
+<p><strong>Candidati screener (TV)</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Market Cap</th>
+<th>PE</th>
+<th>Div. Yield</th>
+<th>Rel. Vol</th>
+<th>Upside analisti</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NASDAQ:UFPI</td>
+<td>UFP Industries</td>
+<td>$4,4B</td>
+<td>18,4x</td>
+<td>1,8%</td>
+<td>0,8x</td>
+<td>+26%</td>
+</tr>
+</tbody>
+</table>
+<p>UFPI è stato proposto 10/14 volte. <strong>Non lo ripropongo come idea nuova.</strong> Resta in watchlist se il prezzo scende del 15%.</p>
+<p><strong>Filiere senza candidati di qualità oggi</strong>: uranio/nucleare (NKLR che hai è l'unico ticker e vale 5,69€), rare earth/metalli (nessun candidato DM sopra il 50/100 MVF), helium/gas industriali (nessun candidato con dati sufficienti), infrastrutture idriche (candidati tutti EM o con dati insufficienti per il tuo budget), riassicurazione (nessun candidato nel Tier 1 oggi), agroalimentare upstream (nessun candidato nel Tier 1 oggi).</p>
+<hr />
+<h2>3b. Income Lab — costruzione portafoglio high income / dividend growth</h2>
+<h3>A) High Yield (rendimento cedolare &gt;4% netto Italia)</h3>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Settore</th>
+<th>Div. Yield lordo</th>
+<th>Netto Italia</th>
+<th>Voto MVF /1000</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>OET.OL</strong></td>
+<td>Okeanis Eco Tankers</td>
+<td>Shipping/Tanker</td>
+<td>21,8%</td>
+<td>13,7%</td>
+<td>838/1000</td>
+<td>Oslo. Tanker moderna (eco-fleet). <strong>Mai proposto.</strong> Rischio ciclico alto: i noli possono dimezzare se Iran-Israele si risolve</td>
+</tr>
+<tr>
+<td><strong>SOMA.OL</strong></td>
+<td>Solstad Maritime</td>
+<td>Offshore/Subsea</td>
+<td>13,5%</td>
+<td>8,5%</td>
+<td>874/1000</td>
+<td>Oslo. Subsea/offshore services per oil &amp; renewables. <strong>Mai proposto.</strong> Diversificazione rispetto ai pure tanker</td>
+</tr>
+<tr>
+<td><strong>SPOL.OL</strong></td>
+<td>SpareBank 1 Østlandet</td>
+<td>Banca regionale NO</td>
+<td>6,4%</td>
+<td>4,0%</td>
+<td>788/1000</td>
+<td>Oslo. Banca regionale norvegese con dividendo stabile. <strong>Mai proposto.</strong> Alternativa bancaria non-italiana</td>
+</tr>
+</tbody>
+</table>
+<p>Nota: tutti e tre i titoli quotano alla Borsa di Oslo in NOK. La ritenuta estera norvegese è del 15% + 26% italiano = drag fiscale totale 37,1%. Nonostante il drag, OET e SOMA restano fra i rendimenti netti più alti in mercato sviluppato.</p>
+<h3>B) Dividend Growth (crescita dividendo &gt;6% CAGR 5y)</h3>
+<table>
+<thead>
+<tr>
+<th>Ticker</th>
+<th>Nome</th>
+<th>Settore</th>
+<th>Yield attuale</th>
+<th>Div. CAGR 5y</th>
+<th>Voto MVF /1000</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>BNP.PA</strong></td>
+<td>BNP Paribas</td>
+<td>Banca europea</td>
+<td>7,6%</td>
+<td>n.d. (ma payout stabile)</td>
+<td>728/1000</td>
+<td>Parigi, EUR. <strong>Mai proposto.</strong> La più grande banca dell'Eurozona, dividend yield alto per un colosso. L'OPAS Intesa-MPS non la tocca direttamente</td>
+</tr>
+<tr>
+<td><strong>VLK.AS</strong></td>
+<td>Van Lanschot Kempen</td>
+<td>Private banking NL</td>
+<td>6,1%</td>
+<td>n.d.</td>
+<td>710/1000</td>
+<td>Amsterdam, EUR. <strong>Mai proposto.</strong> Gestione patrimoniale pura, competitor diretto di Proxima nel segmento HNW — interessante anche per intelligence competitiva</td>
+</tr>
+<tr>
+<td><strong>PGHN.SW</strong></td>
+<td>Partners Group</td>
+<td>PE/alternative asset</td>
+<td>7,3%</td>
+<td>n.d.</td>
+<td>904/1000</td>
+<td>Zurigo, CHF. Già proposto 6/14 — qui perché il voto MVF 904/1000 è il più alto della lista income. Business di qualità eccezionale, ma il prezzo non è attraente (riconciliazione: qualita_cara). Watchlist, non acquisto</td>
+</tr>
+</tbody>
+</table>
+<h3>C) High Income alternativo</h3>
+<table>
+<thead>
+<tr>
+<th>Strumento</th>
+<th>Tipo</th>
+<th>Yield / Cedola</th>
+<th>Scadenza / Duration</th>
+<th>Liquidità</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>VHYL.L</strong></td>
+<td>Vanguard FTSE All-World High Div Yield ETF</td>
+<td>~3,5% dist.</td>
+<td>— / ETF perpetuo</td>
+<td>Alta (LSE)</td>
+<td>Alternativa ETF al cherry-picking di singoli titoli. Costo 0,29% TER. Per un portafoglio da 7k€ e con il tuo vincolo di cassa, un ETF high-div ha più senso di comprare 2 azioni di 15 titoli diversi. <strong>Mai proposto.</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Idea PAC del mese</strong>: <strong>BNP.PA</strong> — banca europea core con yield 7,6% lordo (4,75% netto Italia), voto MVF 728/1000, quota in EUR su Euronext senza layer valutario aggiuntivo. Una azione costa ~€60 — compatibile con il PAC da 100€ trading.</p>
+<hr />
+<h2>4. Fintech globale</h2>
+<h3>Anthropic IPO: la più grande della storia tech, e il segnale per la fintech</h3>
+<p>Anthropic ha $131,7 miliardi di cassa — più di ogni azienda non-bancaria USA tranne Berkshire e Alphabet. L'IPO si preannuncia come la più grande della storia tech. Meta ha annunciato un'emissione azionaria da $95 miliardi per finanziare AI. Il capex AI non rallenta, anzi accelera.</p>
+<blockquote>
+<p><strong>Perché ti riguarda (Proxima):</strong><br />
+- Il capitale che fluisce nell'AI crea domanda per strumenti di investimento accessibili ai retail che vogliono esporsi al tema senza comprare singole azioni a $300+<br />
+- Proxima potrebbe offrire "panieri tematici AI" come prodotto differenziante rispetto a Moneyfarm (che offre solo ETF generici)<br />
+- Il precedente di Robinhood (i retail comprano chip stocks "dopo aver fatto ricerca") conferma che il retail vuole stock-picking guidato, non solo ETF: è esattamente il posizionamento Proxima<br />
+- Fonte: CNBC, Bloomberg, MarketWatch</p>
+</blockquote>
+<hr />
+<h2>5. Regolamentazione</h2>
+<h3>Bank Lending Survey BCE — ottobre 2026</h3>
+<p>La BCE ha pubblicato ieri la Bank Lending Survey di ottobre. Il dato è rilevante per capire se le banche dell'Eurozona stanno allentando o stringendo il credito a famiglie e imprese. In un contesto di tassi ancora alti (10Y UST a 4,99%) e inflazione persistente, il credito bancario è il canale di trasmissione reale della politica monetaria.</p>
+<blockquote>
+<p><strong>Perché ti riguarda (Proxima):</strong><br />
+- Se il credito si allenta, i consumatori italiani hanno più disposable income → più risparmio da investire → mercato target di Proxima si allarga<br />
+- La SCF (3.240€/anno) è il prerequisito regolamentare per Proxima: il timing del lancio dovrebbe coincidere con un ciclo di easing del credito, non di stretta<br />
+- <strong>Fun fact normativo</strong>: la BCE distingue fra "credito alle famiglie per acquisto casa" e "credito al consumo". Per Proxima il secondo è il proxy migliore della propensione al risparmio del target 1-5k€<br />
+- Fonte: ECB Press Releases</p>
+</blockquote>
+<hr />
+<h2>6. Competitor</h2>
+<h3>ING punta sui grandi patrimoni in Italia — e lascia il campo libero a Proxima</h3>
+<p>ING ha annunciato che in Italia si concentrerà sui patrimoni grandi (fonte: Repubblica Economia, "Private banking, ora la sfida è sui servizi integrati"). È un segnale di <strong>resa implicita</strong> sul segmento retail piccolo: ING non riesce a rendere profittevole il cliente da 1-5k€ con il suo modello di costo.</p>
+<blockquote>
+<p><strong>Idea di differenziazione</strong>: ING, Euclidea, e ora anche i private banker di Wells Fargo/UBS/Citi (fonte: Bloomberg Invest Dallas) si spostano tutti verso l'alto. Il segmento 1-5k€ resta scoperto in Italia. Per Proxima, questo è il moat per design: nessuno vuole quel cliente perché il margine è troppo basso con il modello tradizionale. Il modello Proxima (AUM 0,5% + performance fee tiered + subscription opzionale + costi tech bassissimi) è l'unico che scala su quel segmento.</p>
+</blockquote>
+<hr />
+<h2>7. Marketing &amp; Growth case study</h2>
+<h3>Robinhood: i retail comprano chip stocks "dopo aver fatto ricerca"</h3>
+<p>Il CFO di Robinhood ha dichiarato che la volatilità di mercato non ha spaventato i trader retail, che hanno comprato chip stocks "on which they had really done research" (fonte: MarketWatch). Il dato è interessante: non è FOMO cieco, è acquisto informato su drawdown.</p>
+<p><strong>Tre applicazioni per Proxima:</strong></p>
+<ul>
+<li><strong>Content-driven conviction</strong>: Proxima può creare mini-report su 3-5 titoli al mese (stile il briefing che stai leggendo) e renderli disponibili agli utenti prima di un drawdown settoriale. Il messaggio: "se capisci cosa compri, il drawdown è un'opportunità"</li>
+<li><strong>Bottone "Compra con fiducia"</strong>: dopo che l'utente ha letto il report e il mercato scende, Proxima offre un CTA contestuale. Conversione stimata (fonte: KB, benchmark Robinhood): 3-5x rispetto al CTA generico</li>
+<li><strong>Anti-Robinhood positioning</strong>: Robinhood è gamification. Proxima è educazione + azione. Il claim: "Noi non ti vendiamo l'eccitazione del trade. Ti vendiamo la tranquillità di sapere cosa hai in portafoglio."</li>
+</ul>
+<hr />
+<h2>8. Educazione finanziaria</h2>
+<h3>a) Idea per i canali divulgativi</h3>
+<p><strong>"Il tuo portafoglio è più concentrato di quanto pensi"</strong> — Post/reel che spiega il concetto di correlazione settoriale. Esempio concreto: "Se hai Wolters Kluwer e RELX, non hai due titoli. Hai una sola scommessa sull'informazione professionale. Se il settore scende, scendono insieme." Visual: due grafici sovrapposti con correlazione &gt;0,85. Chiusura: "Diversificare non è avere tanti ticker. È avere tanti rischi diversi."</p>
+<h3>b) Insight di posizionamento</h3>
+<p>Il FT ha un pezzo intitolato "We don't understand the gold price — Maybe we never did." L'oro sopra $4.000 è il segnale che gli investitori non si fidano delle asset class tradizionali. Per Proxima, il messaggio è: il retail italiano medio non ha oro in portafoglio, non sa come comprarlo (ETC? fisico? futures?), e non capisce perché dovrebbe. Un contenuto educativo sull'oro come "assicurazione di portafoglio" (non come speculazione) è un differenziatore rispetto ai robo-advisor che offrono solo ETF azionari/obbligazionari.</p>
+<hr />
+<h2>9. To-do del giorno</h2>
+<ol>
+<li><strong>STLAP — prima delle 9:00</strong>: verifica che l'ordine limit di vendita a 3,20€ su 50 azioni sia piazzato. Se la guidance viene tagliata, valuta se vendere al market anziché aspettare il limit</li>
+<li><strong>WKL — questa settimana</strong>: piazza l'ordine di vendita su 3 azioni a 87€. Se il prezzo sale sopra 92€, vendi 4</li>
+<li><strong>ACN — questa settimana</strong>: piazza l'ordine di vendita su 1 azione a 220€</li>
+<li><strong>Prepara il foglio trigger post-earnings</strong>: MO (domani) → EPS stabile + guidance invariata = accumula 3 az. a ~$75; SAN (30/10) → margine &gt;28% = accumula 3 az. a ~€75; MITT (3/11) → BV/share stabile = tieni, BV in calo &gt;10% = vendi 30</li>
+<li><strong>NKLR — entro il 15 dicembre</strong>: se vuoi usare la minusvalenza per compensare i gain di WKL/ACN, la vendita deve avvenire con tempo sufficiente per il regolamento nel 2026</li>
+</ol>
+<hr />
+<p><em>Niente long read in modalità daily — riserva per il weekend.</em></p>
+    </article>
+
+    <div class="footer">
+      Proxima Daily &mdash; generato il 2026-10-28 00:05 &mdash; uso personale
+    </div>
+
+  </div>
+</body>
+</html>
