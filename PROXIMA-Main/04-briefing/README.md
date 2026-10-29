@@ -24,6 +24,22 @@ Lo storico resta in git: `git log -- PROXIMA-Main/04-briefing/pipeline/`.
   scelti per famiglia di settore e con tetti per paese (`universo.py`: USA
   38%, nordici 6%, ogni altro paese 2-9%). Il vecchio universo prendeva i
   primi 50 per capitalizzazione di ogni mercato e lasciava fuori REIT e banche.
+- **Motore di voto MVF v4.5.1** (`mvf_bande.py`, `mvf_metriche.py`): bande
+  a cinque livelli, trend a 5 anni, pesi propri per banche, assicurazioni,
+  utility e REIT. Il voto è sul peso delle metriche disponibili: per le
+  classi dedicate Yahoo non dà CET1, NPL, occupancy, WALT… quindi è
+  **parziale** e dichiara copertura e metriche omesse. Voti non confrontabili
+  fra classi né con quelli precedenti alla v4.5. Regola completa e deviazioni
+  dal testo della specifica nella docstring di `mvf_bande.py`.
+- **Radar settoriale** (`radar.py`): 4 famiglie di settore al giorno a
+  rotazione (ognuna due volte a settimana), titoli ordinati per sconto sul
+  valore intrinseco e distanza dai massimi, non per voto.
+- **Moat Watch** (`moat_watch.py`, `aggiorna_moat.py`): moat WIDE da
+  Morningstar via le ricostituzioni trimestrali VanEck (P/FV Morningstar,
+  ingressi, uscite per moat); NARROW solo dal test numerico, dichiarato non
+  Morningstar. Per rating veri: `rassegna-stampa/dati/moat_manuale.csv`
+  (`ticker,rating,fair_value,data`, export dal proprio account Morningstar).
+  Stato giornaliero in `docs/moat-state.json`.
 - **Costo reale per un italiano** (`costi_italia.py`): ritenute trattenute
   (non quelle da convenzione), valuta, tasse d'acquisto, al massimo un titolo
   nordico per briefing. Le aliquote sono verificate su PwC dove indicato.

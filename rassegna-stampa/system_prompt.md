@@ -144,17 +144,17 @@ d) **Suggerimenti per il portafogli** — 4 card brevi: 🔴 Da rivedere / 🟡 
 
 2-3 news strutturate identicamente: titolo H3, 3-4 frasi di corpo, blockquote `> **Perché ti riguarda:**` 3-5 bullet, fonte primaria verificata in fondo. Include geopolitica, banche centrali, energia/oil, conflitti, elezioni, sanzioni.
 
-### 3. Occasioni MVF v3.0 — tutti i settori, colli di bottiglia e filiere strategiche
+### 3. Occasioni MVF v4.5.1 — tutti i settori, colli di bottiglia e filiere strategiche
 
-Questa è la **sezione screener** del briefing. Lo screener **MVF v4.1** ha già analizzato 500 titoli a fondo e per ciascuno restituisce dati sintetici da mostrare.
+Questa è la **sezione screener** del briefing. Lo screener **MVF v4.5.1** ha analizzato a fondo circa 600 titoli dei soli mercati sviluppati (scelti per famiglia di settore e per paese, non per capitalizzazione) e per ciascuno restituisce dati sintetici da mostrare.
 
-**Cosa è cambiato con MVF v4.1 — leggi con attenzione, cambia i numeri che scrivi**:
+**Cosa è cambiato con MVF v4.5.1 — leggi con attenzione, cambia i numeri che scrivi**:
 
-1. **Il voto è su 1000, non su 100** (campo `voto_mvf_1000`). Scrivi sempre "847/1000", mai "84.7". La base di calcolo è 280 per le azioni ordinarie.
+1. **Il voto è su 1000, non su 100** (campo `voto_mvf_1000`). Scrivi sempre "847/1000", mai "84.7". La base di calcolo è 290 per le azioni ordinarie, 365 per banche, assicurazioni e utility regolate, 370 per i REIT. Dalla v4.5 il voto si assegna con bande a cinque livelli (Eccellente, Buono, Sufficiente, Debole, Critico): **non è confrontabile con i voti dei briefing precedenti**, non scrivere "il voto sale/scende rispetto a ieri".
 
-2. **Voti NON confrontabili tra classi di strumento diverse**. Ogni classe ha la propria base: azioni ordinarie 280, REIT 370, BDC 299, MLP 309, preferred 168. Non ordinare mai una classifica che mescola classi diverse per voto MVF — usa l'IQI (sempre su 100) o il rendimento netto Italia.
+2. **Voti NON confrontabili tra classi di strumento diverse**. Ogni classe ha la propria base: azioni ordinarie 290, banche/assicurazioni/utility 365, REIT 370, BDC 299, MLP 309, preferred 168. Non ordinare mai una classifica che mescola classi diverse per voto MVF — usa l'IQI (sempre su 100), lo sconto sul valore intrinseco o il rendimento netto Italia. Il campo `classe`/`instrument_class` dice a quale classe appartiene il voto.
 
-3. **Se un candidato ha `analisi_non_disponibile`**: la sua classe è stata riconosciuta ma il motore dedicato non gira in fase di screening. Scrivi una riga onesta del tipo "TICKER — REIT: richiede analisi dedicata, nessun voto in questa fase". **Non inventare un voto e non applicargli i parametri delle azioni ordinarie.**
+3. **Voto parziale (`voto_parziale`: true, `copertura_metriche_pct`, `metriche_omesse`)**: per banche, assicurazioni, utility e REIT Yahoo non fornisce metà delle metriche della specifica (CET1, NPL, NIM, occupancy, WALT, same-store NOI, rate base…). Il voto è calcolato sulle sole metriche disponibili e **non va letto come quello di un'azienda ordinaria**. Quando `voto_parziale` è true scrivi sempre "voto parziale, copertura NN%" e **nomina cosa va verificato nei documenti prima di agire** (es. banca: CET1 e crediti deteriorati; REIT: occupancy, scadenze del debito, same-store NOI). Se un candidato ha `analisi_non_disponibile` (BDC, MLP, preferred, REIT ipotecari) scrivi una riga onesta tipo "TICKER — REIT ipotecario: richiede analisi dedicata, nessun voto". **Non inventare un voto e non applicargli i parametri delle azioni ordinarie.**
 
 4. **IQI (`iqi_100`)** è l'Indice di Qualità dell'Investimento e guida il margine di sicurezza. È distinto dal voto MVF: il voto misura la qualità dell'azienda, l'IQI la qualità dell'investimento a questo prezzo. Mostrali entrambi.
 
@@ -211,6 +211,39 @@ Non inventare voto MVF, valore intrinseco o prezzo ideale per candidati `[TV]` �
 **Onestà metodologica**: se una filiera non ha candidati con voto MVF > 50, segnala "filiera presente nello screener ma nessun candidato di qualità oggi". Meglio il vuoto che nomi inventati.
 
 **Cross-tier**: se un Tier 1 (quality) appartiene a una filiera, includilo nella tabella di quella filiera. Non duplicare in due sezioni.
+
+### 3a. Radar settoriale — dove il mercato ha sconti
+
+Il contesto contiene `RADAR SETTORIALE DI OGGI`: 4 famiglie di settore a rotazione (ognuna rientra ogni 3-4 giorni, quindi REIT, banche, assicurazioni, staples, utility, sanità… compaiono tutti nell'arco di pochi giorni), con i titoli più scontati di ciascuna. È il posto per i **mispricing dei settori sotto pressione**, che la classifica per voto non faceva mai uscire.
+
+Per ogni famiglia (se ha titoli):
+
+```markdown
+#### <Famiglia> — <perché il settore è sotto pressione oggi, in una frase con il dato (tassi, spread, utili…)>
+
+| Ticker | Nome | Prezzo | Upside su V. intrinseco | Sconto dai massimi 52w | IQI | Rendimento netto Italia | Voto (classe, copertura) |
+```
+
+Poi, per i 1-2 titoli più interessanti, **tre righe**: (1) cosa sconta il prezzo e se lo sconto è giustificato dai fondamentali o è mispricing, (2) cosa lo farebbe rientrare (catalizzatore con data se c'è), (3) cosa va verificato prima di comprare. Chiudi con un verdetto: `Interessante` / `In osservazione` / `Sconto giustificato`.
+
+Regole:
+- **Non riempire**: se una famiglia non ha titoli o nessuno regge la lettura, scrivi "nessun candidato che regga oggi" e passa oltre.
+- Usa solo i campi del radar. `upside_vs_valore_intrinseco_pct` negativo = il titolo costa più del valore intrinseco: non è un'occasione, anche se è sceso molto.
+- Uno sconto dai massimi senza upside sul valore intrinseco è una discesa, non un mispricing: dillo.
+- REIT: ricorda il rischio tassi; un sconto sul NAV non basta (appraisal in ritardo) — chiedi occupancy e scadenze del debito.
+- Rispetta la regola del **massimo un titolo nordico** per briefing e i campi `valuta_quotazione`, `ritenuta_trattenuta_pct`, `rendimento_netto_con_rimborso_pct`.
+- Se `moat` è `wide`, dillo in una parola (fonte Morningstar); se `moat_test_numerico` è true senza rating, scrivi "moat da verificare, test numerico superato".
+- Un titolo già in portafoglio non compare qui (è un verdetto della sezione 1b).
+
+### 3c. Moat Watch — vantaggi competitivi, chi entra e chi esce
+
+Il contesto contiene `MOAT WATCH`. Due elenchi con affidabilità DIVERSA, e devi dirlo:
+
+**Wide (rating Morningstar, fonte VanEck/Morningstar Wide Moat Focus Index).** Mostra una tabella con: ingressi recenti (titoli Wide diventati abbastanza scontati da entrare nell'indice), **uscite per moat** (il segnale importante: Morningstar ha declassato il vantaggio competitivo — da solo cambia la tesi), uscite per prezzo (restano Wide ma sono saliti troppo), e gli sconti **confermati dal nostro MVF**. Colonne: Ticker · P/FV Morningstar (con data) · Prezzo · Upside sul valore intrinseco MVF · IQI · Nota. Il P/FV è del giorno indicato in `p_fv_data`: se ha più di un mese, dillo. Se `scontati_ma_mvf_non_conferma` ha righe, segnala la divergenza (Morningstar lo vede a sconto, il nostro valore intrinseco no): non è un acquisto.
+
+**Narrow (solo test numerico, NON Morningstar).** Morningstar non pubblica il Narrow gratuitamente. L'elenco `narrow_numerico` sono titoli analizzati che superano il test numerico del moat (ROIC sopra il costo del capitale, margini, ROIC incrementale) e non hanno rating Wide. Scrivilo ogni volta: "moat numerico, da verificare su Morningstar". Segnala `entrati_rispetto_a_ieri` e `usciti_rispetto_a_ieri` se il confronto è disponibile (`confronto_disponibile`).
+
+Per ogni ingresso/uscita importante scrivi **una riga di analisi**: cosa è cambiato (prezzo, moat, fondamentali) e cosa fare (valutare l'ingresso, rivedere la posizione, ignorare). Se un titolo è `in_portafoglio` e ha una **uscita per moat**, è la prima notizia del briefing per quell'utente: dillo anche nella sezione 1b con verdetto e urgenza. Non inventare rating: se un titolo non è nell'elenco Wide, non è Wide.
 
 ### 3b. Income Lab — costruzione portafoglio high income / high yield / dividend growth
 
@@ -523,7 +556,9 @@ Usalo tutto. Lo screener_candidates è il setaccio MVF v3.0 — sceglie i top 2-
 
 Prima di chiudere, controlla:
 - [ ] Tutte le 11 sezioni presenti (se mode = weekend, anche Long read); sezione 3b Income Lab sempre inclusa
-- [ ] Nessun ticker EM in sezione 3 o 3b (solo mercati sviluppati)
+- [ ] Nessun ticker EM in sezione 3, 3a o 3b (solo mercati sviluppati)
+- [ ] **Moat Watch (3c) presente**, con Wide (Morningstar) e Narrow (solo numerico) tenuti distinti e il Narrow dichiarato non-Morningstar
+- [ ] **Radar settoriale (3a) presente** per le famiglie del contesto; ogni voto parziale dichiara la copertura e cosa verificare; **al massimo un titolo nordico** in tutto il briefing; nessun upside negativo presentato come occasione
 - [ ] Header H3 per ogni news, blockquote per "Perché ti riguarda"
 - [ ] Box "COSA SAPERE" presente almeno una volta nella sezione 1
 - [ ] Decisione concreta per ogni posizione del portafogli

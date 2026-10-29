@@ -255,7 +255,8 @@ def _tetti(cap: int) -> dict[str, int]:
     return {g: int(cap * q) for g, q in TETTI_PAESE.items()}
 
 
-def seleziona(righe: list[dict], cap: int) -> tuple[list[dict], dict]:
+def seleziona(righe: list[dict], cap: int,
+              obbligati: Optional[set] = None) -> tuple[list[dict], dict]:
     """Sceglie `cap` righe: quote per famiglia, tetti per paese.
 
     Ogni riga porta gia' `famiglia` e `punteggio`. Prima passata: ogni
@@ -265,8 +266,14 @@ def seleziona(righe: list[dict], cap: int) -> tuple[list[dict], dict]:
 
     Ritorna (selezione ordinata per punteggio decrescente, diagnostica).
     """
+    obbligati = obbligati or set()
+    forzati = [r for r in righe if r["yf_ticker"] in obbligati]
+    # I titoli con moat Wide Morningstar entrano comunque: il Moat Watch deve
+    # poterli confrontare col nostro valore intrinseco. Occupano posti, non
+    # ne aggiungono: le quote delle famiglie si ricalcolano sul resto.
+    libero = max(cap - len(forzati), 1)
     tot_peso = sum(QUOTE_FAMIGLIA.values())
-    quote = {f: max(1, round(cap * p / tot_peso)) for f, p in QUOTE_FAMIGLIA.items()}
+    quote = {f: max(1, round(libero * p / tot_peso)) for f, p in QUOTE_FAMIGLIA.items()}
     tetti = _tetti(cap)
     tetto_altro = int(cap * TETTO_ALTRO_PAESE)
 
@@ -291,6 +298,12 @@ def seleziona(righe: list[dict], cap: int) -> tuple[list[dict], dict]:
         conta_paese[g] = conta_paese.get(g, 0) + 1
         presi.append(r)
         return True
+
+    for r in forzati:
+        usati.add(r["yf_ticker"])
+        g = _gruppo_tetto(paese_riga(r))
+        conta_paese[g] = conta_paese.get(g, 0) + 1
+        presi.append(r)
 
     riempimento: dict[str, int] = {}
     for fam, quota in quote.items():
@@ -323,6 +336,40 @@ def seleziona(righe: list[dict], cap: int) -> tuple[list[dict], dict]:
         "quote_richieste": quote,
         "riempimento_prima_passata": riempimento,
         "per_paese": dict(sorted(conta_paese.items(), key=lambda kv: -kv[1])),
+        "forzati": len(forzati),
         "candidati_totali": len(righe),
     }
     return presi, diag
+
+
+def meta_riga(r: dict) -> dict:
+    """Dati dell'universo che il briefing riusa senza rifare la query."""
+    close, alto = _num(r.get("close")), _num(r.get("price_52_week_high"))
+    sconto = None
+    if close and alto and alto > 0:
+        sconto = round(max(0.0, (alto - close) / alto) * 100, 1)
+    return {
+        "famiglia": r["famiglia"],
+        "punteggio": round(r["punteggio"], 1),
+        "paese": paese_riga(r),
+        "sconto_massimi_pct": sconto,
+        "pe": _num(r.get("price_earnings_ttm")),
+        "pb": _num(r.get("price_book_fq")),
+    }
+
+
+def mediane_margine_operativo(righe: list[dict]) -> dict:
+    """Mediana del margine operativo (frazione) per famiglia di settore.
+
+    E' il nostro Set A: la specifica chiede di confrontare il margine con la
+    mediana dei peer diretti, che qui non abbiamo; l'intera famiglia
+    dell'universo (centinaia di societa') e' un riferimento piu' largo ma
+    reale, al posto di una soglia assoluta uguale per tutti i settori.
+    """
+    import statistics
+    per_fam: dict = {}
+    for r in righe:
+        v = _num(r.get("operating_margin_ttm"))
+        if v is not None:
+            per_fam.setdefault(r["famiglia"], []).append(v / 100.0)
+    return {f: round(statistics.median(v), 4) for f, v in per_fam.items() if len(v) >= 10}
