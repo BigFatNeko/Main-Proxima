@@ -42,6 +42,11 @@ from typing import Optional, Any
 import math
 import statistics
 
+try:
+    from . import costi_italia as costi
+except ImportError:
+    import costi_italia as costi
+
 
 MVF_VERSION = "4.1"
 EXECUTION_REGIME = "S"   # S = screening batch | A = analisi documentale
@@ -139,27 +144,9 @@ MVF_BANDED = {"eps_growth", "fcf_per_share_growth", "multiple_expansion"}
 
 IT_DIVIDEND_TAX = 0.26   # imposta sostitutiva italiana sul netto-frontiera
 
-# VALORI INDICATIVI: la specifica impone di verificare la convenzione
-# vigente (testo del trattato / Agenzia delle Entrate) prima dell'uso.
-WITHHOLDING_TAX = {
-    "US": 0.15,      # con W-8BEN (30% senza)
-    "UK": 0.00,
-    "NL": 0.15,
-    "DE": 0.15,      # 26,375% statutario, 15% via rimborso
-    "FR": 0.15,      # 25% statutario, ~15% via trattato
-    "ES": 0.19,
-    "CH": 0.15,      # 35% statutario, 15% via rimborso
-    "CA": 0.15,      # 25% statutario, 15% via trattato
-    "IE": 0.20,
-    "IT": 0.00,      # titolo domestico: nessuna ritenuta estera
-    "JP": 0.15,
-    "DK": 0.15,
-    "SE": 0.15,
-    "NO": 0.15,
-    "AU": 0.15,
-    "CN": 0.10,
-}
-DEFAULT_WITHHOLDING = 0.15
+# Le aliquote di ritenuta per paese stanno in costi_italia.py: li' sono
+# distinte l'aliquota TRATTENUTA all'incasso e quella della convenzione,
+# che per i nordici (DK 27 vs 15, SE 30 vs 15, NO 25 vs 15) non coincidono.
 
 # Casi speciali che rompono il treaty rate ordinario (Sez. 7)
 SPECIAL_WITHHOLDING_US = {
@@ -334,9 +321,12 @@ class QualityGates:
 class NetYield:
     """Rendimento netto post-imposte HOME vs ITALIA (Sez. 7)."""
     gross_yield: Optional[float] = None
-    withholding_rate: Optional[float] = None
+    withholding_rate: Optional[float] = None      # trattenuta all'incasso
+    withholding_treaty: Optional[float] = None    # convenzione (a rimborso)
+    withholding_verified: bool = True
     net_home: Optional[float] = None
     net_italy: Optional[float] = None
+    net_italy_refund: Optional[float] = None      # se si recupera l'eccedenza
     withholding_drag: Optional[float] = None
     italian_tax_drag: Optional[float] = None
     total_tax_drag: Optional[float] = None
@@ -1708,21 +1698,32 @@ def compute_net_yield(gross_yield: Optional[float],
         return ny
 
     c = (country or "").upper()
-    w = WITHHOLDING_TAX.get(c, DEFAULT_WITHHOLDING)
+    rit = costi.ritenuta(c)
+    w = rit.fonte
+    w_trattato = rit.trattato
 
     # Casi speciali US che rompono il treaty rate ordinario
     if c == "US" and instrument_class in SPECIAL_WITHHOLDING_US:
-        w = SPECIAL_WITHHOLDING_US[instrument_class]
+        w = w_trattato = SPECIAL_WITHHOLDING_US[instrument_class]
         ny.special_case = instrument_class
         ny.notes.append(
             f"{instrument_class.upper()} USA: ritenuta {w:.0%} anziche' il 15% "
             f"treaty ordinario")
-    if c not in WITHHOLDING_TAX:
+    if c not in costi.RITENUTE:
         ny.notes.append(
             f"paese '{c or 'ignoto'}' non in tabella: applicato default "
-            f"{DEFAULT_WITHHOLDING:.0%}, da verificare")
+            f"{costi.RITENUTA_DEFAULT.fonte:.0%}, da verificare")
+    if w > w_trattato:
+        ny.notes.append(
+            f"{c}: trattenuto {w:.1%} all'incasso, la convenzione prevede "
+            f"{w_trattato:.0%}; l'eccedenza si recupera solo con domanda di "
+            f"rimborso al fisco estero")
+    ny.withholding_verified = rit.verificata
 
     ny.withholding_rate = w
+    ny.withholding_treaty = w_trattato
+    ny.net_italy_refund = round(
+        gross_yield * (1 - w_trattato) * (1 - IT_DIVIDEND_TAX), 6)
     ny.net_home = round(gross_yield * (1 - w), 6)
     ny.net_italy = round(gross_yield * (1 - w) * (1 - IT_DIVIDEND_TAX), 6)
     ny.withholding_drag = round(gross_yield * w, 6)

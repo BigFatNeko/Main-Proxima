@@ -18,8 +18,15 @@ Lo storico resta in git: `git log -- PROXIMA-Main/04-briefing/pipeline/`.
   branch: fa checkout del ref da cui parte e ripubblica sullo stesso.
 - **Output:** `docs/alex-latest.html`, `docs/vale-latest.html` e
   `docs/archivio/`, serviti via GitHub Pages.
-- **Destinatari:** portafogli `alex` e `vale`
+- **Destinatari:** portafogli `alex`, `vale` e `diana`
   (`rassegna-stampa/portafogli_examples/`).
+- **Universo dello screener (Tier 1):** solo mercati sviluppati, 600 titoli
+  scelti per famiglia di settore e con tetti per paese (`universo.py`: USA
+  38%, nordici 6%, ogni altro paese 2-9%). Il vecchio universo prendeva i
+  primi 50 per capitalizzazione di ogni mercato e lasciava fuori REIT e banche.
+- **Costo reale per un italiano** (`costi_italia.py`): ritenute trattenute
+  (non quelle da convenzione), valuta, tasse d'acquisto, al massimo un titolo
+  nordico per briefing. Le aliquote sono verificate su PwC dove indicato.
 
 ## Vincoli da rispettare
 
