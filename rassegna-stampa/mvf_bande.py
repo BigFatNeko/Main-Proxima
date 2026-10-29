@@ -45,6 +45,12 @@ BASI = {"common": 290, "banca": 365, "assicurazione": 365, "utility": 365,
 # Metriche che in regime S non esistono: omesse senza costo per il CS.
 NON_DISPONIBILI_REGIME_S = frozenset({"insider_trading", "guidance"})
 
+# Metriche che Yahoo spesso non riporta perche' il valore e' zero o non
+# applicabile (nessuna SBC, nessun riacquisto, dividendo recente): omesse
+# senza penalita' di Confidence Score. Il -2 vale per le metriche core.
+NON_CORE = frozenset({"sbc_revenue", "capex_da", "buyback", "dividend_growth",
+                      "tax", "capex_revenue", "rd_revenue"})
+
 
 # ---------------------------------------------------------------------------
 # Primitive di banda
@@ -364,7 +370,12 @@ def pesi(classe: str, ha_dividendo: bool, ddm_significativo: bool,
         w["nd_ebitda_reit"] = 15
         w["rental_growth"] = 5
         w["revenue_growth"] = 0
-        w["multiple_expansion"] = 5
+        # Fuori dal REIT: imposte (non le pagano), qualita' degli utili (utile
+        # contabile schiacciato dagli ammortamenti) e Delta P/E (il P/E non
+        # misura un REIT; servirebbe il Delta P/AFFO).
+        w["tax"] = 0
+        w["earnings_quality"] = 0
+        w["multiple_expansion"] = 0
         w["dividend_yield"] = 16
         w["payout"] = 0
         note.append("reit: FFO = utile netto + ammortamenti - plusvalenze, "
@@ -504,5 +515,6 @@ def calcola_voto(classe: str, livelli: dict, ha_dividendo: bool,
     r.copertura = round(min(1.0, disponibile / denominatore), 3) if denominatore else 0.0
     r.parziale = r.copertura < 0.85
     r.penalita_altman = pen
-    r.omesse_core = sum(1 for n in r.omesse if n not in NON_DISPONIBILI_REGIME_S)
+    r.omesse_core = sum(1 for n in r.omesse
+                        if n not in NON_DISPONIBILI_REGIME_S and n not in NON_CORE)
     return r
