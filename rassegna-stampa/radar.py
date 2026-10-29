@@ -73,9 +73,24 @@ def _upside_pct(c: dict) -> Optional[float]:
     return None
 
 
+# Sopra questa soglia un upside sul valore intrinseco e' quasi sempre un
+# artefatto del modello (prezzo per azione minuscolo contro un valore calcolato
+# su pochi numeri). Visto nel primo briefing reale: Mercedes +3.576%, Financial
+# Partners +2.463%. L'ordinamento li metteva in cima perche' il tetto a +60 li
+# faceva pari ai migliori.
+UPSIDE_MAX_CREDIBILE = 100.0
+VOTO_MINIMO = 400
+
+
 def idoneo(c: dict) -> bool:
-    """Un titolo entra nel radar solo se ha un voto e nessun blocco."""
-    if not c.get("mvf_vote_1000"):
+    """Un titolo entra nel radar solo se ha un voto, nessun blocco e una
+    valutazione che regge."""
+    if not c.get("mvf_vote_1000") or c["mvf_vote_1000"] < VOTO_MINIMO:
+        return False
+    up = _upside_pct(c)
+    if up is None or up > UPSIDE_MAX_CREDIBILE:
+        return False
+    if (c.get("mvf_valuation") or {}).get("dispersion_flag") == "dispersione_alta":
         return False
     if (c.get("quality_gates") or {}).get("active"):
         return False
@@ -102,7 +117,8 @@ def riga(c: dict, gia_visti: dict) -> dict:
     ny = c.get("net_yield") or {}
     tv = c.get("tv") or {}
     tkr = c.get("ticker", "")
-    att = costi.attrito(tkr)
+    att = costi.attrito(tkr, paese=((c.get("net_yield") or {}).get("country") or ""),
+                        valuta=c.get("currency") or "")
     up = _upside_pct(c)
     return {
         "ticker": tkr,
@@ -152,7 +168,9 @@ def costruisci(tier1: list[dict], data_iso: str, gia_visti: dict,
             tkr = c.get("ticker", "")
             if tkr.split(".")[0] in in_portafoglio:
                 continue
-            if costi.paese_da_ticker(tkr) in costi.NORDICI and tkr not in nordico_ammesso:
+            att = costi.attrito(tkr, paese=((c.get("net_yield") or {}).get("country") or ""),
+                                valuta=c.get("currency") or "")
+            if att["nordico"] and tkr not in nordico_ammesso:
                 continue
             p = punteggio(c)
             if p is None:

@@ -50,6 +50,7 @@ RITENUTE: dict[str, Ritenuta] = {
     "AT": Ritenuta(0.275, 0.15, True),
     "PT": Ritenuta(0.25, 0.15, True),
     "IT": Ritenuta(0.00, 0.00, True),      # titolo domestico
+    "LU": Ritenuta(0.15, 0.15, False),
     # Nord Europa
     "DK": Ritenuta(0.27, 0.15, True),
     "SE": Ritenuta(0.30, 0.15, True),
@@ -107,6 +108,22 @@ _TASSA_ACQUISTO_PCT = {
 _AMMORTAMENTO_ANNI = 5
 
 
+_NOMI_PAESE = {
+    "united states": "US", "canada": "CA", "united kingdom": "UK", "netherlands": "NL",
+    "germany": "DE", "france": "FR", "spain": "ES", "switzerland": "CH",
+    "ireland": "IE", "belgium": "BE", "austria": "AT", "portugal": "PT",
+    "italy": "IT", "denmark": "DK", "sweden": "SE", "norway": "NO",
+    "finland": "FI", "japan": "JP", "australia": "AU", "new zealand": "NZ",
+    "hong kong": "HK", "singapore": "SG", "israel": "IL", "china": "CN",
+    "luxembourg": "LU",
+}
+
+
+def paese_da_nome(nome: str) -> str:
+    """Paese di DOMICILIO dal campo `country` di Yahoo; '' se non riconosciuto."""
+    return _NOMI_PAESE.get((nome or "").strip().lower(), "")
+
+
 def paese_da_ticker(ticker: str, mercato: str = "") -> str:
     """Paese di quotazione dal suffisso Yahoo. Senza suffisso: USA."""
     t = (ticker or "").upper()
@@ -123,27 +140,38 @@ def valuta_quotazione(paese: str) -> str:
     return _PAESE_VALUTA.get((paese or "").upper(), "")
 
 
-def penalita_attrito_pp(paese: str) -> float:
+def penalita_attrito_pp(paese: str, valuta: str = "") -> float:
     """Punti percentuali di rendimento annuo da sottrarre in ordinamento."""
     p = (paese or "").upper()
-    val = valuta_quotazione(p)
+    val = (valuta or "").upper() or valuta_quotazione(p)
     pen_val = _PEN_VALUTA_PP.get(val, _PEN_VALUTA_ALTRE_PP)
     tassa = _TASSA_ACQUISTO_PCT.get(p, 0.0) / _AMMORTAMENTO_ANNI
     return round(pen_val + tassa, 3)
 
 
-def attrito(ticker: str, mercato: str = "") -> dict:
-    """Riepilogo dei costi di un titolo, da allegare al contesto."""
-    p = paese_da_ticker(ticker, mercato)
+def attrito(ticker: str, mercato: str = "", paese: str = "",
+            valuta: str = "") -> dict:
+    """Riepilogo dei costi di un titolo, da allegare al contesto.
+
+    `paese` e' il DOMICILIO della societa' (la ritenuta la fissa lui): Repsol
+    quotata a Francoforte (REP.DE) paga la ritenuta spagnola, non la tedesca.
+    `valuta` e' quella di QUOTAZIONE (il rischio di cambio lo fa la piazza).
+    Senza di loro si ricade sul suffisso del ticker.
+    """
+    p = (paese or "").upper() or paese_da_ticker(ticker, mercato)
+    pq = paese_da_ticker(ticker, mercato) or p     # piazza di quotazione
     r = ritenuta(p)
+    val = (valuta or "").upper() or valuta_quotazione(pq)
+    if val in ("GBX", "GBP"):       # Londra quota in pence (GBp): stessa sterlina
+        val = "GBP"
     return {
         "paese": p,
-        "valuta": valuta_quotazione(p),
+        "valuta": val,
         "ritenuta_trattenuta": r.fonte,
         "ritenuta_convenzione": r.trattato,
-        "tassa_acquisto_pct": _TASSA_ACQUISTO_PCT.get(p, 0.0),
-        "penalita_ordinamento_pp": penalita_attrito_pp(p),
-        "nordico": p in NORDICI,
+        "tassa_acquisto_pct": _TASSA_ACQUISTO_PCT.get(pq, 0.0),
+        "penalita_ordinamento_pp": penalita_attrito_pp(pq, val),
+        "nordico": p in NORDICI or pq in NORDICI,
     }
 
 
@@ -158,7 +186,8 @@ def paese_da_tv(tv_ticker: str) -> str:
 
 
 def limita_nordici(righe: list, ticker_di, massimo: int = 1,
-                   ammessi: frozenset | set | None = None) -> list:
+                   ammessi: frozenset | set | None = None,
+                   e_nordico=None) -> list:
     """Tiene al massimo `massimo` titoli nordici, nell'ordine ricevuto.
 
     `righe` deve arrivare gia' ordinata dal migliore al peggiore: i nordici
@@ -170,7 +199,8 @@ def limita_nordici(righe: list, ticker_di, massimo: int = 1,
     out = []
     for r in righe:
         tkr = ticker_di(r)
-        if paese_da_ticker(tkr) in NORDICI:
+        nord = e_nordico(r) if e_nordico else paese_da_ticker(tkr) in NORDICI
+        if nord:
             if ammessi is not None and tkr not in ammessi:
                 continue
             visti += 1

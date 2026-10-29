@@ -107,7 +107,8 @@ def costruisci(tier1: list[dict], archivio: dict, data_iso: str,
         r = _riga(tkr, voce, c, in_portafoglio)
         if voce["p_fv"] <= SOGLIA_PFV_ACQUISTO and c is not None:
             up = r["upside_vs_valore_intrinseco_pct"]
-            if up is not None and up >= 10 and not r["gate_attivi"]:
+            if up is not None and 10 <= up <= 100 and not r["gate_attivi"] \
+                    and (c.get("mvf_valuation") or {}).get("dispersion_flag") != "dispersione_alta":
                 conferme.append(r)
             elif up is not None and up < 0:
                 divergenze.append(r)

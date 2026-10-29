@@ -838,6 +838,38 @@ def build_system_prompt() -> str:
     return SYSTEM_PROMPT_PATH.read_text()
 
 
+def _watch_compatto(watch: dict) -> dict:
+    """Moat Watch per il prompt: Narrow in testa e righe senza il dettaglio dei
+    test, perche' il taglio a N caratteri non mangi proprio l'elenco Narrow
+    (nel primo run reale era successo: il modello scrisse "il contesto non
+    fornisce un elenco Narrow")."""
+    if not watch:
+        return {}
+    def snello(r: dict) -> dict:
+        return {k: v for k, v in r.items() if k not in ("test_numerico", "analizzato_mvf")}
+    out = {"narrow_numerico": dict(watch["narrow_numerico"])}
+    out["narrow_numerico"]["elenco"] = [snello(r) for r in out["narrow_numerico"]["elenco"]]
+    w = dict(watch["wide"])
+    for k in ("ingressi_recenti", "uscite_per_moat", "uscite_per_prezzo",
+              "scontati_confermati_da_mvf", "scontati_ma_mvf_non_conferma"):
+        w[k] = [snello(r) for r in w.get(k, [])]
+    w["uscite_per_prezzo"] = w["uscite_per_prezzo"][:6]
+    w["ingressi_recenti"] = w["ingressi_recenti"][:14]
+    out["wide"] = w
+    return out
+
+
+def _paese_candidato(c: dict) -> str:
+    """Paese di domicilio usato per la ritenuta (lo scrive il motore nel net_yield)."""
+    return (((c.get("net_yield") or {}).get("country")) or "").upper()
+
+
+def _e_nordico(c: dict) -> bool:
+    """Nordico per domicilio O per piazza di quotazione: l'attrito e' di entrambi."""
+    return costi.attrito(c.get("ticker", ""), paese=_paese_candidato(c),
+                         valuta=c.get("currency") or "")["nordico"]
+
+
 def _pct(frazione) -> Optional[float]:
     """Frazione -> percentuale per il modello, che altrimenti legge 0.031 come 0,03%."""
     return None if frazione is None else round(float(frazione) * 100, 2)
@@ -1070,9 +1102,9 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
         (c for c in tier1 if (c.get("instrument_class") or "common") == "common"),
         key=lambda c: c.get("mvf_vote_100") or 0, reverse=True)
     tier1_top = costi.limita_nordici(
-        tier1_ordinati, lambda c: c.get("ticker", ""), massimo=1)[:40]
-    nordico_ammesso = {c.get("ticker") for c in tier1_top
-                       if costi.paese_da_ticker(c.get("ticker", "")) in costi.NORDICI}
+        tier1_ordinati, lambda c: c.get("ticker", ""), massimo=1,
+        e_nordico=_e_nordico)[:40]
+    nordico_ammesso = {c.get("ticker") for c in tier1_top if _e_nordico(c)}
     tier1_mvf = [_mvf_synthesis(c) for c in tier1_top]
 
     # Lista dedicata all'Income Lab.
@@ -1098,7 +1130,8 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
             scartati_em.append(tkr)
             continue
         base = tkr.split(".")[0]
-        att = costi.attrito(tkr)
+        att = costi.attrito(tkr, paese=_paese_candidato(c),
+                            valuta=c.get("currency") or "")
         income_pool.append({
             "ticker": tkr,
             "nome": (c.get("name") or "")[:45],
@@ -1129,7 +1162,8 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
         primo = next((r["ticker"] for r in income_pool if r["nordico"]), None)
         nordico_ammesso = {primo} if primo else set()
     income_pool = costi.limita_nordici(
-        income_pool, lambda r: r["ticker"], massimo=1, ammessi=nordico_ammesso)[:35]
+        income_pool, lambda r: r["ticker"], massimo=1, ammessi=nordico_ammesso,
+        e_nordico=lambda r: r["nordico"])[:35]
     for r in income_pool:
         r.pop("_ordine", None)
     nuovi = sum(1 for r in income_pool if r["gia_proposto_giorni"] == 0)
@@ -1302,7 +1336,7 @@ dillo, e di' cosa va verificato sui documenti prima di agire.
 MOAT WATCH (sezione 3c) — vantaggi competitivi, ingressi e uscite.
 WIDE = rating Morningstar vero (da VanEck), con P/FV = prezzo / fair value di
 Morningstar alla data indicata. NARROW = SOLO test numerico, non Morningstar.
-{json.dumps(watch, indent=1, ensure_ascii=False, default=str)[:11000]}
+{json.dumps(_watch_compatto(watch), indent=1, ensure_ascii=False, default=str)[:14000]}
 {spec_section}{special_section}
 {filiere_section}
 

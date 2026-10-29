@@ -1887,9 +1887,15 @@ def _log_coverage(n_candidates: int, out_dir=None) -> None:
         log.warning("Log di copertura non riuscito: %s", e)
 
 
-def _country_for_tax(ticker: str, market: str) -> str:
-    """Paese di ritenuta alla fonte, dal suffisso del ticker (MVF Sez. 7)."""
-    return costi.paese_da_ticker(ticker, market) or market
+def _country_for_tax(ticker: str, market: str, info: Optional[dict] = None) -> str:
+    """Paese che fissa la ritenuta alla fonte (MVF Sez. 7).
+
+    Conta il DOMICILIO della societa', non la borsa: Repsol quotata a
+    Francoforte (REP.DE) paga la ritenuta spagnola, non quella tedesca. Il
+    campo `country` di Yahoo e' il domicilio; senza, si ricade sul suffisso.
+    """
+    dom = costi.paese_da_nome((info or {}).get("country", ""))
+    return dom or costi.paese_da_ticker(ticker, market) or market
 
 
 def apply_mvf_valuation(c, data: dict, market: str) -> None:
@@ -2357,7 +2363,7 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
 
     # === STEP 11: riconciliazione Voto <-> IQI + rendimento netto Italia ===
     c.mvf_iqi_reconciliation = mvf.reconcile_mvf_iqi(mvf_vote, iqi.total)
-    country = _country_for_tax(c.ticker, c.market)
+    country = _country_for_tax(c.ticker, c.market, info)
     c.net_yield = asdict(mvf.compute_net_yield(
         c.metrics.dividend_yield, country, routing.instrument_class))
 
