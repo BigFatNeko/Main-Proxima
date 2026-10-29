@@ -59,6 +59,11 @@ logging.basicConfig(level=logging.INFO,
                     datefmt="%H:%M:%S")
 log = logging.getLogger("briefing_pipeline")
 
+try:
+    from . import costi_italia as costi
+except ImportError:
+    import costi_italia as costi
+
 
 # =============================================================================
 # CONFIG
@@ -86,7 +91,7 @@ CLAUDE_MAX_TOKENS = 24000
 # STEP 1 — SCREENER
 # =============================================================================
 
-def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
+def run_screener(region="DM", strategy="all") -> Optional[Path]:
     """Esegue screener.py come subprocess e ritorna il path del JSON output."""
     date_tag = data_briefing()
     json_path = SCREENER_OUTPUT_DIR / f"screener_{date_tag}.json"
@@ -103,7 +108,7 @@ def run_screener(region="GLOBAL", strategy="all") -> Optional[Path]:
         "--top", "500",            # MVF v3.0 completa su top 500
         "--top-speculative", "30",
         "--top-special", "20",
-        # universe: pre-filtri TV (PE 0-80, vol>10k) × 50 righe/mercato → cap 600
+        # universe DM: preselezione stratificata per settore e paese (universo.py) → cap 600
         # Mantiene yfinance sotto la soglia di rate-limit (~600 req Phase 1)
         "--limit-per-market", "50",
         "--universe-cap", "600",
@@ -823,6 +828,11 @@ def build_system_prompt() -> str:
     return SYSTEM_PROMPT_PATH.read_text()
 
 
+def _pct(frazione) -> Optional[float]:
+    """Frazione -> percentuale per il modello, che altrimenti legge 0.031 come 0,03%."""
+    return None if frazione is None else round(float(frazione) * 100, 2)
+
+
 def _mvf_synthesis(c: dict) -> dict:
     """Estrai i campi richiesti per il briefing — MVF v4.1.
 
@@ -882,10 +892,12 @@ def _mvf_synthesis(c: dict) -> dict:
         "motivo_astensione": val.get("abstain_reason", ""),
         # 4-bis. Rendimento netto post-imposte (Sez. 7)
         "rendimento_netto": {
-            "lordo": ny.get("gross_yield"),
-            "ritenuta_estera": ny.get("withholding_rate"),
-            "netto_italia": ny.get("net_italy"),
-            "drag_fiscale_totale": ny.get("effective_combined_rate"),
+            "ritenuta_estera_pct": _pct(ny.get("withholding_rate")),
+            "lordo_pct": _pct(ny.get("gross_yield")),
+            "netto_italia_pct": _pct(ny.get("net_italy")),
+            "netto_italia_con_rimborso_pct": _pct(ny.get("net_italy_refund")),
+            "ritenuta_convenzione_pct": _pct(ny.get("withholding_treaty")),
+            "drag_fiscale_totale_pct": _pct(ny.get("effective_combined_rate")),
             "paese": ny.get("country"),
             "caso_speciale": ny.get("special_case"),
         },
@@ -908,7 +920,8 @@ def _mvf_synthesis(c: dict) -> dict:
         },
         # 4. DIVIDENDI
         "dividendi": {
-            "yield": metrics.get("dividend_yield"),
+            "yield_pct": (round(metrics["dividend_yield"] * 100, 2)
+                          if metrics.get("dividend_yield") else None),
             "payout": metrics.get("payout_ratio"),
             "growth_5y": metrics.get("dividend_growth_5y"),
             "buyback_yield": metrics.get("buyback_yield"),
@@ -1032,7 +1045,15 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
     ctx   = screener_data.get("market_context", {})
 
     # Top 40 per la rassegna stampa (di 500 analizzati), in formato MVF v3.0 sintetico
-    tier1_top = sorted(tier1, key=lambda c: c.get("mvf_vote_100") or 0, reverse=True)[:40]
+    # Al massimo UN titolo nordico (SE NO DK FI) in tutto il briefing: ritenuta
+    # alla fonte 25-35% contro un 15% di convenzione che si recupera solo con
+    # una domanda di rimborso, piu' la valuta. Il primo nordico per voto resta
+    # fra i top 40; l'Income Lab puo' usare solo quello.
+    tier1_ordinati = sorted(tier1, key=lambda c: c.get("mvf_vote_100") or 0, reverse=True)
+    tier1_top = costi.limita_nordici(
+        tier1_ordinati, lambda c: c.get("ticker", ""), massimo=1)[:40]
+    nordico_ammesso = {c.get("ticker") for c in tier1_top
+                       if costi.paese_da_ticker(c.get("ticker", "")) in costi.NORDICI}
     tier1_mvf = [_mvf_synthesis(c) for c in tier1_top]
 
     # Lista dedicata all'Income Lab.
@@ -1058,12 +1079,23 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
             scartati_em.append(tkr)
             continue
         base = tkr.split(".")[0]
+        att = costi.attrito(tkr)
         income_pool.append({
             "ticker": tkr,
             "nome": (c.get("name") or "")[:45],
             "settore": c.get("sector"),
-            "rendimento_netto_italia": round(float(ny), 2),
-            "rendimento_lordo": (c.get("net_yield") or {}).get("gross_yield"),
+            "rendimento_netto_italia_pct": round(float(ny) * 100, 2),
+            "rendimento_netto_con_rimborso_pct": _pct(
+                (c.get("net_yield") or {}).get("net_italy_refund")),
+            "rendimento_lordo_pct": _pct((c.get("net_yield") or {}).get("gross_yield")),
+            "ritenuta_trattenuta_pct": round(att["ritenuta_trattenuta"] * 100, 1),
+            "ritenuta_convenzione_pct": round(att["ritenuta_convenzione"] * 100, 1),
+            "valuta": att["valuta"],
+            "penalita_attrito_pp": att["penalita_ordinamento_pp"],
+            "nordico": att["nordico"],
+            # Chiave di ordinamento: netto Italia meno la penalita' di valuta
+            # e tasse d'acquisto. Non e' mostrata come rendimento.
+            "_ordine": float(ny) - att["penalita_ordinamento_pp"] / 100.0,
             "voto_mvf_1000": c.get("mvf_vote_1000"),
             "iqi_100": (c.get("iqi_score") or {}).get("score"),
             "gate_attivi": (c.get("quality_gates") or {}).get("active", []),
@@ -1073,9 +1105,14 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
         })
     # Ordine: prima i mai proposti, poi per rendimento netto. Cosi' la novita'
     # sta in cima e il modello non deve scorrere per trovarla.
-    income_pool.sort(key=lambda r: (r["gia_proposto_giorni"] > 0,
-                                    -r["rendimento_netto_italia"]))
-    income_pool = income_pool[:35]
+    income_pool.sort(key=lambda r: (r["gia_proposto_giorni"] > 0, -r["_ordine"]))
+    if not nordico_ammesso:
+        primo = next((r["ticker"] for r in income_pool if r["nordico"]), None)
+        nordico_ammesso = {primo} if primo else set()
+    income_pool = costi.limita_nordici(
+        income_pool, lambda r: r["ticker"], massimo=1, ammessi=nordico_ammesso)[:35]
+    for r in income_pool:
+        r.pop("_ordine", None)
     nuovi = sum(1 for r in income_pool if r["gia_proposto_giorni"] == 0)
     log.info("Income Lab: %d candidati con rendimento netto, di cui %d mai "
              "proposti negli ultimi %d briefing", len(income_pool), nuovi,
@@ -1105,6 +1142,8 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
             fil_blocks.append(f"  {fname.upper()} ({len(candidates)} totali, top 8 mostrati):")
             for cand in top_per_fil:
                 tv_tkr = cand.get("tv_ticker", "")
+                if costi.paese_da_tv(tv_tkr):
+                    continue   # nordici: vedi tetto di un solo titolo sopra
                 # Extract base symbol: "NASDAQ:NVDA" → "NVDA", "LSE:SHEL" → "SHEL"
                 base_sym = tv_tkr.split(":")[1] if ":" in tv_tkr else tv_tkr
                 base_sym2 = base_sym.split(".")[0]
@@ -1378,7 +1417,7 @@ def main():
     p.add_argument("--mode",
                    choices=["auto", "daily", "weekend", "lunedì", "catchup", "festivo", "onboarding"],
                    default="auto")
-    p.add_argument("--region", default="GLOBAL", choices=["US", "EU", "ASIA", "GLOBAL"])
+    p.add_argument("--region", default="DM", choices=["DM", "US", "EU", "ASIA", "GLOBAL"])
     p.add_argument("--skip-screener", action="store_true")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--test-snapshot", action="store_true",

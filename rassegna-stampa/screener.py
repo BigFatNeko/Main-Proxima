@@ -55,9 +55,13 @@ except ImportError:
 try:
     from . import mvf_valuation as mvf
     from . import filiere_screener as filiere_mod
+    from . import costi_italia as costi
+    from . import universo as universo_mod
 except ImportError:
     import mvf_valuation as mvf
     import filiere_screener as filiere_mod
+    import costi_italia as costi
+    import universo as universo_mod
 
 # SEC EDGAR — controllo incrociato dei fondamentali (MVF Sez. 6-bis).
 # Opzionale: senza il modulo il pipeline resta sui dati yfinance con tag [V].
@@ -108,6 +112,8 @@ TV_MARKETS = {
     "LATAM": ["brazil", "mexico", "chile", "colombia", "argentina"],
     "AFRICA_ME": ["rsa", "ksa", "israel", "uae"],
 }
+# Mercati sviluppati: l'universo di default. Lista e motivazioni in universo.py.
+TV_MARKETS["DM"] = list(universo_mod.TV_MERCATI_DM)
 TV_MARKETS["GLOBAL"] = (TV_MARKETS["US"] + TV_MARKETS["EU"] + TV_MARKETS["ASIA"]
                         + TV_MARKETS["LATAM"] + TV_MARKETS["AFRICA_ME"])
 
@@ -130,6 +136,8 @@ TV_TO_YF_SUFFIX = {
     "LSE": ".L",
     "BME": ".MC",
     "SIX": ".SW", "BX": ".SW", "EBS": ".SW", "SWX": ".SW",
+    # Canada: TV emette TSX/NEO/TSXV/CSE (verificato interrogando 'canada')
+    "TSX": ".TO", "TSXV": ".V", "NEO": ".NE", "CSE": ".CN",
     "OMXSTO": ".ST", "OMXCOP": ".CO", "OMXHEX": ".HE", "OSL": ".OL",
     "VIE": ".VI",       # Vienna (TV emette VIE, non WBO)
     "GPW": ".WA",       # Varsavia (TV emette GPW, non WSE)
@@ -496,6 +504,11 @@ def tv_to_yf_ticker(tv_ticker: str, market: Optional[str] = None,
     if "/" in symbol:
         symbol = symbol.replace("/", "") if suffix == ".MX" else symbol.replace("/", "-")
 
+    # Classi di azioni USA scritte col punto (BF.A, BRK.B): Yahoo vuole il
+    # trattino. Col punto il suffisso sembra una borsa e il paese si perde.
+    if suffix == "" and "." in symbol:
+        symbol = symbol.replace(".", "-")
+
     # Hong Kong: Yahoo vuole il codice numerico su 4 cifre con gli zeri
     # iniziali. TradingView emette HKEX:5, Yahoo conosce 0005.HK.
     # Verificato su 267, 5, 939, 941, 386: tutte 404 senza padding, tutte
@@ -553,7 +566,8 @@ def _query_one_market(market: str, min_mcap_m: int, min_price: float,
                 "yf_ticker": yf_tkr,
                 "market_cap": row.get("market_cap_basic") or 0,
                 "pe": row.get("price_earnings_ttm"),
-                "div_yield": row.get("dividends_yield") or 0,
+                # TradingView da il rendimento in percentuale: qui in frazione
+                "div_yield": (row.get("dividends_yield") or 0) / 100.0,
             })
     except Exception as e:
         return rows, dropped, skipped, f"{type(e).__name__}: {str(e)[:80]}"
@@ -665,6 +679,142 @@ def build_universe_tradingview(region: str = "GLOBAL", min_mcap_m: int = 500,
     tickers = [r["yf_ticker"] for r in unique]
     log.info("Universe finale: %d ticker unici", len(tickers))
     return tickers
+
+
+_CAMPI_UNIVERSO = (
+    "name", "description", "close", "market_cap_basic", "sector", "industry",
+    "price_earnings_ttm", "price_book_fq", "dividends_yield",
+    "dividends_yield_current", "dividend_payout_ratio_ttm",
+    "continuous_dividend_payout", "return_on_equity_fq",
+    "return_on_invested_capital_fq", "operating_margin_ttm",
+    "enterprise_value_ebitda_ttm", "free_cash_flow_ttm",
+    "price_52_week_high", "net_debt_fq", "ebitda_ttm",
+    "average_volume_30d_calc", "type", "typespecs",
+)
+
+
+def _query_mercato_dm(market: str, min_mcap_m: int, min_price: float,
+                      fetch: int) -> tuple[list[dict], dict, dict, Optional[str]]:
+    """Righe complete di un mercato, SENZA il filtro P/E del vecchio universo.
+
+    Il filtro 0 < P/E < 80 toglieva 83 dei 222 REIT americani (37%): per un
+    REIT l'utile contabile e' schiacciato dagli ammortamenti e il P/E non
+    significa nulla. Liquidita' sul volume medio a 30 giorni, non su quello
+    del giorno: a meta' pomeriggio un mercato chiuso mostra volume zero.
+    """
+    rows: list[dict] = []
+    dropped: dict = {}
+    skipped: dict = {}
+    try:
+        q = (Query()
+             .set_markets(market)
+             .select(*_CAMPI_UNIVERSO)
+             .where(
+                 Column("market_cap_basic") > min_mcap_m * 1_000_000,
+                 Column("close") > min_price,
+                 Column("average_volume_30d_calc") > 10000,
+             )
+             .order_by("market_cap_basic", ascending=False)
+             .limit(fetch))
+        _count, df = q.get_scanner_data()
+        if df is None or df.empty:
+            return rows, dropped, skipped, None
+        for rec in df.to_dict("records"):
+            if rec.get("type") != "stock":
+                continue
+            specs = rec.get("typespecs") or []
+            if any(sp in ("preferred", "etn", "fund", "unit", "right", "warrant")
+                   for sp in specs):
+                continue
+            fam = universo_mod.famiglia(rec.get("sector"), rec.get("industry"))
+            if fam is None:
+                continue
+            yf_tkr = tv_to_yf_ticker(rec["ticker"], market=market,
+                                     dropped=dropped, skipped=skipped)
+            if yf_tkr is None:
+                continue
+            rec["yf_ticker"] = yf_tkr
+            rec["famiglia"] = fam
+            rec["punteggio"] = universo_mod.punteggio(rec, fam)
+            rec["mercato_tv"] = market
+            rows.append(rec)
+    except Exception as e:
+        return rows, dropped, skipped, f"{type(e).__name__}: {str(e)[:80]}"
+    return rows, dropped, skipped, None
+
+
+def build_universe_dm(min_mcap_m: int = 300, min_price: float = 0.5,
+                      cap: int = 600) -> tuple[list[str], dict]:
+    """Universo Tier 1 sui mercati sviluppati, stratificato (vedi universo.py).
+
+    Ritorna (ticker ordinati per punteggio, meta). `meta` porta per ogni
+    ticker famiglia, punteggio e paese: serve alle fasi che vogliono sapere
+    PERCHE' un titolo e' nell'universo senza rifare la query.
+    """
+    if not TV_OK:
+        log.error("tradingview-screener non installato.")
+        return [], {}
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    mercati = universo_mod.TV_MERCATI_DM
+    log.info("Universe DM: %d mercati sviluppati, cap %d", len(mercati), cap)
+    tutte: list[dict] = []
+    errori: list[str] = []
+    a_zero: list[str] = []
+    persi: dict = {}
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futs = {ex.submit(_query_mercato_dm, m, min_mcap_m, min_price,
+                          universo_mod.FETCH_PER_MERCATO.get(
+                              m, universo_mod.FETCH_DEFAULT)): m
+                for m in mercati}
+        for fut in as_completed(futs):
+            m = futs[fut]
+            rows, dropped, _skipped, err = fut.result()
+            for pref, n in dropped.items():
+                persi[pref] = persi.get(pref, 0) + n
+            if err:
+                errori.append(f"{m} ({err})")
+            elif not rows:
+                a_zero.append(m)
+            tutte.extend(rows)
+    if errori:
+        log.warning("TV mercati in errore (%d): %s", len(errori), ", ".join(sorted(errori)))
+    if a_zero:
+        log.warning("TV mercati a zero righe (%d): %s", len(a_zero), ", ".join(sorted(a_zero)))
+    if persi:
+        log.warning("TV prefissi borsa non convertiti (%d ticker persi): %s",
+                    sum(persi.values()),
+                    ", ".join(f"{p}={n}" for p, n in sorted(persi.items(), key=lambda kv: -kv[1])))
+
+    # Doppie quotazioni (ADR + linea locale): vince la prima nell'ordine dei
+    # mercati, deterministico. Chiave: descrizione + capitalizzazione ~uguale.
+    ordine = {m: i for i, m in enumerate(mercati)}
+    tutte.sort(key=lambda r: (ordine.get(r["mercato_tv"], 99), r["yf_ticker"]))
+    viste: dict = {}
+    uniche: list[dict] = []
+    for r in tutte:
+        desc = re.sub(r"[^a-z0-9]", "", str(r.get("description") or "").lower())
+        mc = float(r.get("market_cap_basic") or 0)
+        chiave = (desc, round(mc / 1e8)) if desc else (r["yf_ticker"], 0)
+        if chiave in viste:
+            continue
+        viste[chiave] = True
+        uniche.append(r)
+    log.info("Universe DM: %d righe, %d dopo deduplica doppie quotazioni",
+             len(tutte), len(uniche))
+
+    scelte, diag = universo_mod.seleziona(uniche, cap)
+    log.info("Universe DM: selezionati %d su %d. Per paese: %s",
+             len(scelte), diag["candidati_totali"],
+             ", ".join(f"{k}={v}" for k, v in list(diag["per_paese"].items())[:12]))
+    log.info("Universe DM: quote per famiglia (riempite/richieste): %s",
+             ", ".join(f"{f}={diag['riempimento_prima_passata'].get(f, 0)}/{q}"
+                       for f, q in diag["quote_richieste"].items()))
+    meta = {r["yf_ticker"]: {"famiglia": r["famiglia"],
+                             "punteggio": round(r["punteggio"], 1),
+                             "paese": universo_mod.paese_riga(r)}
+            for r in scelte}
+    return [r["yf_ticker"] for r in scelte], meta
 
 
 def build_universe_finviz_fallback(min_mcap_m: int = 500,
@@ -1115,8 +1265,12 @@ def passes_quick_filter(info: dict) -> bool:
     if margin is not None and margin < -0.75:
         return False
     # D/E catastrofico — elimina zombi finanziari evidenti
+    # Banche, assicurazioni e REIT hanno leva strutturale: il loro "debito" e'
+    # raccolta o ipoteche, non un segnale Altman. Con questo filtro molte
+    # banche venivano scartate alla prima fase.
     de = info.get("debtToEquity")
-    if de is not None and de > 800:  # debtToEquity yfinance è in %
+    struttura_a_leva = info.get("sector") in ("Financial Services", "Real Estate")
+    if de is not None and de > 800 and not struttura_a_leva:  # yfinance: in %
         return False
     # Volume troppo basso → illiquido
     avg_vol = info.get("averageVolume10days") or 0
@@ -1164,6 +1318,42 @@ def fetch_data(ticker):
         return None
 
 
+try:
+    _YF_RENDIMENTO_IN_PERCENTUALE = tuple(
+        int(x) for x in yf.__version__.split(".")[:3]) >= (0, 2, 54)
+except Exception:
+    _YF_RENDIMENTO_IN_PERCENTUALE = True
+
+
+def yield_frazione(info: dict) -> Optional[float]:
+    """Rendimento da dividendo come FRAZIONE (0.0231 = 2,31%).
+
+    yfinance >= 0.2.54 restituisce `dividendYield` in PERCENTUALE (Coca-Cola:
+    2.31, non 0.0231), mentre l'intero motore — soglie del 4%, bande MVF,
+    punteggio composito, fallen angel al 6% — ragiona in frazione. Con la
+    percentuale ogni titolo che stacca anche solo lo 0,5% superava la soglia
+    del 4%: il tag "income" era sempre acceso e il punteggio dividendi
+    saturava per tutti. Per non dipendere dalla versione si confronta con il
+    rendimento implicito dividendRate/prezzo e si tiene la lettura piu'
+    vicina; senza quel riscontro, oltre 0.5 e' per forza una percentuale.
+    """
+    v = info.get("dividendYield")
+    if v is None:
+        return None
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    if v <= 0 or v != v:
+        return None
+    rate = info.get("dividendRate")
+    prezzo = info.get("currentPrice") or info.get("regularMarketPrice")
+    if rate and prezzo and rate > 0 and prezzo > 0:
+        implicito = rate / prezzo
+        return v if abs(v - implicito) <= abs(v / 100 - implicito) else v / 100
+    return v / 100 if (_YF_RENDIMENTO_IN_PERCENTUALE or v > 0.5) else v
+
+
 def compute_metrics(data):
     info, fin, bs, cf = data["info"], data["financials"], data["balance_sheet"], data["cashflow"]
     m = IntrinsicMetrics()
@@ -1207,7 +1397,7 @@ def compute_metrics(data):
     da = safe_row(cf, "Depreciation")
     if capex is not None and da and da > 0:
         m.capex_da = abs(capex) / da
-    m.dividend_yield = info.get("dividendYield")
+    m.dividend_yield = yield_frazione(info)
     m.payout_ratio = info.get("payoutRatio")
     m.dividend_growth_5y = compute_dividend_growth(data["dividends"])
     sh_now = info.get("sharesOutstanding")
@@ -1255,7 +1445,9 @@ def apply_hard_filters(m, inter, special):
         if m.altman_z is not None and m.altman_z < 1.23:
             hf.altman_z_below_1_23 = True
     fcf_s = inter.get("fcf_series", [])
-    if len(fcf_s) >= 3 and all(v < 0 for v in fcf_s[:3]):
+    # Per banche e assicurazioni il flusso di cassa operativo oscilla con
+    # depositi e portafoglio titoli: tre anni negativi non dicono nulla.
+    if special != "bank_or_insurance" and len(fcf_s) >= 3 and all(v < 0 for v in fcf_s[:3]):
         hf.fcf_negative_3y = True
     if special != "bank_or_insurance":
         if m.debt_to_equity is not None and m.debt_to_equity > 3.0:
@@ -1665,25 +1857,9 @@ def _log_coverage(n_candidates: int, out_dir=None) -> None:
         log.warning("Log di copertura non riuscito: %s", e)
 
 
-_YF_SUFFIX_TO_COUNTRY = {
-    ".MI": "IT", ".DE": "DE", ".F": "DE", ".PA": "FR", ".AS": "NL",
-    ".BR": "BE", ".L": "UK", ".MC": "ES", ".SW": "CH", ".VX": "CH",
-    ".T": "JP", ".HK": "CN", ".SS": "CN", ".SZ": "CN", ".KS": "KR",
-    ".ST": "SE", ".CO": "DK", ".OL": "NO", ".HE": "FI", ".VI": "AT",
-    ".LS": "PT", ".AX": "AU", ".NZ": "NZ", ".TO": "CA", ".V": "CA",
-    ".IR": "IE", ".SA": "BR", ".MX": "MX",
-}
-
-
 def _country_for_tax(ticker: str, market: str) -> str:
     """Paese di ritenuta alla fonte, dal suffisso del ticker (MVF Sez. 7)."""
-    t = (ticker or "").upper()
-    if "." in t:
-        suffix = "." + t.rsplit(".", 1)[1]
-        if suffix in _YF_SUFFIX_TO_COUNTRY:
-            return _YF_SUFFIX_TO_COUNTRY[suffix]
-    # senza suffisso: quotazione USA
-    return "US" if market in ("US", "") else market
+    return costi.paese_da_ticker(ticker, market) or market
 
 
 def apply_mvf_valuation(c, data: dict, market: str) -> None:
@@ -3123,7 +3299,7 @@ def _porzioni_serializzate(cands, speculative_cands, special_cands):
                 "situation_type": sc.situation_type,
                 "situation_score": sc.situation_score,
                 "pe": sc.pe_ratio, "pb": sc.pb_ratio,
-                "div_yield": sc.div_yield,
+                "div_yield_pct": round(sc.div_yield * 100, 2) if sc.div_yield else None,
                 "price_change_1y": sc.price_change_1y,
                 "piotroski_f": sc.piotroski_f,
                 "fcf_positive": sc.fcf_positive,
@@ -3425,11 +3601,40 @@ def _assembla(args) -> None:
     _log_coverage(len(candidati), args.output)
 
 
+def _universo_dm_condiviso(args) -> list:
+    """Universo DM, costruito una volta sola per giornata e condiviso.
+
+    Le tre fette del Tier 1 girano a 30 minuti l'una dall'altra e ognuna
+    rifaceva la query a TradingView. I punteggi dipendono dal prezzo (sconto
+    dai massimi, P/E): con prezzi diversi fra una fetta e l'altra l'ordine
+    cambia e il passo alternato (1/3, 2/3, 3/3) salta o duplica dei titoli.
+    La prima fetta salva l'universo nelle parti; le altre lo rileggono.
+    """
+    snap = _parts_dir(args.output) / "universo_tv.json"
+    if snap.exists():
+        try:
+            d = json.loads(snap.read_text())
+            if d.get("tickers"):
+                log.info("Universo DM riletto da %s: %d ticker", snap, len(d["tickers"]))
+                return d["tickers"]
+        except Exception as e:
+            log.warning("Snapshot universo illeggibile (%s): lo ricostruisco.", e)
+    tickers, meta = build_universe_dm(
+        min_mcap_m=args.min_mcap, min_price=CONFIG["min_price_usd"],
+        cap=args.universe_cap)
+    if tickers:
+        _scrivi_parte(args.output, "universo_tv", {"tickers": tickers, "meta": meta})
+    return tickers
+
+
 def main():
     p = argparse.ArgumentParser(description="MVF v3.0 Stock Screener (tre tier + market context)")
     p.add_argument("--region",
-                   choices=["US", "EU", "ASIA", "GLOBAL", "LATAM", "AFRICA_ME"],
-                   default="GLOBAL")
+                   choices=["DM", "US", "EU", "ASIA", "GLOBAL", "LATAM", "AFRICA_ME"],
+                   default="DM",
+                   help="DM = solo mercati sviluppati, universo stratificato "
+                        "per settore (default). Le altre regioni usano il "
+                        "vecchio universo per capitalizzazione.")
     p.add_argument("--strategy", choices=["income", "post_news", "quality", "all"], default="all")
     p.add_argument("--min-mcap", type=int, default=CONFIG["min_market_cap_million"])
     p.add_argument("--top", type=int, default=500,
@@ -3437,7 +3642,7 @@ def main():
     p.add_argument("--top-speculative", type=int, default=25)
     p.add_argument("--top-special", type=int, default=15)
     p.add_argument("--limit-per-market", type=int, default=50,
-                   help="Righe TV per singolo mercato dopo pre-filtri qualità (default 50)")
+                   help="Solo regioni diverse da DM: righe TV per mercato (default 50)")
     p.add_argument("--universe-cap", type=int, default=600,
                    help="Cap finale universe Tier 1 prima di yfinance (default 600)")
     p.add_argument("--no-speculative", action="store_true")
@@ -3502,13 +3707,16 @@ def main():
         tier2_set = set()
         log.info("=== TIER 1: Quality/Income Universe (mcap>%dM, limit/mkt=%d) ===",
                  args.min_mcap, args.limit_per_market)
-        tickers = build_universe_tradingview(
-            region=args.region, min_mcap_m=args.min_mcap,
-            min_price=CONFIG["min_price_usd"],
-            limit_per_market=args.limit_per_market,
-            sector_filter=args.sector,
-            total_limit=args.universe_cap,
-        )
+        if args.region == "DM":
+            tickers = _universo_dm_condiviso(args)
+        else:
+            tickers = build_universe_tradingview(
+                region=args.region, min_mcap_m=args.min_mcap,
+                min_price=CONFIG["min_price_usd"],
+                limit_per_market=args.limit_per_market,
+                sector_filter=args.sector,
+                total_limit=args.universe_cap,
+            )
         if not tickers and args.region in ("US", "GLOBAL") and FINVIZ_OK:
             log.warning("Tentativo fallback finvizfinance...")
             tickers = build_universe_finviz_fallback(args.min_mcap, args.sector, args.limit_per_market)
