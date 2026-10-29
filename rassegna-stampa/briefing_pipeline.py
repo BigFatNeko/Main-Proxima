@@ -61,8 +61,14 @@ log = logging.getLogger("briefing_pipeline")
 
 try:
     from . import costi_italia as costi
+    from . import radar as radar_mod
+    from . import moat as moat_store
+    from . import moat_watch as moat_watch_mod
 except ImportError:
     import costi_italia as costi
+    import radar as radar_mod
+    import moat as moat_store
+    import moat_watch as moat_watch_mod
 
 
 # =============================================================================
@@ -70,6 +76,9 @@ except ImportError:
 # =============================================================================
 
 SCRIPT_DIR = Path(__file__).parent.absolute()
+# Stato del Moat Watch (chi era nell'elenco numerico ieri): vive in docs/,
+# che il workflow committa insieme ai briefing.
+DOCS_DIR = Path(os.environ.get("BRIEFING_DOCS_DIR", SCRIPT_DIR.parent / "docs"))
 
 DEFAULT_PORTFOLIO_DIR = Path(os.environ.get(
     "BRIEFING_PORTFOLIO_DIR", "~/proxima/portafogli")).expanduser()
@@ -84,7 +93,7 @@ SYSTEM_PROMPT_PATH = SCRIPT_DIR / "system_prompt.md"
 TEMPLATE_PATH = SCRIPT_DIR / "newspaper_template.html"
 
 CLAUDE_MODEL = "claude-opus-4-6"
-CLAUDE_MAX_TOKENS = 24000
+CLAUDE_MAX_TOKENS = 32000
 
 
 # =============================================================================
@@ -688,7 +697,8 @@ def estrai_storico_proposte(previous: list[dict], giorni: int = 14) -> dict:
             continue
 
         proposti: set[str] = set()
-        for titolo in ("Income Lab", "Occasioni", "Special Situations"):
+        for titolo in ("Income Lab", "Occasioni", "Special Situations",
+                       "Radar settoriale"):
             sezione = _sezione_dopo_titolo(html, titolo)
             if sezione:
                 proposti |= _ticker_nel_testo(_html_in_testo(sezione))
@@ -828,6 +838,38 @@ def build_system_prompt() -> str:
     return SYSTEM_PROMPT_PATH.read_text()
 
 
+def _watch_compatto(watch: dict) -> dict:
+    """Moat Watch per il prompt: Narrow in testa e righe senza il dettaglio dei
+    test, perche' il taglio a N caratteri non mangi proprio l'elenco Narrow
+    (nel primo run reale era successo: il modello scrisse "il contesto non
+    fornisce un elenco Narrow")."""
+    if not watch:
+        return {}
+    def snello(r: dict) -> dict:
+        return {k: v for k, v in r.items() if k not in ("test_numerico", "analizzato_mvf")}
+    out = {"narrow_numerico": dict(watch["narrow_numerico"])}
+    out["narrow_numerico"]["elenco"] = [snello(r) for r in out["narrow_numerico"]["elenco"]]
+    w = dict(watch["wide"])
+    for k in ("ingressi_recenti", "uscite_per_moat", "uscite_per_prezzo",
+              "scontati_confermati_da_mvf", "scontati_ma_mvf_non_conferma"):
+        w[k] = [snello(r) for r in w.get(k, [])]
+    w["uscite_per_prezzo"] = w["uscite_per_prezzo"][:6]
+    w["ingressi_recenti"] = w["ingressi_recenti"][:14]
+    out["wide"] = w
+    return out
+
+
+def _paese_candidato(c: dict) -> str:
+    """Paese di domicilio usato per la ritenuta (lo scrive il motore nel net_yield)."""
+    return (((c.get("net_yield") or {}).get("country")) or "").upper()
+
+
+def _e_nordico(c: dict) -> bool:
+    """Nordico per domicilio O per piazza di quotazione: l'attrito e' di entrambi."""
+    return costi.attrito(c.get("ticker", ""), paese=_paese_candidato(c),
+                         valuta=c.get("currency") or "")["nordico"]
+
+
 def _pct(frazione) -> Optional[float]:
     """Frazione -> percentuale per il modello, che altrimenti legge 0.031 come 0,03%."""
     return None if frazione is None else round(float(frazione) * 100, 2)
@@ -873,6 +915,9 @@ def _mvf_synthesis(c: dict) -> dict:
         "mvf_version": val.get("mvf_version"),
         "instrument_class": val.get("instrument_class"),
         "base": val.get("base"),
+        "voto_parziale": bool((c.get("mvf_scoring") or {}).get("voto_parziale")),
+        "copertura_metriche_pct": round(((c.get("mvf_scoring") or {}).get("copertura") or 0) * 100),
+        "moat": (c.get("mvf_scoring") or {}).get("moat"),
         # 1. VOTO FINALE — ora su 1000
         "voto_mvf_1000": c.get("mvf_vote_1000"),
         "voto_mvf_100": c.get("mvf_vote_100"),   # compat display
@@ -1049,11 +1094,17 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
     # alla fonte 25-35% contro un 15% di convenzione che si recupera solo con
     # una domanda di rimborso, piu' la valuta. Il primo nordico per voto resta
     # fra i top 40; l'Income Lab puo' usare solo quello.
-    tier1_ordinati = sorted(tier1, key=lambda c: c.get("mvf_vote_100") or 0, reverse=True)
+    # I voti di classi diverse hanno basi diverse (290, 365, 370) e copertura
+    # diversa: nella classifica globale per voto stanno solo le azioni
+    # ordinarie. Banche, assicurazioni, utility e REIT passano dal radar
+    # settoriale, dove si confrontano fra pari.
+    tier1_ordinati = sorted(
+        (c for c in tier1 if (c.get("instrument_class") or "common") == "common"),
+        key=lambda c: c.get("mvf_vote_100") or 0, reverse=True)
     tier1_top = costi.limita_nordici(
-        tier1_ordinati, lambda c: c.get("ticker", ""), massimo=1)[:40]
-    nordico_ammesso = {c.get("ticker") for c in tier1_top
-                       if costi.paese_da_ticker(c.get("ticker", "")) in costi.NORDICI}
+        tier1_ordinati, lambda c: c.get("ticker", ""), massimo=1,
+        e_nordico=_e_nordico)[:40]
+    nordico_ammesso = {c.get("ticker") for c in tier1_top if _e_nordico(c)}
     tier1_mvf = [_mvf_synthesis(c) for c in tier1_top]
 
     # Lista dedicata all'Income Lab.
@@ -1079,7 +1130,8 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
             scartati_em.append(tkr)
             continue
         base = tkr.split(".")[0]
-        att = costi.attrito(tkr)
+        att = costi.attrito(tkr, paese=_paese_candidato(c),
+                            valuta=c.get("currency") or "")
         income_pool.append({
             "ticker": tkr,
             "nome": (c.get("name") or "")[:45],
@@ -1110,7 +1162,8 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
         primo = next((r["ticker"] for r in income_pool if r["nordico"]), None)
         nordico_ammesso = {primo} if primo else set()
     income_pool = costi.limita_nordici(
-        income_pool, lambda r: r["ticker"], massimo=1, ammessi=nordico_ammesso)[:35]
+        income_pool, lambda r: r["ticker"], massimo=1, ammessi=nordico_ammesso,
+        e_nordico=lambda r: r["nordico"])[:35]
     for r in income_pool:
         r.pop("_ordine", None)
     nuovi = sum(1 for r in income_pool if r["gia_proposto_giorni"] == 0)
@@ -1122,6 +1175,38 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
                  "sviluppati (%s%s)", len(scartati_em),
                  ", ".join(scartati_em[:8]),
                  "..." if len(scartati_em) > 8 else "")
+
+    # Radar settoriale: famiglie del giorno, ordinate per sconto e non per voto
+    try:
+        radar = radar_mod.costruisci(
+            tier1, data_briefing(), gia_visti, in_portafoglio, nordico_ammesso)
+        log.info("Radar settoriale: %s",
+                 ", ".join(f"{f}={len(v)}" for f, v in radar["titoli"].items()))
+    except Exception as e:
+        # Una sezione in piu' non deve costare il briefing intero
+        log.warning("Radar settoriale non costruito (%s: %s)", type(e).__name__, e)
+        radar = {"famiglie": [], "etichette": {}, "titoli": {}}
+
+    # Moat Watch: Wide da Morningstar (VanEck), Narrow dal test numerico
+    try:
+        watch = moat_watch_mod.costruisci(
+            tier1, moat_store.carica(), data_briefing(), set(),
+            percorso_stato=DOCS_DIR / "moat-state.json")
+        # titoli in portafoglio: segnalati dentro le righe, non esclusi
+        for blocco in ("ingressi_recenti", "uscite_per_moat", "uscite_per_prezzo",
+                       "scontati_confermati_da_mvf", "scontati_ma_mvf_non_conferma"):
+            for r in watch["wide"][blocco]:
+                r["in_portafoglio"] = r["ticker"] in in_portafoglio
+        for r in watch["narrow_numerico"]["elenco"]:
+            r["in_portafoglio"] = r["ticker"] in in_portafoglio
+        log.info("Moat Watch: %d Wide noti, %d ingressi, %d uscite per moat, "
+                 "%d Narrow numerici", watch["wide"]["titoli_wide_noti"],
+                 len(watch["wide"]["ingressi_recenti"]),
+                 len(watch["wide"]["uscite_per_moat"]),
+                 len(watch["narrow_numerico"]["elenco"]))
+    except Exception as e:
+        log.warning("Moat Watch non costruito (%s: %s)", type(e).__name__, e)
+        watch = {}
 
     # Lookup Tier 1 per ticker symbol (per cross-reference filiere ↔ MVF)
     tier1_lookup: dict = {}
@@ -1219,7 +1304,7 @@ Inserisci 2-3 nella sezione "Filiere strategiche" se il Piotroski ≥5.
     gender = user_data.get("gender", "maschile")
     gender_note = f"GENERE NARRATIVA: {user_data['user'].upper()} è {'un uomo' if gender == 'maschile' else 'una donna'} — usa il genere {gender} in tutta la narrativa italiana.\n"
 
-    return f"""Genera il briefing per {user_data['user'].upper()} in data {datetime.now():%Y-%m-%d}.
+    return f"""Genera il briefing per {user_data['user'].upper()} in data {data_briefing()}.
 
 {gender_note}MODE: {mode}
 {ctx_section}
@@ -1241,6 +1326,17 @@ REGOLA OUTPUT: nella rassegna stampa cita SOLO questi 5 valori per titolo
 lettore — il calcolo è stato fatto, ma l'output è volutamente compatto.
 
 {json.dumps(tier1_mvf, indent=2, default=str)[:15000]}
+RADAR SETTORIALE DI OGGI (sezione 3a) — famiglie: {", ".join(radar["etichette"].values())}.
+Ordinati per SCONTO (upside sul valore intrinseco, distanza dai massimi a
+52 settimane, IQI), non per voto: e' il posto dove cercare i mispricing dei
+settori sotto pressione. `voto_parziale` = true significa che mancano metriche
+(`metriche_omesse`) e il voto non e' confrontabile con quello di altre classi:
+dillo, e di' cosa va verificato sui documenti prima di agire.
+{json.dumps(radar["titoli"], indent=1, ensure_ascii=False, default=str)[:12000]}
+MOAT WATCH (sezione 3c) — vantaggi competitivi, ingressi e uscite.
+WIDE = rating Morningstar vero (da VanEck), con P/FV = prezzo / fair value di
+Morningstar alla data indicata. NARROW = SOLO test numerico, non Morningstar.
+{json.dumps(_watch_compatto(watch), indent=1, ensure_ascii=False, default=str)[:14000]}
 {spec_section}{special_section}
 {filiere_section}
 

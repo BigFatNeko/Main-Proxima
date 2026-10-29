@@ -163,6 +163,17 @@ jobs:
       - name: Installa dipendenze
         run: pip install -r rassegna-stampa/requirements.txt
 
+      # Rating di moat Morningstar (da VanEck): servono al voto (Tier 1) e al
+      # Moat Watch (briefing). Best-effort: se VanEck o pdftotext non
+      # rispondono resta l'archivio committato in rassegna-stampa/dati/.
+      - name: Aggiorna rating moat Morningstar
+        if: ${{ contains(fromJSON('["tier1","tutto","briefing"]'), steps.fase.outputs.fase) }}
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y -qq poppler-utils >/dev/null 2>&1 || true
+          cd rassegna-stampa
+          python aggiorna_moat.py || true
+
       - name: Crea cartelle output
         run: |
           mkdir -p briefings

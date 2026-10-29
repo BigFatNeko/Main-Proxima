@@ -28,6 +28,7 @@ import os
 import re
 import sys
 import threading
+import traceback
 import time
 import warnings
 from dataclasses import dataclass, asdict, field
@@ -57,11 +58,17 @@ try:
     from . import filiere_screener as filiere_mod
     from . import costi_italia as costi
     from . import universo as universo_mod
+    from . import mvf_bande as mb
+    from . import mvf_metriche as mvm
+    from . import moat as moat_mod
 except ImportError:
     import mvf_valuation as mvf
     import filiere_screener as filiere_mod
     import costi_italia as costi
     import universo as universo_mod
+    import mvf_bande as mb
+    import mvf_metriche as mvm
+    import moat as moat_mod
 
 # SEC EDGAR — controllo incrociato dei fondamentali (MVF Sez. 6-bis).
 # Opzionale: senza il modulo il pipeline resta sui dati yfinance con tag [V].
@@ -371,6 +378,7 @@ class Candidate:
     earnings_acceleration: Optional[float] = None
     # MVF v4.1 — valutazione completa
     instrument_class: str = "common"        # STEP 0 routing (Sez. 2)
+    mvf_scoring: Optional[dict] = None      # motore a bande v4.5.1: copertura, omesse, dettaglio
     instrument_base: int = 280
     mvf_vote_1000: Optional[float] = None   # voto su base per classe, /1000
     mvf_vote_100: Optional[float] = None    # compat v3.0: voto/10
@@ -694,7 +702,8 @@ _CAMPI_UNIVERSO = (
 
 
 def _query_mercato_dm(market: str, min_mcap_m: int, min_price: float,
-                      fetch: int) -> tuple[list[dict], dict, dict, Optional[str]]:
+                      fetch: int, nomi: Optional[list] = None
+                      ) -> tuple[list[dict], dict, dict, Optional[str]]:
     """Righe complete di un mercato, SENZA il filtro P/E del vecchio universo.
 
     Il filtro 0 < P/E < 80 toglieva 83 dei 222 REIT americani (37%): per un
@@ -706,15 +715,15 @@ def _query_mercato_dm(market: str, min_mcap_m: int, min_price: float,
     dropped: dict = {}
     skipped: dict = {}
     try:
-        q = (Query()
-             .set_markets(market)
-             .select(*_CAMPI_UNIVERSO)
-             .where(
-                 Column("market_cap_basic") > min_mcap_m * 1_000_000,
-                 Column("close") > min_price,
-                 Column("average_volume_30d_calc") > 10000,
-             )
-             .order_by("market_cap_basic", ascending=False)
+        cond = [Column("market_cap_basic") > min_mcap_m * 1_000_000,
+                Column("close") > min_price,
+                Column("average_volume_30d_calc") > 10000]
+        if nomi:
+            # richiesta per simbolo: i titoli Wide moat di media capitalizzazione
+            # stanno oltre il limite di righe del mercato USA
+            cond.append(Column("name").isin(nomi))
+        q = (Query().set_markets(market).select(*_CAMPI_UNIVERSO)
+             .where(*cond).order_by("market_cap_basic", ascending=False)
              .limit(fetch))
         _count, df = q.get_scanner_data()
         if df is None or df.empty:
@@ -786,10 +795,27 @@ def build_universe_dm(min_mcap_m: int = 300, min_price: float = 0.5,
                     sum(persi.values()),
                     ", ".join(f"{p}={n}" for p, n in sorted(persi.items(), key=lambda kv: -kv[1])))
 
-    # Doppie quotazioni (ADR + linea locale): vince la prima nell'ordine dei
-    # mercati, deterministico. Chiave: descrizione + capitalizzazione ~uguale.
+    # Titoli Wide moat Morningstar (solo USA, senza suffisso): sempre in universo,
+    # anche quelli che il limite di righe per mercato lascerebbe fuori.
+    wide = {t for t, v in moat_mod.carica().get("titoli", {}).items()
+            if v.get("rating") == "wide"}
+    presenti = {r["yf_ticker"] for r in tutte}
+    mancanti = sorted(wide - presenti)
+    if mancanti:
+        simboli = [t.replace("-", ".") for t in mancanti]
+        rows, _d, _s, err = _query_mercato_dm("america", min_mcap_m, min_price, 200, nomi=simboli)
+        if err:
+            log.warning("Titoli Wide moat non recuperati (%s)", err)
+        for r in rows:
+            r["yf_ticker"] = r["yf_ticker"].replace(".", "-")
+        tutte.extend(r for r in rows if r["yf_ticker"] not in presenti)
+
+    # Doppie quotazioni e classi di azioni: vince il titolo Wide moat, poi la
+    # prima nell'ordine dei mercati, in modo deterministico. Chiave:
+    # descrizione + capitalizzazione ~uguale.
     ordine = {m: i for i, m in enumerate(mercati)}
-    tutte.sort(key=lambda r: (ordine.get(r["mercato_tv"], 99), r["yf_ticker"]))
+    tutte.sort(key=lambda r: (r["yf_ticker"] not in wide,
+                              ordine.get(r["mercato_tv"], 99), r["yf_ticker"]))
     viste: dict = {}
     uniche: list[dict] = []
     for r in tutte:
@@ -803,17 +829,19 @@ def build_universe_dm(min_mcap_m: int = 300, min_price: float = 0.5,
     log.info("Universe DM: %d righe, %d dopo deduplica doppie quotazioni",
              len(tutte), len(uniche))
 
-    scelte, diag = universo_mod.seleziona(uniche, cap)
+    scelte, diag = universo_mod.seleziona(uniche, cap, obbligati=wide)
+    log.info("Universe DM: %d titoli Wide moat Morningstar forzati in universo "
+             "(archivio moat %s)", diag.get("forzati", 0),
+             moat_mod.carica().get("aggiornato", "assente"))
     log.info("Universe DM: selezionati %d su %d. Per paese: %s",
              len(scelte), diag["candidati_totali"],
              ", ".join(f"{k}={v}" for k, v in list(diag["per_paese"].items())[:12]))
     log.info("Universe DM: quote per famiglia (riempite/richieste): %s",
              ", ".join(f"{f}={diag['riempimento_prima_passata'].get(f, 0)}/{q}"
                        for f, q in diag["quote_richieste"].items()))
-    meta = {r["yf_ticker"]: {"famiglia": r["famiglia"],
-                             "punteggio": round(r["punteggio"], 1),
-                             "paese": universo_mod.paese_riga(r)}
-            for r in scelte}
+    meta = {r["yf_ticker"]: universo_mod.meta_riga(r) for r in scelte}
+    # Mediane di settore sull'INTERO insieme idoneo, non sui soli selezionati
+    meta["_mediane_opm"] = universo_mod.mediane_margine_operativo(uniche)
     return [r["yf_ticker"] for r in scelte], meta
 
 
@@ -1441,7 +1469,9 @@ def compute_metrics(data):
 
 def apply_hard_filters(m, inter, special):
     hf = HardFilters()
-    if special not in {"bank_or_insurance", "reit"}:
+    # Settori esenti da Altman (nucleo Sez. 3-D): banche, assicurazioni, REIT,
+    # utility. ENEL cadeva qui con Z < 1,23 per la leva tipica del settore.
+    if special not in {"bank_or_insurance", "reit", "utility"}:
         if m.altman_z is not None and m.altman_z < 1.23:
             hf.altman_z_below_1_23 = True
     fcf_s = inter.get("fcf_series", [])
@@ -1449,7 +1479,7 @@ def apply_hard_filters(m, inter, special):
     # depositi e portafoglio titoli: tre anni negativi non dicono nulla.
     if special != "bank_or_insurance" and len(fcf_s) >= 3 and all(v < 0 for v in fcf_s[:3]):
         hf.fcf_negative_3y = True
-    if special != "bank_or_insurance":
+    if special not in ("bank_or_insurance", "reit", "utility"):
         if m.debt_to_equity is not None and m.debt_to_equity > 3.0:
             hf.debt_equity_above_3 = True
     ni_s = inter.get("net_income_series", [])
@@ -1857,9 +1887,15 @@ def _log_coverage(n_candidates: int, out_dir=None) -> None:
         log.warning("Log di copertura non riuscito: %s", e)
 
 
-def _country_for_tax(ticker: str, market: str) -> str:
-    """Paese di ritenuta alla fonte, dal suffisso del ticker (MVF Sez. 7)."""
-    return costi.paese_da_ticker(ticker, market) or market
+def _country_for_tax(ticker: str, market: str, info: Optional[dict] = None) -> str:
+    """Paese che fissa la ritenuta alla fonte (MVF Sez. 7).
+
+    Conta il DOMICILIO della societa', non la borsa: Repsol quotata a
+    Francoforte (REP.DE) paga la ritenuta spagnola, non quella tedesca. Il
+    campo `country` di Yahoo e' il domicilio; senza, si ricade sul suffisso.
+    """
+    dom = costi.paese_da_nome((info or {}).get("country", ""))
+    return dom or costi.paese_da_ticker(ticker, market) or market
 
 
 def apply_mvf_valuation(c, data: dict, market: str) -> None:
@@ -2086,55 +2122,7 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
 
     c.variation_5y = asdict(var)
 
-    # === STEP 7: controllo incrociato EDGAR + Confidence Score ===
-    # Il DIP (Sez. 6-bis) impone primary-first: per gli emittenti SEC il
-    # riscontro XBRL porta il dato da [V] a [P]; un conflitto material lo
-    # degrada a [U], perche' due fonti discordi valgono meno di una sola non
-    # verificata. Fuori dal perimetro SEC il tag resta [V].
-    cross_checked = False
-    cross_agrees = None
-    if EDGAR_OK:
-        yf_for_check = {
-            "revenue": rev_series[0] if rev_series else None,
-            "net_income": safe_row(fin, "Net Income"),
-            "operating_income": safe_row(fin, "Operating Income"),
-            "assets": safe_row(bs, "Total Assets"),
-            "equity": safe_row(bs, "Stockholders Equity"),
-            "operating_cash_flow": safe_row(cf, "Operating Cash Flow"),
-            "net_margin": c.metrics.net_margin,
-            "operating_margin": c.metrics.operating_margin,
-            "roe": c.metrics.roe,
-        }
-        yf_for_check = {k: v for k, v in yf_for_check.items() if v is not None}
-        xc = edgar.verify_ticker(c.ticker, yf_for_check)
-        c.edgar_cross_check = {
-            "verdict": xc.verdict, "checked": xc.checked,
-            "matched": xc.matched, "mismatched": xc.mismatched,
-            "notes": xc.notes,
-        }
-        if xc.verdict in ("agree", "conflict"):
-            cross_checked = True
-            cross_agrees = xc.agrees
-            if xc.verdict == "conflict":
-                notes.append(
-                    f"EDGAR in conflitto: {xc.mismatched}/{xc.checked} campi "
-                    f"fuori tolleranza")
-
-    completeness = sum(1 for v in [c.metrics.gross_margin, c.metrics.operating_margin,
-                                    c.metrics.net_margin, c.metrics.roic,
-                                    c.metrics.fcf_margin, c.metrics.roe, eps,
-                                    fcf_0, total_debt] if v is not None) / 9
-    cs = mvf.compute_confidence_score(
-        completeness, fcf_series, c.sector,
-        [val.graham_fv, val.ddm_2stage_fv or val.ddm_1stage_fv,
-         val.dcf_2stage_fv, val.epv_fv],
-        has_quality_audit=True,
-        source_tag="V",
-        cross_checked=cross_checked,
-        cross_check_agrees=cross_agrees)
-    c.confidence_score = asdict(cs)
-
-    # === STEP 8: Voto MVF /1000 su base 280 ===
+    # === STEP 8: Voto MVF /1000 con il motore a bande v4.5.1 ===
     metrics_dict = asdict(c.metrics)
     metrics_dict["altman_z"] = c.metrics.altman_z
     metrics_dict["earnings_quality"] = c.metrics.cash_conversion_ratio
@@ -2188,13 +2176,88 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
         "multiple_expansion_raw": trail_pe,
     }
 
+    # Motore a bande MVF v4.5.1 (mvf_bande/mvf_metriche): classe di voto dal
+    # sector_class dei modelli di valore, livelli dai bilanci, voto sul peso
+    # delle sole metriche disponibili.
     altman_exempt = sector_class in {"bank", "insurance", "reit", "utility"}
-    mvf_vote, breakdown = mvf.compute_mvf_score(
-        metrics_dict, has_div, ddm_used, c.metrics.altman_z, es_neg_2y,
-        instrument_class=routing.instrument_class,
-        altman_exempt=altman_exempt, banded_fractions=banded)
+    classe_voto = mvm.classe_di_voto(sector_class, c.industry or "")
+    dy_v = c.metrics.dividend_yield or 0
+    ddm_sign = bool(ddm_used and dy_v >= 0.015 and (payout or 0) >= 0.25)
+    costr = mvm.costruisci(
+        classe_voto, info, fin, bs, cf, dividends, metrics_dict,
+        wacc, re_, c.sector or "", c.industry or "", market,
+        moat_rating=moat_mod.rating(c.ticker),
+        mediana_op_margin=MEDIANE_OPM.get((META_UNIVERSO.get(c.ticker) or {}).get("famiglia")),
+        ddm_significativo=ddm_sign,
+        multiple_expansion_frac=banded.get("multiple_expansion"))
+    ctxm = costr["ctx"]
+    esito = mb.calcola_voto(
+        classe_voto, costr["livelli"],
+        ha_dividendo=bool(ctxm.get("ha_dividendo")),
+        ddm_significativo=ddm_sign,
+        rd_materiale=bool(ctxm.get("rd_materiale")),
+        altman_z=ctxm.get("altman_z"), altman_modello=ctxm.get("altman_modello", "Z"),
+        altman_esente=classe_voto != "common",
+        valori=costr["valori"], frazioni_dirette=costr["frazioni"])
+    mvf_vote = esito.voto_1000
     c.mvf_vote_1000 = mvf_vote
     c.mvf_vote_100 = round(mvf_vote / 10, 1) if mvf_vote else None  # compat
+    c.mvf_scoring = {
+        "versione": mb.VERSIONE, "regime": mb.REGIME, "classe_voto": classe_voto,
+        "base_nominale": esito.base_nominale, "copertura": esito.copertura,
+        "voto_parziale": esito.parziale, "metriche_omesse": esito.omesse,
+        "dettaglio": esito.dettaglio, "note": esito.note,
+        "moat": ctxm.get("moat"),
+    }
+
+    # === STEP 7: controllo incrociato EDGAR + Confidence Score ===
+    # Il DIP (Sez. 6-bis) impone primary-first: per gli emittenti SEC il
+    # riscontro XBRL porta il dato da [V] a [P]; un conflitto material lo
+    # degrada a [U], perche' due fonti discordi valgono meno di una sola non
+    # verificata. Fuori dal perimetro SEC il tag resta [V].
+    cross_checked = False
+    cross_agrees = None
+    if EDGAR_OK:
+        yf_for_check = {
+            "revenue": rev_series[0] if rev_series else None,
+            "net_income": safe_row(fin, "Net Income"),
+            "operating_income": safe_row(fin, "Operating Income"),
+            "assets": safe_row(bs, "Total Assets"),
+            "equity": safe_row(bs, "Stockholders Equity"),
+            "operating_cash_flow": safe_row(cf, "Operating Cash Flow"),
+            "net_margin": c.metrics.net_margin,
+            "operating_margin": c.metrics.operating_margin,
+            "roe": c.metrics.roe,
+        }
+        yf_for_check = {k: v for k, v in yf_for_check.items() if v is not None}
+        xc = edgar.verify_ticker(c.ticker, yf_for_check)
+        c.edgar_cross_check = {
+            "verdict": xc.verdict, "checked": xc.checked,
+            "matched": xc.matched, "mismatched": xc.mismatched,
+            "notes": xc.notes,
+        }
+        if xc.verdict in ("agree", "conflict"):
+            cross_checked = True
+            cross_agrees = xc.agrees
+            if xc.verdict == "conflict":
+                notes.append(
+                    f"EDGAR in conflitto: {xc.mismatched}/{xc.checked} campi "
+                    f"fuori tolleranza")
+
+    completeness = sum(1 for v in [c.metrics.gross_margin, c.metrics.operating_margin,
+                                    c.metrics.net_margin, c.metrics.roic,
+                                    c.metrics.fcf_margin, c.metrics.roe, eps,
+                                    fcf_0, total_debt] if v is not None) / 9
+    cs = mvf.compute_confidence_score(
+        completeness, fcf_series, c.sector,
+        [val.graham_fv, val.ddm_2stage_fv or val.ddm_1stage_fv,
+         val.dcf_2stage_fv, val.epv_fv],
+        has_quality_audit=True,
+        source_tag="V",
+        cross_checked=cross_checked,
+        cross_check_agrees=cross_agrees,
+        omitted_core_metrics=esito.omesse_core)
+    c.confidence_score = asdict(cs)
 
     # === STEP 9: Red Flags ===
     goodwill = safe_row(bs, "Goodwill")
@@ -2262,9 +2325,17 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
     if has_div:
         clean_div = [v for v in _series_to_list(fin, "Net Income", 5) if v]
         div_years = 5 if (c.metrics.dividend_growth_5y is not None) else 2
-    moat_proxy = mvf.moat_proxy_score(
-        c.metrics.operating_margin, c.metrics.roic, c.metrics.gross_margin,
-        economic_spread)
+    # Moat per l'IQI: il livello del motore a bande (rating Morningstar se c'e',
+    # altrimenti test numerico) ha la precedenza sul vecchio proxy.
+    liv_moat = costr["livelli"].get("moat")
+    if liv_moat is not None:
+        moat_proxy = (10.0, 7.5, 5.0, 2.5, 0.0)[liv_moat]
+        moat_fonte = "morningstar" if (ctxm.get("moat") or {}).get("rating") else "numerico"
+    else:
+        moat_proxy = mvf.moat_proxy_score(
+            c.metrics.operating_margin, c.metrics.roic, c.metrics.gross_margin,
+            economic_spread)
+        moat_fonte = "proxy"
     iqi = mvf.compute_iqi(
         metrics_dict, c.metrics.altman_z, economic_spread, wacc, moat_proxy,
         dividend_years=div_years,
@@ -2276,7 +2347,8 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
                      if val.upside_at_current_pct else None),
         growth_expected=eps_cagr, growth_from_buyback=ni_flat_or_down,
         interest_coverage=int_cov, net_debt_ebitda=nde,
-        altman_exempt=altman_exempt, forward_is_estimate=True)
+        altman_exempt=altman_exempt, forward_is_estimate=True,
+        moat_source=moat_fonte)
     c.iqi_score = asdict(iqi)
 
     mos, mos_detail = mvf.compute_final_mos(iqi, cs, gates)
@@ -2291,12 +2363,16 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
 
     # === STEP 11: riconciliazione Voto <-> IQI + rendimento netto Italia ===
     c.mvf_iqi_reconciliation = mvf.reconcile_mvf_iqi(mvf_vote, iqi.total)
-    country = _country_for_tax(c.ticker, c.market)
+    country = _country_for_tax(c.ticker, c.market, info)
     c.net_yield = asdict(mvf.compute_net_yield(
         c.metrics.dividend_yield, country, routing.instrument_class))
 
-    val.instrument_class = routing.instrument_class
-    val.base = routing.base
+    # La classe che vale per il voto e' quella del motore a bande (banca,
+    # assicurazione, utility, REIT), non il routing grezzo: la base cambia.
+    c.instrument_class = classe_voto
+    c.instrument_base = (c.mvf_scoring or {}).get("base_nominale", routing.base)
+    val.instrument_class = classe_voto
+    val.base = c.instrument_base
     c.mvf_valuation = asdict(val)
     c.intrinsic_value = wfv
     c.ideal_purchase_price_mos = val.ideal_purchase_price
@@ -2555,7 +2631,11 @@ def screen_universe(tickers, strategy="all", max_workers=None):
             try:
                 apply_mvf_valuation(c, data, market)
             except Exception as e:
-                mvf_falliti.append((c.ticker, f"{type(e).__name__}: {e}"))
+                # Il punto del codice conta piu' del messaggio: "'>' not
+                # supported" senza una riga non si puo' correggere.
+                fr = traceback.extract_tb(e.__traceback__)[-1]
+                mvf_falliti.append((c.ticker, f"{type(e).__name__}: {e} "
+                                              f"[{Path(fr.filename).name}:{fr.lineno}]"))
                 log.debug("MVF valuation fallita per %s: %s", c.ticker, e)
             out.append(c)
 
@@ -2567,7 +2647,7 @@ def screen_universe(tickers, strategy="all", max_workers=None):
     senza_voto = [c.ticker for c in out if not c.mvf_vote_1000]
     if mvf_falliti:
         quota = len(mvf_falliti) / max(len(out), 1)
-        primi = ", ".join(f"{t} ({e[:50]})" for t, e in mvf_falliti[:3])
+        primi = ", ".join(f"{t} ({e[:160]})" for t, e in mvf_falliti[:3])
         livello = log.error if quota > 0.10 else log.warning
         livello("MVF fallita su %d/%d candidati (%.0f%%). Primi casi: %s",
                 len(mvf_falliti), len(out), quota * 100, primi)
@@ -3386,6 +3466,7 @@ def _costruisci_payload(date_tag, cands, top, spec_list, special_list,
             "mvf_vote_100": c.mvf_vote_100,
             "mvf_engine_note": c.mvf_engine_note,
             "mvf_valuation": c.mvf_valuation,
+            "mvf_scoring": c.mvf_scoring,
             "mvf_red_flags": c.mvf_red_flags,
             "quality_gates": c.quality_gates,
             "iqi_score": c.iqi_score,
@@ -3555,6 +3636,14 @@ def _assembla(args) -> None:
                   ", ".join(sorted(parti)) or "nessuna")
         sys.exit(1)
 
+    # Famiglia di settore e sconto dai massimi vengono dall'universo (dati
+    # TradingView): servono al radar settoriale del briefing.
+    meta = parti.get("universo_tv", {}).get("meta", {})
+    for cand in candidati:
+        mt = meta.get(cand.get("ticker"))
+        if mt and isinstance(mt, dict) and "famiglia" in mt:
+            cand["tv"] = mt
+
     # Le fette arrivano gia' valutate: qui si riordina e si taglia, come
     # farebbe output_results su un run unico.
     candidati.sort(key=lambda c: c.get("score") or 0, reverse=True)
@@ -3601,6 +3690,17 @@ def _assembla(args) -> None:
     _log_coverage(len(candidati), args.output)
 
 
+META_UNIVERSO: dict = {}      # ticker -> famiglia, paese, sconto...
+MEDIANE_OPM: dict = {}        # famiglia -> mediana margine operativo (frazione)
+
+
+def _carica_meta_universo(meta: dict) -> None:
+    """Rende disponibili al voto la famiglia di ogni titolo e le mediane di settore."""
+    global META_UNIVERSO, MEDIANE_OPM
+    META_UNIVERSO = {k: v for k, v in meta.items() if not k.startswith("_")}
+    MEDIANE_OPM = meta.get("_mediane_opm") or {}
+
+
 def _universo_dm_condiviso(args) -> list:
     """Universo DM, costruito una volta sola per giornata e condiviso.
 
@@ -3616,6 +3716,7 @@ def _universo_dm_condiviso(args) -> list:
             d = json.loads(snap.read_text())
             if d.get("tickers"):
                 log.info("Universo DM riletto da %s: %d ticker", snap, len(d["tickers"]))
+                _carica_meta_universo(d.get("meta") or {})
                 return d["tickers"]
         except Exception as e:
             log.warning("Snapshot universo illeggibile (%s): lo ricostruisco.", e)
@@ -3624,6 +3725,7 @@ def _universo_dm_condiviso(args) -> list:
         cap=args.universe_cap)
     if tickers:
         _scrivi_parte(args.output, "universo_tv", {"tickers": tickers, "meta": meta})
+    _carica_meta_universo(meta)
     return tickers
 
 

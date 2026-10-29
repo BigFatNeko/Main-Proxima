@@ -48,7 +48,7 @@ except ImportError:
     import costi_italia as costi
 
 
-MVF_VERSION = "4.1"
+MVF_VERSION = "4.5.1"
 EXECUTION_REGIME = "S"   # S = screening batch | A = analisi documentale
 
 
@@ -80,8 +80,12 @@ CRP = {
 # Ogni classe ha la PROPRIA base. I Voti NON sono confrontabili tra classi
 # diverse (Sez. 11F): confronto valido solo intra-classe e intra-versione.
 INSTRUMENT_BASES = {
-    "common":    280,
+    "common":    290,
+    "banca":     365,
+    "assicurazione": 365,
+    "utility":   365,
     "reit":      370,
+    "mreit":     300,   # REIT ipotecari: nessun motore, base indicativa
     "bdc":       299,
     "mlp":       309,
     "preferred": 168,   # VOTO MVF-P, motore credito/reddito
@@ -90,7 +94,7 @@ INSTRUMENT_BASES = {
 # In regime S e' implementato il solo motore common. Le altre classi vengono
 # RILEVATE e marcate: meglio nessun voto che un voto prodotto dal motore
 # sbagliato su metriche non pertinenti.
-IMPLEMENTED_ENGINES = {"common"}
+IMPLEMENTED_ENGINES = {"common", "banca", "assicurazione", "utility", "reit"}
 
 
 # =============================================================================
@@ -436,8 +440,12 @@ def classify_instrument(sector: Optional[str], industry: Optional[str],
     if any(h in blob for h in _MLP_HINTS):
         return _route("mlp", "denominazione contiene marcatore MLP/midstream")
 
-    if "real estate" in s or any(h in blob for h in _REIT_HINTS):
-        return _route("reit", "settore/industria immobiliare o marcatore REIT")
+    # REIT ipotecari (MITT, NLY...): vivono di spread e book value, non di
+    # affitti. Il motore REIT (FFO, occupancy) non li misura: nessun voto.
+    if "mortgage" in ind and "reit" in ind:
+        return _route("mreit", "REIT ipotecario")
+    if "reit" in ind or any(h in blob for h in _REIT_HINTS):
+        return _route("reit", "industria REIT o marcatore REIT")
 
     return _route("common", "nessun marcatore di classe speciale rilevato")
 
@@ -677,7 +685,7 @@ def classify_sector_for_weights(sector: str, industry: str,
                                 fcf_negative: bool) -> str:
     s = (sector or "").lower()
     ind = (industry or "").lower()
-    if "real estate" in s or "reit" in ind:
+    if "reit" in ind:
         return "reit"
     if "bank" in ind or ("financial services" in s and "bank" in ind):
         return "bank"
@@ -1092,7 +1100,8 @@ def compute_iqi(metrics: dict,
                 interest_coverage: Optional[float] = None,
                 net_debt_ebitda: Optional[float] = None,
                 altman_exempt: bool = False,
-                forward_is_estimate: bool = True) -> IQIScore:
+                forward_is_estimate: bool = True,
+                moat_source: str = "proxy") -> IQIScore:
     """IQI = 0.40 x Blocco A (Solidita') + 0.60 x Blocco B (Prospettive).
 
     DEVIAZIONE REGIME S: B1 e B4 dovrebbero venire da guidance [G] o
@@ -1212,7 +1221,12 @@ def compute_iqi(metrics: dict,
     if moat_0_10 is not None:
         # ancoraggio specifica: none 0 / narrow 6 / wide 12 su 12 punti
         a4 += min(12.0, (moat_0_10 / 10.0) * 12.0)
-        notes.append("A4: moat da proxy fondamentali, NON Morningstar (deviazione regime S)")
+        if moat_source == "morningstar":
+            notes.append("A4: moat con rating Morningstar [P] modulato dal test numerico")
+        elif moat_source == "numerico":
+            notes.append("A4: moat dal solo test numerico [U], senza rating Morningstar")
+        else:
+            notes.append("A4: moat da proxy fondamentali, NON Morningstar (deviazione regime S)")
     else:
         a4 += 4.0
     # Capital allocation non valutabile in regime S: punti neutri
@@ -1354,7 +1368,8 @@ def compute_confidence_score(data_completeness_pct: float,
                              internal_coherence_ok: Optional[bool] = None,
                              source_tag: str = "V",
                              cross_checked: bool = False,
-                             cross_check_agrees: Optional[bool] = None
+                             cross_check_agrees: Optional[bool] = None,
+                             omitted_core_metrics: int = 0
                              ) -> ConfidenceScore:
     """4 sub-score 0-25 -> totale 0-100, su scala di regime S.
 
@@ -1396,6 +1411,10 @@ def compute_confidence_score(data_completeness_pct: float,
 
     # B. Completezza / copertura
     b = max(0.0, min(25.0, data_completeness_pct * 25))
+    if omitted_core_metrics:
+        # v4.5.1, Sez. 3-B: -2 punti di CS per ogni metrica core omessa
+        b = max(0.0, b - 2.0 * omitted_core_metrics)
+        notes.append(f"{omitted_core_metrics} metriche core omesse: -{2 * omitted_core_metrics} punti")
     cs.completeness = round(b, 1)
 
     # C. Puntualita'
