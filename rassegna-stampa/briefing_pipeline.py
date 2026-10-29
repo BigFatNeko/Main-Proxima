@@ -1143,10 +1143,15 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
                  "..." if len(scartati_em) > 8 else "")
 
     # Radar settoriale: famiglie del giorno, ordinate per sconto e non per voto
-    radar = radar_mod.costruisci(
-        tier1, data_briefing(), gia_visti, in_portafoglio, nordico_ammesso)
-    log.info("Radar settoriale: %s",
-             ", ".join(f"{f}={len(v)}" for f, v in radar["titoli"].items()))
+    try:
+        radar = radar_mod.costruisci(
+            tier1, data_briefing(), gia_visti, in_portafoglio, nordico_ammesso)
+        log.info("Radar settoriale: %s",
+                 ", ".join(f"{f}={len(v)}" for f, v in radar["titoli"].items()))
+    except Exception as e:
+        # Una sezione in piu' non deve costare il briefing intero
+        log.warning("Radar settoriale non costruito (%s: %s)", type(e).__name__, e)
+        radar = {"famiglie": [], "etichette": {}, "titoli": {}}
 
     # Moat Watch: Wide da Morningstar (VanEck), Narrow dal test numerico
     try:

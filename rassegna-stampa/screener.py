@@ -28,6 +28,7 @@ import os
 import re
 import sys
 import threading
+import traceback
 import time
 import warnings
 from dataclasses import dataclass, asdict, field
@@ -2624,7 +2625,11 @@ def screen_universe(tickers, strategy="all", max_workers=None):
             try:
                 apply_mvf_valuation(c, data, market)
             except Exception as e:
-                mvf_falliti.append((c.ticker, f"{type(e).__name__}: {e}"))
+                # Il punto del codice conta piu' del messaggio: "'>' not
+                # supported" senza una riga non si puo' correggere.
+                fr = traceback.extract_tb(e.__traceback__)[-1]
+                mvf_falliti.append((c.ticker, f"{type(e).__name__}: {e} "
+                                              f"[{Path(fr.filename).name}:{fr.lineno}]"))
                 log.debug("MVF valuation fallita per %s: %s", c.ticker, e)
             out.append(c)
 
@@ -2636,7 +2641,7 @@ def screen_universe(tickers, strategy="all", max_workers=None):
     senza_voto = [c.ticker for c in out if not c.mvf_vote_1000]
     if mvf_falliti:
         quota = len(mvf_falliti) / max(len(out), 1)
-        primi = ", ".join(f"{t} ({e[:50]})" for t, e in mvf_falliti[:3])
+        primi = ", ".join(f"{t} ({e[:160]})" for t, e in mvf_falliti[:3])
         livello = log.error if quota > 0.10 else log.warning
         livello("MVF fallita su %d/%d candidati (%.0f%%). Primi casi: %s",
                 len(mvf_falliti), len(out), quota * 100, primi)
