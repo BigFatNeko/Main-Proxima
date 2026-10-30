@@ -2155,6 +2155,9 @@ def apply_mvf_valuation(c, data: dict, market: str) -> None:
 
     pe_hist_median = None
     fwd_pe = info.get("forwardPE")
+    # Yahoo a volte restituisce la stringa "Infinity" (2020.OL)
+    fwd_pe = fwd_pe if isinstance(fwd_pe, (int, float)) and not isinstance(fwd_pe, bool) \
+        and fwd_pe == fwd_pe and fwd_pe != float("inf") else None
     trail_pe = c.pe_ratio
     if trail_pe and fwd_pe and fwd_pe > 0:
         pe_hist_median = (trail_pe + fwd_pe) / 2  # proxy grezzo, regime S
