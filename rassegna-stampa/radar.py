@@ -88,7 +88,9 @@ def idoneo(c: dict) -> bool:
     if not c.get("mvf_vote_1000") or c["mvf_vote_1000"] < VOTO_MINIMO:
         return False
     up = _upside_pct(c)
-    if up is None or up > UPSIDE_MAX_CREDIBILE:
+    # sconto senza upside non e' un mispricing: e' una discesa che i fondamentali
+    # giustificano (visto il 30 ottobre: JKHY -50%, WSO -0,5%)
+    if up is None or up < 0 or up > UPSIDE_MAX_CREDIBILE:
         return False
     if (c.get("mvf_valuation") or {}).get("dispersion_flag") == "dispersione_alta":
         return False
