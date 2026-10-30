@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Optional
 
 import costi_italia as costi
+from radar import UPSIDE_MAX_CREDIBILE
 
 log = logging.getLogger("moat_watch")
 
@@ -46,6 +47,9 @@ def _riga(tkr: str, voce: dict, c: Optional[dict], in_portafoglio: set) -> dict:
     up = val.get("upside_at_current_pct")
     if up is None and c and c.get("intrinsic_value") and c.get("price"):
         up = (c["intrinsic_value"] / c["price"] - 1) * 100
+    # oltre la soglia e' un artefatto del modello (visto: +2.610%, +3.200%)
+    if up is not None and up > UPSIDE_MAX_CREDIBILE:
+        up = None
     return {
         "ticker": tkr,
         "nome": (voce.get("nome") or (c or {}).get("name") or "")[:40],
@@ -71,9 +75,30 @@ def _carica_stato(percorso: Path) -> dict:
         return {}
 
 
+def _nordico_escluso(c: dict, nordico_ammesso: Optional[set]) -> bool:
+    """Un solo nordico per briefing: gli altri restano fuori dall'elenco."""
+    if nordico_ammesso is None:
+        return False
+    att = costi.attrito(c.get("ticker", ""),
+                        paese=((c.get("net_yield") or {}).get("country") or ""),
+                        valuta=c.get("currency") or "")
+    return att["nordico"] and c.get("ticker") not in nordico_ammesso
+
+
+def _valutazione_credibile(c: dict) -> bool:
+    val = c.get("mvf_valuation") or {}
+    if val.get("dispersion_flag") == "dispersione_alta" or val.get("abstain"):
+        return False
+    up = val.get("upside_at_current_pct")
+    if up is None and c.get("intrinsic_value") and c.get("price"):
+        up = (c["intrinsic_value"] / c["price"] - 1) * 100
+    return up is None or up <= UPSIDE_MAX_CREDIBILE
+
+
 def costruisci(tier1: list[dict], archivio: dict, data_iso: str,
                in_portafoglio: set, percorso_stato: Optional[Path] = None,
-               oggi: Optional[date] = None) -> dict:
+               oggi: Optional[date] = None,
+               nordico_ammesso: Optional[set] = None) -> dict:
     """Struttura per il contesto del briefing. Aggiorna il file di stato."""
     oggi = oggi or date.today()
     per_tkr = {c.get("ticker", "").upper(): c for c in tier1}
@@ -108,7 +133,7 @@ def costruisci(tier1: list[dict], archivio: dict, data_iso: str,
         if voce["p_fv"] <= SOGLIA_PFV_ACQUISTO and c is not None:
             up = r["upside_vs_valore_intrinseco_pct"]
             if up is not None and 10 <= up <= 100 and not r["gate_attivi"] \
-                    and (c.get("mvf_valuation") or {}).get("dispersion_flag") != "dispersione_alta":
+                    and _valutazione_credibile(c) and not _nordico_escluso(c, nordico_ammesso):
                 conferme.append(r)
             elif up is not None and up < 0:
                 divergenze.append(r)
@@ -126,6 +151,8 @@ def costruisci(tier1: list[dict], archivio: dict, data_iso: str,
         if (c.get("instrument_class") or "common") != "common":
             continue
         if (c.get("quality_gates") or {}).get("active"):
+            continue
+        if not _valutazione_credibile(c) or _nordico_escluso(c, nordico_ammesso):
             continue
         narrow_oggi.append(c)
     narrow_oggi.sort(key=lambda c: -((c.get("iqi_score") or {}).get("total") or 0))

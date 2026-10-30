@@ -1191,7 +1191,8 @@ def build_user_prompt(user_data, screener_data, market, todo, previous, mode,
     try:
         watch = moat_watch_mod.costruisci(
             tier1, moat_store.carica(), data_briefing(), set(),
-            percorso_stato=DOCS_DIR / "moat-state.json")
+            percorso_stato=DOCS_DIR / "moat-state.json",
+            nordico_ammesso=nordico_ammesso)
         # titoli in portafoglio: segnalati dentro le righe, non esclusi
         for blocco in ("ingressi_recenti", "uscite_per_moat", "uscite_per_prezzo",
                        "scontati_confermati_da_mvf", "scontati_ma_mvf_non_conferma"):
