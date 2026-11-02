@@ -460,9 +460,9 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale/diana), `user_data.p
 
 ### Vale
 - **Vale è un uomo** — usa il genere maschile in tutta la narrativa italiana (es. "analizzato", "investito", "preoccupato", "soddisfatto" etc.)
-- Portafoglio medio-piccolo (nell'ordine dei **7.000€**, il secondo dei tre per dimensione), posizioni contenute, tilt income + alcune scommesse speculative. Dati da estratto IBKR aggiornato al 27 ottobre 2026, liquidità al 2 novembre
-- **Liquidità circa 930€ (2 novembre)**: era 481€ il 27 ottobre dopo la vendita di ENI, 105€ il 14 ottobre. Ora supera il target di 600€ dell'overlay reserve. È divisa in quattro valute (EUR 558, USD 294, CNH 705, GBP 10): un acquisto in euro attinge solo ai 558€ in EUR, le altre valute richiedono una conversione. Ogni acquisto proposto va finanziato dalla cassa, dal prossimo conferimento PAC o da una vendita, e **va detto da dove viene il denaro**
-- **Movimenti recenti**: 7 agosto, primo scaglione dell'overlay su MITT dopo il -13% in una seduta per un'acquisizione; settembre, STLAP da 67 a 167 azioni; 1-2 ottobre, aperta REN (RELX), MITT da 66 a 93 azioni, SAN da 5 a 7; dopo il 2 ottobre, CMCSA da 15 a 22 azioni (la mediazione annunciata a settembre è stata eseguita); 27 ottobre, ENI venduta interamente (14 azioni)
+- Portafoglio medio-piccolo (nell'ordine dei **7.000€**, il secondo dei tre per dimensione), posizioni contenute, tilt income + alcune scommesse speculative. Dati da estratto IBKR aggiornato al 2 novembre 2026
+- **Liquidità circa 930€ (2 novembre)**: era 481€ il 27 ottobre dopo la vendita di ENI, 105€ il 14 ottobre; il 1 novembre Vale ha versato 500€ in più del PAC e fra il 27 ottobre e il 2 novembre ha chiuso 601728 e SGMT e aperto DTE e CARM. Supera il target di 600€ dell'overlay reserve. È divisa in quattro valute (EUR 558, USD 294, CNH 705, GBP 10): un acquisto in euro attinge solo ai 558€ in EUR, le altre valute richiedono una conversione. Ogni acquisto proposto va finanziato dalla cassa, dal prossimo conferimento PAC o da una vendita, e **va detto da dove viene il denaro**
+- **Movimenti recenti**: 7 agosto, primo scaglione dell'overlay su MITT dopo il -13% in una seduta per un'acquisizione; settembre, STLAP da 67 a 167 azioni; 1-2 ottobre, aperta REN (RELX), MITT da 66 a 93 azioni, SAN da 5 a 7; dopo il 2 ottobre, CMCSA da 15 a 22 azioni (la mediazione annunciata a settembre è stata eseguita); 27 ottobre, ENI venduta interamente (14 azioni); 1 novembre, versati 500€ extra; fra il 27 ottobre e il 2 novembre vendute interamente 601728 (China Telecom, 100 az.) e SGMT (Sagimet, 26 az.), aperte DTE (Deutsche Telekom, 16 az. a 25,76€) e CARM (Carmila, REIT retail francese, 30 az. a 14,86€)
 - INSW venduto interamente a 85.3 il 29/05/2026 senza incassare il dividendo
 - WEN (Wendy's, 59 az.) venduto interamente a ~9.40 USD — posizione chiusa, non citarla più
 - PAC giugno 2026: CS.PA (AXA) e CMCSA (Comcast)
@@ -479,7 +479,7 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale/diana), `user_data.p
 - Tono: piano di accumulo strutturato, attenzione concentrazioni
 - **Sovrapposizione da non perdere di vista**: REN (RELX) e WKL (Wolters Kluwer) fanno lo stesso mestiere — informazione professionale e analytics — e insieme sono una delle concentrazioni principali. Una notizia di settore colpisce entrambe: trattala come **un'unica scommessa, non due**
 - **Chi è in guadagno e chi in perdita: non fidarti di questo profilo, leggi il contesto.** Ogni posizione porta `pnl_pct` e `pnl_assoluto` calcolati dal prezzo live (nella valuta della posizione). Non ricopiare cifre di P&L o di peso da nessuna parte: quelle scritte a mano in questo profilo erano ferme ad agosto e sbagliate
-- **Ticker diversi dal nome che Vale vede sul broker**: ACN è Accenture sulla **linea di Vienna in EUR** (il broker la chiama CSA; non è quella di New York in USD); REN è RELX sulla linea di Amsterdam in EUR; SAN è Sanofi (SAN1 sul broker); 601728 è China Telecom Shanghai (il broker la quota in CNH)
+- **Ticker diversi dal nome che Vale vede sul broker**: ACN è Accenture sulla **linea di Vienna in EUR** (il broker la chiama CSA; non è quella di New York in USD); REN è RELX sulla linea di Amsterdam in EUR; SAN è Sanofi (SAN1 sul broker); DTE è Deutsche Telekom su Xetra e CARM è Carmila a Parigi, entrambe in EUR
 
 ### Diana
 - **Diana è una donna** — usa il genere femminile in tutta la narrativa italiana (es. "analizzata", "investita", "preoccupata", "soddisfatta"). Il pipeline lo passa anche in `user_data.gender`
@@ -500,7 +500,7 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale/diana), `user_data.p
 - Tono: portafoglio in costruzione, poche posizioni, ogni euro di commissione conta. Didattico dove serve, mai paternalistico
 
 ### Posizioni overlap
-- **Alex ∩ Vale**: 601728, STLAP (Vale ha venduto ENI il 27 ottobre, Alex la tiene)
+- **Alex ∩ Vale**: STLAP (Vale ha venduto ENI il 27 ottobre e 601728 il 2 novembre, Alex le tiene)
 - **Alex ∩ Diana**: VUAA, EIMI, PST, TTWO, IGLN, IDTM (VUAA, EIMI, IGLN e IDTM sono sulle stesse linee di Londra in USD per entrambi)
 - Quando esce una notizia rilevante, coprila da angoli diversi in base alla dimensione della posizione: la stessa news su PST pesa in modo molto diverso su 653 azioni di Alex e 5 di Diana
 
