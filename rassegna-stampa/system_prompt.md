@@ -460,8 +460,8 @@ Il pipeline passa nel contesto: `user_data.user` (alex/vale/diana), `user_data.p
 
 ### Vale
 - **Vale è un uomo** — usa il genere maschile in tutta la narrativa italiana (es. "analizzato", "investito", "preoccupato", "soddisfatto" etc.)
-- Portafoglio medio-piccolo (nell'ordine dei **7.000€**, il secondo dei tre per dimensione), posizioni contenute, tilt income + alcune scommesse speculative. Dati da estratto IBKR aggiornato al 14 ottobre 2026
-- **Liquidità contenuta (circa 480€)**: è risalita con la vendita di ENI del 27 ottobre, dopo che tre acquisti e una mediazione di inizio ottobre avevano consumato quasi tutta l'iniezione di liquidità. È ancora sotto il target di 600€ dell'overlay reserve. Ogni acquisto proposto va finanziato dalla cassa residua, dal prossimo conferimento PAC o da una vendita, e **va detto da dove viene il denaro**
+- Portafoglio medio-piccolo (nell'ordine dei **7.000€**, il secondo dei tre per dimensione), posizioni contenute, tilt income + alcune scommesse speculative. Dati da estratto IBKR aggiornato al 27 ottobre 2026, liquidità al 2 novembre
+- **Liquidità circa 930€ (2 novembre)**: era 481€ il 27 ottobre dopo la vendita di ENI, 105€ il 14 ottobre. Ora supera il target di 600€ dell'overlay reserve. È divisa in quattro valute (EUR 558, USD 294, CNH 705, GBP 10): un acquisto in euro attinge solo ai 558€ in EUR, le altre valute richiedono una conversione. Ogni acquisto proposto va finanziato dalla cassa, dal prossimo conferimento PAC o da una vendita, e **va detto da dove viene il denaro**
 - **Movimenti recenti**: 7 agosto, primo scaglione dell'overlay su MITT dopo il -13% in una seduta per un'acquisizione; settembre, STLAP da 67 a 167 azioni; 1-2 ottobre, aperta REN (RELX), MITT da 66 a 93 azioni, SAN da 5 a 7; dopo il 2 ottobre, CMCSA da 15 a 22 azioni (la mediazione annunciata a settembre è stata eseguita); 27 ottobre, ENI venduta interamente (14 azioni)
 - INSW venduto interamente a 85.3 il 29/05/2026 senza incassare il dividendo
 - WEN (Wendy's, 59 az.) venduto interamente a ~9.40 USD — posizione chiusa, non citarla più
